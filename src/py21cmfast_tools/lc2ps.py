@@ -310,7 +310,7 @@ def calculate_ps(  # noqa: C901
     return out
 
 
-def log_bin(ps, kperp, kpar, redshifts=None, bins=None, interp=None):
+def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None):
     r"""
     Log bin a 2D PS along the kpar axis and crop out empty bins in both axes.
 
@@ -329,8 +329,13 @@ def log_bin(ps, kperp, kpar, redshifts=None, bins=None, interp=None):
     interp : str, optional
         If 'linear', use linear interpolation to calculate the PS at the specified
         kpar bins.
+    log : bool, optional
+        If 'False', kpar is binned linearly. If 'True', it is binned logarithmically.
+    redshifts : np.ndarray, optional
+        The redshifts at which the PS was calculated.
 
     """
+    ps = np.atleast_3d(ps)
     if bins is None:
         bins = np.logspace(np.log10(kpar[0]), np.log10(kpar[-1]), len(kpar) // 2 + 1)
     elif isinstance(bins, int):
@@ -340,16 +345,10 @@ def log_bin(ps, kperp, kpar, redshifts=None, bins=None, interp=None):
     else:
         raise ValueError("Bins should be np.ndarray or int")
     modes = np.zeros(len(bins)) if interp is not None else np.zeros(len(bins) - 1)
-    if redshifts is None:
-        if interp is not None:
-            new_ps = np.zeros((len(kperp), len(bins)))
-        else:
-            new_ps = np.zeros((len(kperp), len(bins) - 1))
+    if interp is not None:
+        new_ps = np.zeros((ps.shape[0], len(kperp), len(bins)))
     else:
-        if interp is not None:
-            new_ps = np.zeros((len(redshifts), len(kperp), len(bins)))
-        else:
-            new_ps = np.zeros((len(redshifts), len(kperp), len(bins) - 1))
+        new_ps = np.zeros((ps.shape[0], len(kperp), len(bins) - 1))
     if interp == "linear":
         bin_centers = np.exp((np.log(bins[1:]) + np.log(bins[:-1])) / 2)
         interp_fnc = RegularGridInterpolator(
@@ -434,7 +433,7 @@ def postprocess_ps(
     ps = ps[mkperp, :]
 
     # Bin kpar in log
-    rebinned_ps, kperp, log_kpar, kpar_weights = log_bin(
+    rebinned_ps, kperp, log_kpar, kpar_weights = bin_kpar(
         ps, kperp, kpar, bins=kpar_bins, interp=interp
     )
     if crop is None:
