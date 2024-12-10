@@ -204,6 +204,7 @@ def calculate_ps(  # noqa: C901
                 lc_var_2d.append(var)
             else:
                 ps_2d, kperp, nmodes, kpar = results
+
             lc_ps_2d.append(ps_2d)
             if postprocess:
                 clean_ps_2d, clean_kperp, clean_kpar, clean_nmodes = postprocess_ps(
@@ -279,7 +280,6 @@ def calculate_ps(  # noqa: C901
                 lc_var_1d.append(var_1d)
             else:
                 ps_1d, k, nmodes_1d = results
-
             lc_ps_1d.append(ps_1d)
 
     if calc_1d:
@@ -312,7 +312,7 @@ def calculate_ps(  # noqa: C901
 
 def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None):
     r"""
-    Log bin a 2D PS along the kpar axis and crop out empty bins in both axes.
+    Bin a 2D PS along the kpar axis and crop out empty bins in both axes.
 
     Parameters
     ----------
@@ -333,13 +333,18 @@ def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None)
         If 'False', kpar is binned linearly. If 'True', it is binned logarithmically.
     redshifts : np.ndarray, optional
         The redshifts at which the PS was calculated.
-
     """
     ps = np.atleast_3d(ps)
     if bins is None:
-        bins = np.logspace(np.log10(kpar[0]), np.log10(kpar[-1]), len(kpar) // 2 + 1)
+        if log:
+            bins = np.logspace(np.log10(kpar[0]), np.log10(kpar[-1]), 17)
+        else:
+            bins = np.linspace(kpar[0], kpar[-1], 17)
     elif isinstance(bins, int):
-        bins = np.logspace(np.log10(kpar[0]), np.log10(kpar[-1]), bins + 1)
+        if log:
+            bins = np.logspace(np.log10(kpar[0]), np.log10(kpar[-1]), bins + 1)
+        else:
+            bins = np.linspace(kpar[0], kpar[-1], bins + 1)
     elif isinstance(bins, (np.ndarray, list)):
         bins = np.array(bins)
     else:
@@ -357,6 +362,7 @@ def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None)
             bounds_error=False,
             fill_value=np.nan,
         )
+
         if redshifts is None:
             kperp_grid, kpar_grid = np.meshgrid(
                 kperp, bin_centers, indexing="ij", sparse=True
@@ -379,6 +385,10 @@ def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None)
             new_ps[..., i] = np.nanmean(ps[..., m], axis=-1)
             modes[i] = np.sum(m)
         bin_centers = np.exp((np.log(bins[1:]) + np.log(bins[:-1])) / 2)
+    if log:
+        bin_centers = np.exp((np.log(bins[1:]) + np.log(bins[:-1])) / 2)
+    else:
+        bin_centers = (bins[1:] + bins[:-1]) / 2
     return new_ps, kperp, bin_centers, modes
 
 
@@ -432,9 +442,9 @@ def postprocess_ps(
     kperp = kperp[mkperp]
     ps = ps[mkperp, :]
 
-    # Bin kpar in log
+    # maybe rebin kpar in log
     rebinned_ps, kperp, log_kpar, kpar_weights = bin_kpar(
-        ps, kperp, kpar, bins=kpar_bins, interp=interp
+        ps, kperp, kpar, bins=kpar_bins, interp=interp, log=log_bins
     )
     if crop is None:
         crop = [0, rebinned_ps.shape[0] + 1, 0, rebinned_ps.shape[1] + 1]
@@ -524,6 +534,7 @@ def cylindrical_to_spherical(
     """
     if mu is not None and interp and generator is None:
         generator = above_mu_min_angular_generator(mu=mu)
+
     if mu is not None and not interp:
         kpar_mesh, kperp_mesh = np.meshgrid(kpar, kperp)
         theta = np.arctan(kperp_mesh / kpar_mesh)
