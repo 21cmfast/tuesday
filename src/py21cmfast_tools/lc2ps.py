@@ -334,12 +334,14 @@ def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None)
     redshifts : np.ndarray, optional
         The redshifts at which the PS was calculated.
     """
-    ps = np.atleast_3d(ps)
+    ps = ps if len(ps.shape) == 3 else ps[np.newaxis, ...]
     if bins is None:
         if log:
-            bins = np.logspace(np.log10(kpar[0]), np.log10(kpar[-1]), 17)
+            bins = np.logspace(
+                np.log10(kpar[0]), np.log10(kpar[-1]), len(kpar) // 2 + 1
+            )
         else:
-            bins = np.linspace(kpar[0], kpar[-1], 17)
+            bins = np.linspace(kpar[0], kpar[-1], len(kpar) // 2 + 1)
     elif isinstance(bins, int):
         if log:
             bins = np.logspace(np.log10(kpar[0]), np.log10(kpar[-1]), bins + 1)
@@ -349,16 +351,16 @@ def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None)
         bins = np.array(bins)
     else:
         raise ValueError("Bins should be np.ndarray or int")
-    modes = np.zeros(len(bins)) if interp is not None else np.zeros(len(bins) - 1)
-    if interp is not None:
-        new_ps = np.zeros((ps.shape[0], len(kperp), len(bins)))
-    else:
-        new_ps = np.zeros((ps.shape[0], len(kperp), len(bins) - 1))
-    if interp == "linear":
+    if log:
         bin_centers = np.exp((np.log(bins[1:]) + np.log(bins[:-1])) / 2)
+    else:
+        bin_centers = (bins[1:] + bins[:-1]) / 2
+    if interp == "linear":
+        new_ps = np.zeros((ps.shape[0], len(kperp), len(bins)))
+        modes = np.zeros(len(bins))
         interp_fnc = RegularGridInterpolator(
             (redshifts, kperp, kpar) if redshifts is not None else (kperp, kpar),
-            ps,
+            ps.squeeze(),
             bounds_error=False,
             fill_value=np.nan,
         )
@@ -377,18 +379,15 @@ def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None)
         idxs = np.digitize(kpar, bins) - 1
         for i in range(len(bins) - 1):
             modes[i] = np.sum(idxs == i)
-        bin_centers = bins
     else:
+        new_ps = np.zeros((ps.shape[0], len(kperp), len(bins) - 1))
+        modes = np.zeros(len(bins) - 1)
         idxs = np.digitize(kpar, bins) - 1
         for i in range(len(bins) - 1):
             m = idxs == i
             new_ps[..., i] = np.nanmean(ps[..., m], axis=-1)
             modes[i] = np.sum(m)
-        bin_centers = np.exp((np.log(bins[1:]) + np.log(bins[:-1])) / 2)
-    if log:
-        bin_centers = np.exp((np.log(bins[1:]) + np.log(bins[:-1])) / 2)
-    else:
-        bin_centers = (bins[1:] + bins[:-1]) / 2
+
     return new_ps, kperp, bin_centers, modes
 
 

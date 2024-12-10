@@ -1,10 +1,12 @@
 """Test cases for the __main__ module."""
 
 import numpy as np
+import pytest
 from py21cmfast_tools import calculate_ps, cylindrical_to_spherical
 
 
-def test_calculate_ps():
+@pytest.mark.parametrize("log_bins", [True, False])
+def test_calculate_ps(log_bins):
     rng = np.random.default_rng()
     test_lc = rng.random((100, 100, 1000))
     test_redshifts = np.logspace(np.log10(5), np.log10(30), 1000)
@@ -19,6 +21,7 @@ def test_calculate_ps():
         calc_2d=False,
         calc_1d=True,
         calc_global=True,
+        log_bins=log_bins,
     )
 
     calculate_ps(
@@ -29,6 +32,7 @@ def test_calculate_ps():
         calc_1d=True,
         calc_global=True,
         interp=True,
+        log_bins=log_bins,
     )
 
     calculate_ps(
@@ -39,6 +43,7 @@ def test_calculate_ps():
         calc_1d=True,
         calc_global=True,
         mu=0.5,
+        log_bins=log_bins,
     )
 
     calculate_ps(
@@ -50,6 +55,7 @@ def test_calculate_ps():
         calc_global=True,
         interp=True,
         mu=0.5,
+        log_bins=log_bins,
     )
 
 
