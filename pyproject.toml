@@ -116,8 +116,10 @@ max-complexity = 21
 
 [dependency-groups]
 dev = [
+    "coverage>=7.6.12",
     "hatch>=1.14.0",
     "hatch-vcs>=0.4.0",
     "pre-commit>=4.1.0",
+    "pytest>=8.3.5",
     "sphinx>=8.1.3",
 ]

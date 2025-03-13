@@ -21,18 +21,19 @@ jobs:
       - uses: actions/checkout@master
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: set PY
-        run: echo "PY=$(python -c 'import hashlib, sys;print(hashlib.sha256(sys.version.encode()+sys.executable.encode()).hexdigest())')" >> $GITHUB_ENV
-      - name: Setup Environment
-        run: |
-          pip install -U coverage
-          pip install .[dev]
+          enable-cache: true
+
+      - name: Install the project
+        run: uv sync --all-extras --dev
+
       - name: Run Tests
         run: |
-          coverage run --parallel-mode -m pytest
+          uv run coverage run --parallel-mode -m pytest
 
       - name: Upload coverage report
         if: matrix.os == 'ubuntu-latest' && success()
