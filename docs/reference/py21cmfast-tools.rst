@@ -3,12 +3,11 @@ py21cmsense
 
 .. testsetup::
 
-    from py21cmfast_tools import *
+    from tuesday import *
 
 .. autosummary::
     :toctree: _autosummary
     :template: module.rst
 
-    py21cmfast_tools.summaries
-    py21cmfast_tools.postprocessing
-    py21cmfast_tools.mocks
+    tuesday.core.summaries
+    tuesday.core.postprocessing
