@@ -14,13 +14,13 @@ A collection of lightcone postprocessing tools such as conversion to power spect
 tools like `pip` or `uv`:
 
 ```bash
-pip install tuesday
+pip install tuesday-eor
 ```
 
 or
 
 ```bash
-uv pip install tuesday
+uv pip install tuesday-eor
 ```
 
 If you are developing `tuesday`, we recommend using a virtual environment.
