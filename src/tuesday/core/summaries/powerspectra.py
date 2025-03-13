@@ -34,6 +34,7 @@ def calculate_ps(  # noqa: C901
     mu=None,
     bin_ave=True,
     interp=None,
+    interp_bins=True,
     prefactor_fnc=power2delta,
     interp_points_generator=None,
     get_variance=False,
@@ -107,6 +108,9 @@ def calculate_ps(  # noqa: C901
         If True, use linear interpolation to calculate the PS
         at the points specified by interp_points_generator.
         Note that this significantly slows down the calculation.
+    interp_bins : bool, optional
+        If True, interpolate the PS to fill empty bins.
+        Useful if also using `postprocess=True`.
     prefactor_fnc : callable, optional
         A function that takes a frequency tuple and returns the prefactor
         to multiply the PS with.
@@ -216,7 +220,7 @@ def calculate_ps(  # noqa: C901
                     crop=crop.copy() if crop is not None else crop,
                     kperp_modes=nmodes,
                     return_modes=True,
-                    interp=interp,
+                    interp=interp_bins,
                 )
                 clean_lc_ps_2d.append(clean_ps_2d)
                 if get_variance:
@@ -229,7 +233,7 @@ def calculate_ps(  # noqa: C901
                         crop=crop.copy() if crop is not None else crop,
                         kperp_modes=nmodes,
                         return_modes=False,
-                        interp=interp,
+                        interp=interp_bins,
                     )
                     clean_lc_var_2d.append(clean_var_2d)
 
@@ -310,7 +314,7 @@ def calculate_ps(  # noqa: C901
     return out
 
 
-def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None):
+def bin_kpar(ps, kperp, kpar, bins=None, interp=False, log=False, redshifts=None):
     r"""
     Bin a 2D PS along the kpar axis and crop out empty bins in both axes.
 
@@ -326,8 +330,8 @@ def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None)
         The number of bins or the bin edges to use for binning the kpar axis.
         If None, produces 16 bins logarithmically spaced between
         the minimum and maximum `kpar` supplied.
-    interp : str, optional
-        If 'linear', use linear interpolation to calculate the PS at the specified
+    interp : bool, optional
+        If True, use linear interpolation to calculate the PS at the specified
         kpar bins.
     log : bool, optional
         If 'False', kpar is binned linearly. If 'True', it is binned logarithmically.
@@ -355,7 +359,7 @@ def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None)
         bin_centers = np.exp((np.log(bins[1:]) + np.log(bins[:-1])) / 2)
     else:
         bin_centers = (bins[1:] + bins[:-1]) / 2
-    if interp == "linear":
+    if interp:
         new_ps = np.zeros((ps.shape[0], len(kperp), len(bins)))
         modes = np.zeros(len(bins))
         interp_fnc = RegularGridInterpolator(
@@ -400,7 +404,7 @@ def postprocess_ps(
     crop=None,
     kperp_modes=None,
     return_modes=False,
-    interp=None,
+    interp=False,
 ):
     r"""
     Postprocess a 2D PS by cropping out empty bins and log binning the kpar axis.
@@ -425,6 +429,9 @@ def postprocess_ps(
     return_modes : bool, optional
         If True, return a grid with the number of modes in each bin.
         Requires kperp_modes to be supplied.
+    interp : bool, optional
+        If True, use linear interpolation to calculate the PS at the specified
+        kpar bins.
     """
     kpar = kpar[0]
     m = kpar > 1e-10
