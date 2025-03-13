@@ -2,8 +2,8 @@
 A collection of lightcone postprocessing tools such as conversion to power spectrum and plotting.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PyPi version](https://badgen.net/pypi/v/tuesday/)](https://pypi.org/project/tuesday)
-[![PyPI pyversions](https://img.shields.io/pypi/pyversions/tuesday.svg)](https://pypi.python.org/pypi/tuesday/)
+[![PyPi version](https://badgen.net/pypi/v/tuesday-eor/)](https://pypi.org/project/tuesday-eor)
+[![PyPI pyversions](https://img.shields.io/pypi/pyversions/tuesday-eor.svg)](https://pypi.python.org/pypi/tuesday-eor/)
 [![Documentation Status](https://readthedocs.org/projects/tuesday/badge/?version=latest)](http://tuesday.readthedocs.io/?badge=latest)
 [![Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Codecov](https://codecov.io/gh/21cmfast/tuesday/branch/main/graph/badge.svg)](https://app.codecov.io/gh/21cmfast/tuesday)
