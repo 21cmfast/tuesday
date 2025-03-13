@@ -1,16 +1,16 @@
 [paths]
 source =
-    py21cmfast_tools/
+    tuesday/
 omit =
     tests/
-    */site-packages/py21cmfast_tools/tests/
+    */site-packages/tuesday/tests/
 
 [run]
 branch = True
-source_pkgs = py21cmfast_tools
+source_pkgs = tuesday
 omit =
   tests/
-  */site-packages/py21cmfast_tools/tests/
+  */site-packages/tuesday/tests/
 
 [report]
 ; Regexes for lines to exclude from consideration

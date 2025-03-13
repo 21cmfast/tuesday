@@ -811,43 +811,6 @@ wheels = [
 ]
 
 [[package]]
-name = "py21cmfast-tools"
-source = { editable = "." }
-dependencies = [
-    { name = "numpy" },
-    { name = "powerbox" },
-    { name = "scipy" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "coverage" },
-    { name = "hatch" },
-    { name = "hatch-vcs" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "sphinx", version = "8.1.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "sphinx", version = "8.2.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "numpy", specifier = ">=2" },
-    { name = "powerbox", specifier = ">=0.8.2" },
-    { name = "scipy", specifier = ">=1.15.2" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "coverage", specifier = ">=7.6.12" },
-    { name = "hatch", specifier = ">=1.14.0" },
-    { name = "hatch-vcs", specifier = ">=0.4.0" },
-    { name = "pre-commit", specifier = ">=4.1.0" },
-    { name = "pytest", specifier = ">=8.3.5" },
-    { name = "sphinx", specifier = ">=8.1.3" },
-]
-
-[[package]]
 name = "pycparser"
 version = "2.22"
 source = { registry = "https://pypi.org/simple" }
@@ -1272,6 +1235,43 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/08/e9/eb59303bac7aca949c4a4b0fa03a9b270be165d303a84cf2733d35a840ce/trove_classifiers-2025.3.3.18.tar.gz", hash = "sha256:3ffcfa90a428adfde1a5d90e3aa1b87fe474c5dbdbf5ccbca74ed69ba83c5ca7", size = 16239 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ef/bf/44195f3d9c3c4fe4cccf1c261c80d50781b9e8a0a6febf084c09c66740ff/trove_classifiers-2025.3.3.18-py3-none-any.whl", hash = "sha256:215630da61cf8757c373f81b602fc1283ec5a691cf12c5f9f96f11d6ad5fc7f2", size = 13629 },
+]
+
+[[package]]
+name = "tuesday"
+source = { editable = "." }
+dependencies = [
+    { name = "numpy" },
+    { name = "powerbox" },
+    { name = "scipy" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "coverage" },
+    { name = "hatch" },
+    { name = "hatch-vcs" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "sphinx", version = "8.1.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "sphinx", version = "8.2.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2" },
+    { name = "powerbox", specifier = ">=0.8.2" },
+    { name = "scipy", specifier = ">=1.15.2" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "coverage", specifier = ">=7.6.12" },
+    { name = "hatch", specifier = ">=1.14.0" },
+    { name = "hatch-vcs", specifier = ">=0.4.0" },
+    { name = "pre-commit", specifier = ">=4.1.0" },
+    { name = "pytest", specifier = ">=8.3.5" },
+    { name = "sphinx", specifier = ">=8.1.3" },
 ]
 
 [[package]]

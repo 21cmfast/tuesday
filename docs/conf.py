@@ -3,7 +3,7 @@
 import os
 from datetime import datetime, timezone
 
-from py21cmfast_tools import __version__
+from tuesday import __version__
 
 extensions = [
     "sphinx.ext.autodoc",
@@ -34,7 +34,7 @@ numpydoc_show_class_members = False
 
 source_suffix = ".rst"
 master_doc = "index"
-project = "py21cmfast-tools"
+project = "tuesday"
 year = str(datetime.now(tz=timezone.utc).year)
 author = "21cmFAST Team"
 copyright = f"{year}, {author}"
@@ -43,8 +43,8 @@ templates_path = ["templates"]
 
 pygments_style = "trac"
 extlinks = {
-    "issue": ("https://github.com/21cmfast/py21cmfast-tools/issues/%s", "#"),
-    "pr": ("https://github.com/21cmfast/py21cmfast-tools/pull/%s", "PR #"),
+    "issue": ("https://github.com/21cmfast/tuesday/issues/%s", "#"),
+    "pr": ("https://github.com/21cmfast/tuesday/pull/%s", "PR #"),
 }
 
 html_theme = "furo"

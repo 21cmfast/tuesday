@@ -3,12 +3,12 @@ requires = ["setuptools>=64", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-write_to = "src/py21cmfast_tools/_version.py"
-parentdir_prefix_version = "py21cmfast-tools-"
+write_to = "src/tuesday/_version.py"
+parentdir_prefix_version = "tuesday-"
 fallback_version  = "0.0.0"
 
 [project]
-name = "py21cmfast-tools"
+name = "tuesday"
 description = "Tools for post-processing and computing summaries of 21cmFAST simulations"
 readme = "README.md"
 authors = [

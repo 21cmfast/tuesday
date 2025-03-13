@@ -1,7 +1,7 @@
 Tutorials
 =========
 
-The following introductory tutorials will help you get started with ``py21cmfast-tools``:
+The following introductory tutorials will help you get started with ``tuesday``:
 
 .. toctree::
    :maxdepth: 2
