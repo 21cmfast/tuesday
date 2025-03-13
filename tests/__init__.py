@@ -1,1 +1,1 @@
-"""Tests for the py21cmFAST-tools package."""
+"""Tests for the tuesday package."""

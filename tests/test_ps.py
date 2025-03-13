@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from py21cmfast_tools import calculate_ps, cylindrical_to_spherical
+from tuesday.core import calculate_ps, cylindrical_to_spherical
 
 
 @pytest.mark.parametrize("log_bins", [True, False])
