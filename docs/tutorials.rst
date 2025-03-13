@@ -1,7 +1,7 @@
 Tutorials
 =========
 
-The following introductory tutorials will help you get started with ``21cmSense``:
+The following introductory tutorials will help you get started with ``py21cmfast-tools``:
 
 .. toctree::
    :maxdepth: 2
