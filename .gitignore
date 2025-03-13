@@ -12,3 +12,5 @@ htmlcov/
 .coverage
 */*.egg-info/
 docs/_build/
+.qodo
+_version.py

@@ -1,19 +1,23 @@
 [build-system]
-requires = ["setuptools>=60", "wheel", "setuptools_scm>=8.0", "numpy"]
+requires = ["setuptools>=64", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-
+write_to = "src/py21cmfast_tools/_version.py"
+parentdir_prefix_version = "py21cmfast-tools-"
+fallback_version  = "0.0.0"
 
 [project]
-name = "py21cmfast_tools"
-description = "A collection of lightcone postprocessing tools."
+name = "py21cmfast-tools"
+description = "Tools for post-processing and computing summaries of 21cmFAST simulations"
 readme = "README.md"
 authors = [
-    {name="Daniela Breitman", email="daniela.breitman@sns.it"}
+    { name = "Daniela Breitman", email = "daniela.breitman@sns.it" },
+    { name = "James Davies", email = "james.davies@sns.it" },
+    { name = "Steven Murray", email = "murray.steveng@gmail.com" },
 ]
+requires-python = ">=3.10"
 license = {text="MIT"}
-requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -22,46 +26,42 @@ classifiers = [
     "Operating System :: Unix",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3 :: Only"
-    ]
-dependencies = [
-    "numpy",
-    "scipy",
-    "powerbox>=0.8.1",
-    "attrs",
-    "matplotlib",
-    "h5py",
-    "typing_extensions",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: Implementation :: CPython",
 ]
-dynamic = ["version"]
 
-[project.optional-dependencies]
-docs = [
-    "sphinx",
-    "furo",
-    "myst-parser"
+dependencies = [
+    "numpy>=2",
+    "powerbox>=0.8.2",
+    "scipy>=1.15.2",
 ]
-tests = [
-    "pytest",
-    "pytest-cov",
-    "pytest-xdist",
-    "coverage",
+dynamic = ['version']
+
+[project.urls]
+Repository = "https://github.com/21cmfast/py21cmfast-tools"
+Issues = "https://github.com/21cmfast/py21cmfast-tools/issues"
+Changelog = "https://github.com/21cmfast/py21cmfast-tools/releases"
+
+[tool.pytest.ini_options]
+addopts = "--verbose --durations=25"
+norecursedirs = [
+    "dist",
+    "build",
 ]
-dev = [
-    "pre-commit",
-    "ruff",
-    "py21cmfast_tools[docs,tests]"
-]
+testpaths = "tests"
+
+
 
 [tool.ruff]
 line-length = 88
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 extend-select = [
   "UP",   # pyupgrade
   "E",    # pycodestyle
   "W",    # pycodestyle warning
+  "F",    # pyflakes
   "C90",  # mccabe complexity
   "I",    # isort
   "N",    # pep8-naming
@@ -83,33 +83,43 @@ extend-select = [
   "PERF", # performance
   # "FURB", # refurb
   "RUF",  # ruff-specific rules
+  "RET",  # return statements
+  "RSE",  # exception raises
+  "TRY201", # verbose raise
 ]
+
 ignore = [
-    "DTZ007",   # use %z in strptime
-    "A003",     # class attribute shadows python builtin
-    "B008",     # function call in argument defaults
+    "D101",  # Missing docstring in public class -- my docstrings are in the __init__ which seems to fail this ?
 ]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = [
-    "D103",  # ignore missing docstring in tests
+    "D",  # ignore missing docstring in tests
     "DTZ",   # ignore datetime in tests
     "T",     # print statements
 ]
 "docs/conf.py" = [
     "A",  # conf.py can shadow builtins
     "ERA",
+    "DTZ",
 ]
 
 [tool.ruff.lint.pydocstyle]
 convention = 'numpy'
-
-[tool.ruff.lint.mccabe]
-max-complexity = 15
-
-[tool.pytest.ini_options]
-addopts = "--verbose --durations=10"
-norecursedirs = [
-    "dist",
-    "build",
+property-decorators = [
+    "property",
+    "functools.cached_property",
+    "pytest.fixture"
 ]
-testpaths = "tests"
+[tool.ruff.lint.mccabe]
+max-complexity = 21
+
+[dependency-groups]
+dev = [
+    "coverage>=7.6.12",
+    "hatch>=1.14.0",
+    "hatch-vcs>=0.4.0",
+    "pre-commit>=4.1.0",
+    "pytest>=8.3.5",
+    "sphinx>=8.1.3",
+]

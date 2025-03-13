@@ -347,7 +347,7 @@ def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None)
             bins = np.logspace(np.log10(kpar[0]), np.log10(kpar[-1]), bins + 1)
         else:
             bins = np.linspace(kpar[0], kpar[-1], bins + 1)
-    elif isinstance(bins, (np.ndarray, list)):
+    elif isinstance(bins, np.ndarray | list):
         bins = np.array(bins)
     else:
         raise ValueError("Bins should be np.ndarray or int")
@@ -472,18 +472,16 @@ def postprocess_ps(
                 log_kpar[crop[2] : crop[3]],
                 nmodes,
             )
-        else:
-            return (
-                rebinned_ps[crop[0] : crop[1]][:, crop[2] : crop[3]],
-                kperp[crop[0] : crop[1]],
-                log_kpar[crop[2] : crop[3]],
-            )
-    else:
         return (
             rebinned_ps[crop[0] : crop[1]][:, crop[2] : crop[3]],
             kperp[crop[0] : crop[1]],
             log_kpar[crop[2] : crop[3]],
         )
+    return (
+        rebinned_ps[crop[0] : crop[1]][:, crop[2] : crop[3]],
+        kperp[crop[0] : crop[1]],
+        log_kpar[crop[2] : crop[3]],
+    )
 
 
 def cylindrical_to_spherical(

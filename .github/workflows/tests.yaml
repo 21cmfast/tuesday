@@ -16,102 +16,30 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.9", "3.10", "3.11"]
+        python-version: ["3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@master
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: set PY
-        run: echo "PY=$(python -c 'import hashlib, sys;print(hashlib.sha256(sys.version.encode()+sys.executable.encode()).hexdigest())')" >> $GITHUB_ENV
-      - name: Setup Environment
-        run: |
-          pip install -U coverage
-          pip install .[dev]
-      - name: Run Tests
-        run: |
-          coverage run --parallel-mode -m pytest
+          enable-cache: true
 
-      - name: Upload coverage data
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-data-tests-${{ matrix.python-version }}-${{ matrix.os }}
-          path: ".coverage.*"
-          if-no-files-found: error
-
-  downstream:
-    env:
-      PYTHON: 3.11
-      OS: ubuntu-latest
-    name: Downstream
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        package: ['py21cmfast-tools']
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@master
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON }}
-
-      - name: Setup Environment
-        run: |
-          pip install -U coverage
-          pip install .[dev]
-
-      - name: Get downstream package
-        run: |
-          cd ..
-          git clone https://github.com/21cmfast/${{ matrix.package }}
-          cd ${{ matrix.package }}
-          pip install .[dev]
+      - name: Install the project
+        run: uv sync --all-extras --dev
 
       - name: Run Tests
         run: |
-          coverage run --parallel-mode -m pytest ../${{ matrix.package}}
-
-      - name: Upload coverage data
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-data-downstream-${{ matrix.package }}
-          path: ".coverage.*"
-          if-no-files-found: error
-
-  codecov:
-    needs: [tests]
-    name: Codecov Reporting
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download coverage data.
-        uses: actions/download-artifact@v4
-        with:
-          pattern: coverage-data-*
-          merge-multiple: true
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: 3.11
-
-      - name: Install dependencies
-        run: pip install .[dev]
-
-      - name: Combine coverage data and display human readable report
-        run: |
-          coverage combine
-          coverage report
-
-      - name: Create coverage report
-        run: |
-          coverage xml
+          uv run coverage run --parallel-mode -m pytest
 
       - name: Upload coverage report
-        uses: codecov/codecov-action@v4.5.0
+        if: matrix.os == 'ubuntu-latest' && success()
+        uses: codecov/codecov-action@v5.4.0
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          files: "./coverage.xml"
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: true
