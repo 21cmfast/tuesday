@@ -16,7 +16,7 @@ authors = [
     { name = "James Davies", email = "james.davies@sns.it" },
     { name = "Steven Murray", email = "murray.steveng@gmail.com" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {text="MIT"}
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -114,7 +114,13 @@ property-decorators = [
 [tool.ruff.lint.mccabe]
 max-complexity = 21
 
+[tool.uv.sources]
+21cmfast = { git = "https://github.com/21cmfast/21cmfast", rev = "v4-prep" }
+
 [dependency-groups]
+21cmfast = [
+    "21cmfast",
+]
 dev = [
     "coverage>=7.6.12",
     "hatch>=1.14.0",
