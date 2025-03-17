@@ -1506,6 +1506,7 @@ wheels = [
 name = "tuesday"
 source = { editable = "." }
 dependencies = [
+    { name = "attrs" },
     { name = "numpy" },
     { name = "powerbox" },
     { name = "scipy" },
@@ -1526,6 +1527,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "attrs", specifier = ">=25.3.0" },
     { name = "numpy", specifier = ">=2" },
     { name = "powerbox", specifier = ">=0.8.2" },
     { name = "scipy", specifier = ">=1.15.2" },
