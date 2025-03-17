@@ -31,6 +31,7 @@ classifiers = [
 ]
 
 dependencies = [
+    "astropy>=7.0.1",
     "attrs>=25.3.0",
     "numpy>=2",
     "powerbox>=0.8.2",
