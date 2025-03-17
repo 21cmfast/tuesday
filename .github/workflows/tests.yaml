@@ -40,8 +40,13 @@ jobs:
           brew install gsl
           brew install libomp
 
-      - name: Install the project
+      - name: Install the project Linux
+        if: matrix.os == 'ubuntu-latest'
         run: uv sync --all-extras --all-groups --dev
+
+      - name: Install the project Linux
+        if: matrix.os == 'macos-latest'
+        run: LIB=/opt/homebrew/opt/libomp/lib INCLUDE=/opt/homebrew/opt/libomp/include uv sync --all-extras --all-groups --dev
 
       - name: Run Tests
         run: |
