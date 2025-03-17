@@ -35,7 +35,7 @@ jobs:
           sudo apt-get install libgsl0-dev
 
       - name: Install the project
-        run: uv sync --all-extras --all-groups --dev
+        run: CC=gcc uv sync --all-extras --all-groups --dev
 
       - name: Run Tests
         run: |
