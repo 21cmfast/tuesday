@@ -14,3 +14,4 @@ htmlcov/
 docs/_build/
 .qodo
 _version.py
+_autosummary/
