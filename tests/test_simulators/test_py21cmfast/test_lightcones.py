@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import attrs
+import pytest
 from astropy import units as un
 from py21cmfast import AngularLightconer, InputParameters, RectilinearLightconer
 from py21cmfast.drivers.lightcone import LightCone
@@ -22,7 +23,9 @@ def create_mock_cache_output(cachedir: Path, ics: bool = False) -> RunCache:
     cachedir.mkdir()
     inputs = InputParameters.from_template(
         "simple", random_seed=1, node_redshifts=[10, 9, 8, 7, 6]
-    ).evolve_input_structs(BOX_LEN=100, HII_DIM=50, DIM=100, APPLY_RSDS=False)
+    ).evolve_input_structs(
+        BOX_LEN=100, HII_DIM=50, DIM=100, APPLY_RSDS=False, KEEP_3D_VELOCITIES=True
+    )
     cache = RunCache.from_inputs(inputs, cache=OutputCache(cachedir))
 
     for fldname, fld in attrs.asdict(cache, recurse=False).items():
@@ -66,14 +69,27 @@ def test_construct_rect_lightcone_from_cache(tmp_path: Path):
         quantities=("density", "brightness_temp"),
     )
 
-    lightcone = construct_lightcone_from_cache(cache, lightconer)
+    lightcone = construct_lightcone_from_cache(
+        cache,
+        lightconer,
+        global_quantities=("log10_mturn_acg", "log10_mturn_mcg", "brightness_temp"),
+    )
 
     assert isinstance(lightcone, LightCone)
 
     # Check that the data is stored in the lightcone object
     assert lightcone.lightcones["brightness_temp"].shape == (50, 50, 607)
     assert lightcone.lightcones["density"].shape == (50, 50, 607)
-    assert lightcone.global_quantities == {}
+
+    assert lightcone.global_quantities["log10_mturn_acg"].shape == (
+        len(cache.inputs.node_redshifts),
+    )
+    assert lightcone.global_quantities["log10_mturn_mcg"].shape == (
+        len(cache.inputs.node_redshifts),
+    )
+    assert lightcone.global_quantities["brightness_temp"].shape == (
+        len(cache.inputs.node_redshifts),
+    )
 
 
 def test_construct_ang_lightcone_from_cache(tmp_path: Path):
@@ -86,6 +102,7 @@ def test_construct_ang_lightcone_from_cache(tmp_path: Path):
         max_redshift=10,
         match_at_z=6.0,
         quantities=("density", "brightness_temp"),
+        get_los_velocity=True,
     )
 
     lightcone = construct_lightcone_from_cache(cache, lightconer)
@@ -94,3 +111,18 @@ def test_construct_ang_lightcone_from_cache(tmp_path: Path):
     assert lightcone.lightcones["brightness_temp"].shape == (2500, 607)
     assert lightcone.lightcones["density"].shape == (2500, 607)
     assert lightcone.global_quantities == {}
+
+
+def test_exceptions(tmp_path: Path):
+    cachedir = tmp_path / "cache"
+    cache = create_mock_cache_output(cachedir)
+    cache.PerturbedField[cache.inputs.node_redshifts[-1]].unlink()
+    lightconer = AngularLightconer.like_rectilinear(
+        user_params=cache.inputs.user_params,
+        max_redshift=10,
+        match_at_z=6.0,
+        quantities=("density", "brightness_temp"),
+    )
+
+    with pytest.raises(ValueError, match="The cache specified is not complete!"):
+        construct_lightcone_from_cache(cache, lightconer)
