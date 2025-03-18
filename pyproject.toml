@@ -39,6 +39,14 @@ dependencies = [
 ]
 dynamic = ['version']
 
+[project.optional-dependencies]
+dev = [
+    "coverage",
+    "pre-commit",
+    "pytest",
+    "sphinx",
+]
+
 [project.urls]
 Repository = "https://github.com/21cmfast/py21cmfast-tools"
 Issues = "https://github.com/21cmfast/py21cmfast-tools/issues"
@@ -122,12 +130,4 @@ max-complexity = 21
 [dependency-groups]
 21cmfast = [
     "21cmfast",
-]
-dev = [
-    "coverage>=7.6.12",
-    "hatch>=1.14.0",
-    "hatch-vcs>=0.4.0",
-    "pre-commit>=4.1.0",
-    "pytest>=8.3.5",
-    "sphinx>=8.1.3",
 ]
