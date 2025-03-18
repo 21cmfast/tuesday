@@ -39,7 +39,6 @@ jobs:
           conda install fftw gsl
 
       - name: Install the project Linux
-        if: matrix.os == 'ubuntu-latest'
         run: pip install ".[dev]"
 
       - name: Run Tests

@@ -40,12 +40,17 @@ dependencies = [
 dynamic = ['version']
 
 [project.optional-dependencies]
-dev = [
+21cmfast = ['21cmFAST @ git+https://github.com/21cmFAST/21cmFAST@v4-prep']
+tests = [
     "coverage",
     "pre-commit",
     "pytest",
     "sphinx",
 ]
+dev = [
+    "tuesday[tests,21cmfast]"
+]
+
 
 [project.urls]
 Repository = "https://github.com/21cmfast/py21cmfast-tools"
