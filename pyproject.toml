@@ -43,6 +43,7 @@ dynamic = ['version']
 21cmfast = ['21cmFAST @ git+https://github.com/21cmFAST/21cmFAST@v4-prep']
 tests = [
     "coverage",
+    "pytest-cov",
     "pre-commit",
     "pytest",
     "sphinx",
@@ -58,7 +59,7 @@ Issues = "https://github.com/21cmfast/py21cmfast-tools/issues"
 Changelog = "https://github.com/21cmfast/py21cmfast-tools/releases"
 
 [tool.pytest.ini_options]
-addopts = "--verbose --durations=25"
+addopts = "--durations=25 --cov"
 norecursedirs = [
     "dist",
     "build",

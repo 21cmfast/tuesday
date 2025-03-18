@@ -43,7 +43,7 @@ jobs:
 
       - name: Run Tests
         run: |
-          coverage run --parallel-mode -m pytest
+          coverage run -m pytest
 
       - name: Upload coverage report
         if: matrix.os == 'ubuntu-latest' && success()
