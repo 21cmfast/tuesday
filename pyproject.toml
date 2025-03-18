@@ -59,7 +59,7 @@ Issues = "https://github.com/21cmfast/py21cmfast-tools/issues"
 Changelog = "https://github.com/21cmfast/py21cmfast-tools/releases"
 
 [tool.pytest.ini_options]
-addopts = "--durations=25 --cov"
+addopts = "--durations=25 --cov tuesday --cov-config=.coveragerc --cov-report xml:./coverage.xml "
 norecursedirs = [
     "dist",
     "build",

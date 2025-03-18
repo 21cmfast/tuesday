@@ -38,7 +38,7 @@ jobs:
         run: |
           conda install fftw gsl
 
-      - name: Install the project Linux
+      - name: Install the Package
         run: pip install ".[dev]"
 
       - name: Run Tests
