@@ -22,35 +22,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v5
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
         with:
+          # auto-update-conda: true
+          channels: conda-forge,defaults
           python-version: ${{ matrix.python-version }}
-          enable-cache: true
+          channel-priority: true
 
-      - name: Get C Libraries Linux
-        if: matrix.os == 'ubuntu-latest'
+      - name: Install Non-Python Dependencies
         run: |
-          sudo apt-get install libfftw3-dev
-          sudo apt-get install libgsl0-dev
-      - name: Get C Libraries MacOS
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew install fftw
-          brew install gsl
-          brew install libomp
+          conda install fftw gsl
 
       - name: Install the project Linux
         if: matrix.os == 'ubuntu-latest'
-        run: uv sync --all-extras --all-groups --dev
-
-      - name: Install the project Linux
-        if: matrix.os == 'macos-latest'
-        run: LIB=/opt/homebrew/opt/libomp/lib INCLUDE=/opt/homebrew/opt/libomp/include uv sync --all-extras --all-groups --dev
+        run: pip install ".[dev]"
 
       - name: Run Tests
         run: |
-          uv run coverage run --parallel-mode -m pytest
+          coverage run --parallel-mode -m pytest
 
       - name: Upload coverage report
         if: matrix.os == 'ubuntu-latest' && success()
