@@ -16,7 +16,7 @@ authors = [
     { name = "James Davies", email = "james.davies@sns.it" },
     { name = "Steven Murray", email = "murray.steveng@gmail.com" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {text="MIT"}
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -31,11 +31,27 @@ classifiers = [
 ]
 
 dependencies = [
+    "astropy>=7.0.1",
+    "attrs>=25.3.0",
     "numpy>=2",
     "powerbox>=0.8.2",
     "scipy>=1.15.2",
 ]
 dynamic = ['version']
+
+[project.optional-dependencies]
+21cmfast = ['21cmFAST @ git+https://github.com/21cmFAST/21cmFAST@v4-prep']
+tests = [
+    "coverage",
+    "pytest-cov",
+    "pre-commit",
+    "pytest",
+    "sphinx",
+]
+dev = [
+    "tuesday[tests,21cmfast]"
+]
+
 
 [project.urls]
 Repository = "https://github.com/21cmfast/py21cmfast-tools"
@@ -43,7 +59,7 @@ Issues = "https://github.com/21cmfast/py21cmfast-tools/issues"
 Changelog = "https://github.com/21cmfast/py21cmfast-tools/releases"
 
 [tool.pytest.ini_options]
-addopts = "--verbose --durations=25"
+addopts = "--durations=25 --cov tuesday --cov-config=.coveragerc --cov-report xml:./coverage.xml "
 norecursedirs = [
     "dist",
     "build",
@@ -114,12 +130,10 @@ property-decorators = [
 [tool.ruff.lint.mccabe]
 max-complexity = 21
 
+[tool.uv.sources]
+21cmfast = { git = "https://github.com/21cmfast/21cmfast", rev = "v4-prep" }
+
 [dependency-groups]
-dev = [
-    "coverage>=7.6.12",
-    "hatch>=1.14.0",
-    "hatch-vcs>=0.4.0",
-    "pre-commit>=4.1.0",
-    "pytest>=8.3.5",
-    "sphinx>=8.1.3",
+21cmfast = [
+    "21cmfast",
 ]
