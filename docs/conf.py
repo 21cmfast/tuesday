@@ -21,7 +21,6 @@ extensions = [
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_design",
-    "myst_parser",
 ]
 myst_enable_extensions = ["deflist"]
 if os.getenv("SPELLCHECK"):
