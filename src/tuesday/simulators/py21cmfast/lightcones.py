@@ -49,7 +49,7 @@ def construct_lightcone_from_cache(
     inputs = cache.inputs
     node_redshifts = sorted(cache.BrightnessTemp.keys(), reverse=True)
 
-    lightconer.validate_options(cache.inputs.user_params, cache.inputs.flag_options)
+    lightconer.validate_options(cache.inputs.matter_options, cache.inputs.astro_options)
 
     # Create the LightCone instance, loading from file if needed
     lightcone = setup_lightcone_instance(
