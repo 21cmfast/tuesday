@@ -39,7 +39,7 @@ jobs:
           conda install fftw gsl
 
       - name: Install the Package
-        run: pip install ".[dev]"
+        run: pip install ".[dev]" --prerelease allow
 
       - name: Run Tests
         run: |
