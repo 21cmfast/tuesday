@@ -63,9 +63,9 @@ def test_construct_rect_lightcone_from_cache(tmp_path: Path):
     lightconer = RectilinearLightconer.with_equal_cdist_slices(
         min_redshift=6,
         max_redshift=10,
-        resolution=cache.inputs.user_params.BOX_LEN
+        resolution=cache.inputs.simulation_options.BOX_LEN
         * un.Mpc
-        / cache.inputs.user_params.HII_DIM,
+        / cache.inputs.simulation_options.HII_DIM,
         quantities=("density", "brightness_temp"),
     )
 
@@ -98,7 +98,7 @@ def test_construct_ang_lightcone_from_cache(tmp_path: Path):
     cache = create_mock_cache_output(cachedir)
 
     lightconer = AngularLightconer.like_rectilinear(
-        user_params=cache.inputs.user_params,
+        simulation_options=cache.inputs.simulation_options,
         max_redshift=10,
         match_at_z=6.0,
         quantities=("density", "brightness_temp"),
@@ -118,7 +118,7 @@ def test_exceptions(tmp_path: Path):
     cache = create_mock_cache_output(cachedir)
     cache.PerturbedField[cache.inputs.node_redshifts[-1]].unlink()
     lightconer = AngularLightconer.like_rectilinear(
-        user_params=cache.inputs.user_params,
+        simulation_options=cache.inputs.simulation_options,
         max_redshift=10,
         match_at_z=6.0,
         quantities=("density", "brightness_temp"),
