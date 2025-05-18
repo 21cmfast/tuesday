@@ -8,7 +8,6 @@ A collection of lightcone postprocessing tools such as calculating power spectra
 .. |PyPI| image:: https://badgen.net/pypi/v/tuesday-eor/
    :target: https://pypi.org/project/tuesday-eor
    :alt: PyPI version
-
 .. |Status| image:: https://badgen.net/github/status/tuesday.svg
     :target: https://pypi.org/project/tuesday-eor
     :alt: Status
@@ -18,7 +17,10 @@ A collection of lightcone postprocessing tools such as calculating power spectra
 .. |Version| image:: https://badgen.net/pypi/v/tuesday-eor/
     :target: https://pypi.org/project/tuesday-eor
     :alt: Version
-.. |RTD| image:: https://readthedocs.org/projects/tuesday/badge/?version=latest
+.. |Python Version| image:: https://img.shields.io/pypi/pyversions/tuesday-eor.svg
+    :target: https://pypi.python.org/pypi/tuesday-eor/
+    :alt: Python Version
+.. |Docs| image:: https://readthedocs.org/projects/tuesday/badge/?version=latest
     :target: http://tuesday.readthedocs.io/?badge=latest
     :alt: Documentation Status
 .. |Code Style| image:: https://img.shields.io/badge/code%20style-black-000000.svg
