@@ -34,20 +34,17 @@ Installation
 tools like `pip` or `uv`:
 
 .. code-block:: bash
- pip install tuesday-eor
-
-
+   pip install tuesday-eor
 or
 
 .. code-block:: bash
- uv pip install tuesday-eor
-
+   uv pip install tuesday-eor
 
 If you are developing `tuesday`, we recommend using a virtual environment.
 You can create a new environment with `uv`:
 .. code-block:: bash
- uv sync
- source .venv/bin/activate
+   uv sync
+   source .venv/bin/activate
 
 Contribute
 ==========
