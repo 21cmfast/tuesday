@@ -1,7 +1,7 @@
 ===================================================
 tuesday - The Ultimate EoR Simulation Data AnalYser
 ===================================================
-A collection of lightcone postprocessing tools such as conversion to power spectrum, plotting, and line intensity map making.
+A collection of lightcone postprocessing tools such as calculating power spectra, plotting, and making line intensity maps.
 
 |PyPI| |Status| |License| |Version| |Python Version| |Docs| |Code Style| |Coverage|
 
@@ -15,8 +15,8 @@ A collection of lightcone postprocessing tools such as conversion to power spect
 .. |License| image:: https://img.shields.io/badge/License-MIT-yellow.svg
     :target: https://opensource.org/licenses/MIT
     :alt: License
-.. |Version| image:: https://img.shields.io/pypi/pyversions/tuesday-eor.svg
-    :target: https://pypi.python.org/pypi/tuesday-eor/
+.. |Version| image:: https://badgen.net/pypi/v/tuesday-eor/
+    :target: https://pypi.org/project/tuesday-eor
     :alt: Version
 .. |RTD| image:: https://readthedocs.org/projects/tuesday/badge/?version=latest
     :target: http://tuesday.readthedocs.io/?badge=latest
