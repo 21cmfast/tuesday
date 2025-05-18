@@ -33,16 +33,16 @@ Installation
 `tuesday` is available on PyPI and can be installed with standard
 tools like `pip` or `uv`:
 
-.. code-block:: bash
+.. code-block:: console
    pip install tuesday-eor
 or
 
-.. code-block:: bash
+.. code-block:: console
    uv pip install tuesday-eor
 
 If you are developing `tuesday`, we recommend using a virtual environment.
 You can create a new environment with `uv`:
-.. code-block:: bash
+.. code-block:: console
    uv sync
    source .venv/bin/activate
 
@@ -66,39 +66,35 @@ Development
 If you are developing `tuesday`, here are some basic steps to follow to get setup.
 
 First create a development environment with `uv`:
+.. code-block:: console
+   uv sync --all-extras --dev
 
-```bash
-uv sync --all-extras --dev
-```
 
 Then install `pre-commit` in your repo so that style checks can be done on the fly:
 
-```bash
-pre-commit install
-```
+.. code-block:: console
+   pre-commit install
+
 
 Make changes in a branch:
 
-```bash
-git checkout -b my-new-feature
-```
+.. code-block:: console
+   git checkout -b my-new-feature
 
 Make sure to run the tests:
 
-```bash
-uv run pytest
-```
+.. code-block:: console
+   uv run pytest
+
 
 If you add new dependencies, use `uv` to manage this:
 
-```bash
-uv add my-new-dependency
-```
+.. code-block:: console
+   uv add my-new-dependency
 
 If it is a development dependency, use the `--dev` flag:
 
-```bash
-uv add my-new-dev-dependency --dev
-```
+.. code-block:: console
+   uv add my-new-dev-dependency --dev
 
 When you are ready to submit your changes, open a pull request on GitHub.
