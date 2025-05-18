@@ -30,8 +30,8 @@ A collection of lightcone postprocessing tools such as calculating power spectra
 Installation
 ============
 
-`tuesday` is available on PyPI and can be installed with standard
-tools like `pip` or `uv`::
+``tuesday`` is available on PyPI and can be installed with standard
+tools like ``pip`` or ``uv``::
 
     $ pip install tuesday-eor
 
@@ -39,8 +39,8 @@ or::
 
     $ uv pip install tuesday-eor
 
-If you are developing `tuesday`, we recommend using a virtual environment.
-You can create a new environment with `uv`::
+If you are developing ``tuesday``, we recommend using a virtual environment.
+You can create a new environment with ``uv``::
 
     $ uv sync
     $ source .venv/bin/activate
@@ -48,28 +48,28 @@ You can create a new environment with `uv`::
 Contribute
 ==========
 
-`tuesday` is meant to be the collection of all these useful functionalities of which everyone has their own implementation, such as the power spectrum calculation.
-To contribute to `tuesday`, first find where your code belongs: if your code can be written in a simulator-independent manner (preferred), it goes into `core`. On the other hand, if it requires a simulator-dependent input, then it goes into `simulators/your_simulator`.
+``tuesday`` is meant to be the collection of all these useful functionalities of which everyone has their own implementation, such as the power spectrum calculation.
+To contribute to ``tuesday``, first find where your code belongs: if your code can be written in a simulator-independent manner (preferred), it goes into `core`. On the other hand, if it requires a simulator-dependent input, then it goes into `simulators/your_simulator`.
 
-To contribute, open a `pull request <https://github.com/21cmFAST/21cmEMU/pulls>`_ with your code including tests for all lines and docstrings for everything you add.
+To contribute, open a ``pull request <https://github.com/21cmFAST/21cmEMU/pulls>``_ with your code including tests for all lines and docstrings for everything you add.
 Please also add a notebook with a tutorial demonstrating the uses of your code as part of the documentation.
 
 Documentation
 =============
 
-See the `documentation <https://tuesday.readthedocs.io/en/latest/>`_ for more information on how to use `tuesday`.
+See the ``documentation <https://tuesday.readthedocs.io/en/latest/>``_ for more information on how to use `tuesday`.
 
 Development
 ===========
 
-If you are developing `tuesday`, here are some basic steps to follow to get setup.
+If you are developing ```tuesday``, here are some basic steps to follow to get setup.
 
-First create a development environment with `uv`::
+First create a development environment with ``uv``::
 
     $ uv sync --all-extras --dev
 
 
-Then install `pre-commit` in your repo so that style checks can be done on the fly::
+Then install ``pre-commit`` in your repo so that style checks can be done on the fly::
 
     $ pre-commit install
 
@@ -83,11 +83,11 @@ Make sure to run the tests::
     $ uv run pytest
 
 
-If you add new dependencies, use `uv` to manage this::
+If you add new dependencies, use ``uv`` to manage this::
 
     $ uv add my-new-dependency
 
-If it is a development dependency, use the `--dev` flag::
+If it is a development dependency, use the ``--dev`` flag::
 
     $ uv add my-new-dev-dependency --dev
 
