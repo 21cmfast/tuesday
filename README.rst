@@ -61,12 +61,12 @@ Please also add a notebook with a tutorial demonstrating the uses of your code a
 Documentation
 =============
 
-See the `documentation <https://tuesday.readthedocs.io/en/latest/>`_ for more information on how to use `tuesday`.
+See the `documentation <https://tuesday.readthedocs.io/en/latest/>`_ for more information on how to use ``tuesday``.
 
 Development
 ===========
 
-If you are developing ```tuesday``, here are some basic steps to follow to get setup.
+If you are developing ``tuesday``, here are some basic steps to follow to get setup.
 
 First create a development environment with ``uv``::
 
