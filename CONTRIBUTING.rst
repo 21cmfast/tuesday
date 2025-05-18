@@ -1,24 +1,21 @@
-# Contributor Guide
+Contributor Guide
+=================
 
 Thank you for your interest in improving this project.
-This project is open-source under the [MIT license] and
+This project is open-source under the `MIT license <https://opensource.org/licenses/MIT>`_  and
 welcomes contributions in the form of bug reports, feature requests, and pull requests.
 
 Here is a list of important resources for contributors:
 
-- [Source Code]
-- [Documentation]
-- [Issue Tracker]
-- [Code of Conduct]
+- `Source Code <https://github.com/21cmfast/tuesday>`_
+- `Documentation <https://tuesday.readthedocs.io/>`_
+- `Issue Tracker <https://github.com/21cmfast/tuesday/issues>`_
+- :ref:`CODE OF CONDUCT`
 
-[mit license]: https://opensource.org/licenses/MIT
-[source code]: https://github.com/21cmfast/py21cmFAST-tools
-[documentation]: https://py21cmFAST-tools.readthedocs.io/
-[issue tracker]: https://github.com/21cmfast/py21cmFAST-tools/issues
+How to report a bug
+===================
 
-## How to report a bug
-
-Report bugs on the [Issue Tracker].
+Report bugs on the `issue tracker <https://github.com/21cmfast/tuesday/issues>`_.
 
 When filing an issue, make sure to answer these questions:
 
@@ -31,18 +28,21 @@ When filing an issue, make sure to answer these questions:
 The best way to get your bug fixed is to provide a test case,
 and/or steps to reproduce the issue.
 
-## How to request a feature
+How to request a feature
+========================
 
-Request features on the [Issue Tracker].
+Request features on the `issue tracker <https://github.com/21cmfast/tuesday/issues>`_.
 
-## How to set up your development environment
+How to set up your development environment
+==========================================
 
 
 ```console
 $ pip install -e ".[dev]"
 ```
 
-## How to test the project
+How to test the project
+=======================
 
 Run the full test suite:
 
@@ -51,13 +51,13 @@ $ pytest
 ```
 
 Unit tests are located in the _tests_ directory,
-and are written using the [pytest] testing framework.
+and are written using the `pytest <https://pytest.readthedocs.io/>`_ testing framework.
 
-[pytest]: https://pytest.readthedocs.io/
 
-## How to submit changes
+How to submit changes
+=====================
 
-Open a [pull request] to submit changes to this project.
+Open a `pull request <https://github.com/21cmfast/tuesday/pulls>`_ to submit changes to this project.
 
 Your pull request needs to meet the following guidelines for acceptance:
 
@@ -75,9 +75,3 @@ $ pre-commit intsall
 
 It is recommended to open an issue before starting work on anything.
 This will allow a chance to talk it over with the owners and validate your approach.
-
-[pull request]: https://github.com/21cmfast/py21cmFAST-tools/pulls
-
-<!-- github-only -->
-
-[code of conduct]: CODE_OF_CONDUCT.md
