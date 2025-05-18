@@ -31,19 +31,17 @@ Installation
 ============
 
 `tuesday` is available on PyPI and can be installed with standard
-tools like `pip` or `uv`:
+tools like `pip` or `uv`::
 
-..  code-block:: bash
     $ pip install tuesday-eor
 
-or
+or::
 
-..  code-block:: bash
     $ uv pip install tuesday-eor
 
 If you are developing `tuesday`, we recommend using a virtual environment.
-You can create a new environment with `uv`:
-..  code-block:: bash
+You can create a new environment with `uv`::
+
     $ uv sync
     $ source .venv/bin/activate
 
@@ -66,36 +64,31 @@ Development
 
 If you are developing `tuesday`, here are some basic steps to follow to get setup.
 
-First create a development environment with `uv`:
-.. code-block:: console
-   uv sync --all-extras --dev
+First create a development environment with `uv`::
+
+    $ uv sync --all-extras --dev
 
 
-Then install `pre-commit` in your repo so that style checks can be done on the fly:
+Then install `pre-commit` in your repo so that style checks can be done on the fly::
 
-.. code-block:: console
-   pre-commit install
-
-
-Make changes in a branch:
-
-.. code-block:: console
-   git checkout -b my-new-feature
-
-Make sure to run the tests:
-
-.. code-block:: console
-   uv run pytest
+    $ pre-commit install
 
 
-If you add new dependencies, use `uv` to manage this:
+Make changes in a branch::
 
-.. code-block:: console
-   uv add my-new-dependency
+    $ git checkout -b my-new-feature
 
-If it is a development dependency, use the `--dev` flag:
+Make sure to run the tests::
 
-.. code-block:: console
-   uv add my-new-dev-dependency --dev
+    $ uv run pytest
+
+
+If you add new dependencies, use `uv` to manage this::
+
+    $ uv add my-new-dependency
+
+If it is a development dependency, use the `--dev` flag::
+
+    $ uv add my-new-dev-dependency --dev
 
 When you are ready to submit your changes, open a pull request on GitHub.
