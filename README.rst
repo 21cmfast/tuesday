@@ -33,22 +33,22 @@ Installation
 `tuesday` is available on PyPI and can be installed with standard
 tools like `pip` or `uv`:
 
-```bash
-pip install tuesday-eor
-```
+.. code-block:: bash
+ pip install tuesday-eor
+
 
 or
 
-```bash
-uv pip install tuesday-eor
-```
+.. code-block:: bash
+ uv pip install tuesday-eor
+
 
 If you are developing `tuesday`, we recommend using a virtual environment.
 You can create a new environment with `uv`:
-```bash
-uv sync
-source .venv/bin/activate
-```
+.. code-block:: bash
+ uv sync
+ source .venv/bin/activate
+
 Contribute
 ==========
 
