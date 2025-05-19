@@ -32,7 +32,7 @@ A collection of lightcone postprocessing tools such as calculating power spectra
 Installation
 ------------
 There is no PyPI package for ``tuesday`` yet, but you can install it from the source code::
-    
+
     $ git clone git@github.com:21cmfast/tuesday.git
     $ cd tuesday
     $ pip install .
