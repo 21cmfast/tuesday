@@ -38,7 +38,7 @@ There is no PyPI package for ``tuesday`` yet, but you can install it from the so
     $ pip install .
 
 
-``tuesday`` is available on PyPI and can be installed with standard
+SOON: ``tuesday`` is available on PyPI and can be installed with standard
 tools like ``pip`` or ``uv``::
 
     $ pip install tuesday-eor
