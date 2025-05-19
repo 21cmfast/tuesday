@@ -10,7 +10,7 @@ fallback_version  = "0.0.0"
 [project]
 name = "tuesday"
 description = "Tools for post-processing and computing summaries of 21cmFAST simulations"
-readme = "README.md"
+readme = "README.rst"
 authors = [
     { name = "Daniela Breitman", email = "daniela.breitman@sns.it" },
     { name = "James Davies", email = "james.davies@sns.it" },
