@@ -50,7 +50,7 @@ You can create a new environment with ``uv``::
 Contribute
 ==========
 
-``tuesday`` is meant to be the collection of all these useful functionalities of which everyone has their own implementation, such as the power spectrum calculation.
+``tuesday`` is a collection of useful functionality for 21cm simulations, bringing together many otherwise separate implementations, such as power spectrum calculations.
 To contribute to ``tuesday``, first find where your code belongs:
 if your code can be written in a simulator-independent manner (preferred), it goes into ``core``.
 On the other hand, if it requires a simulator-dependent input, then it goes into ``simulators/your_simulator``.
