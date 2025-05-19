@@ -5,12 +5,55 @@ Thank you for your interest in improving this project.
 This project is open-source under the `MIT license <https://opensource.org/licenses/MIT>`_  and
 welcomes contributions in the form of bug reports, feature requests, and pull requests.
 
+``tuesday`` is a collection of useful functionality for 21cm simulations, bringing together many otherwise separate implementations, such as power spectrum calculations.
+To contribute to ``tuesday``, first find where your code belongs:
+if your code can be written in a simulator-independent manner (preferred), it goes into ``core``.
+On the other hand, if it requires a simulator-dependent input, then it goes into ``simulators/your_simulator``.
+
+To contribute, open a `pull request <https://github.com/21cmFAST/21cmEMU/pulls>`_ with your code including tests for all lines and docstrings for everything you add.
+Please also add a notebook with a tutorial demonstrating the uses of your code as part of the documentation.
+
 Here is a list of important resources for contributors:
 
 - `Source Code <https://github.com/21cmfast/tuesday>`_
 - `Documentation <https://tuesday.readthedocs.io/>`_
 - `Issue Tracker <https://github.com/21cmfast/tuesday/issues>`_
 - :ref:`CODE OF CONDUCT`
+
+
+Development
+-----------
+
+If you are developing ``tuesday``, here are some basic steps to follow to get setup.
+
+First create a development environment with ``uv``::
+
+    $ uv sync --all-extras --dev
+
+
+Then install ``pre-commit`` in your repo so that style checks can be done on the fly::
+
+    $ pre-commit install
+
+
+Make changes in a branch::
+
+    $ git checkout -b my-new-feature
+
+Make sure to run the tests::
+
+    $ uv run pytest
+
+
+If you add new dependencies, use ``uv`` to manage this::
+
+    $ uv add my-new-dependency
+
+If it is a development dependency, use the ``--dev`` flag::
+
+    $ uv add my-new-dev-dependency --dev
+
+When you are ready to submit your changes, open a pull request on GitHub.
 
 How to report a bug
 -------------------
@@ -37,20 +80,22 @@ How to set up your development environment
 ------------------------------------------
 
 
-```console
-$ pip install -e ".[dev]"
-```
+::
+    $ pip install -e ".[dev]"
+
 
 How to test the project
 -----------------------
 
-Run the full test suite::
-
-    $ pytest
-
 
 Unit tests are located in the _tests_ directory,
 and are written using the `pytest <https://pytest.readthedocs.io/>`_ testing framework.
+
+The full test suite can be ran with the command::
+
+    $ pytest
+
+in the root directory of the project.
 
 
 How to submit changes

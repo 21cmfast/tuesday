@@ -31,6 +31,12 @@ A collection of lightcone postprocessing tools such as calculating power spectra
 
 Installation
 ------------
+There is no PyPI package for ``tuesday`` yet, but you can install it from the source code::
+    
+    $ git clone git@github.com:21cmfast/tuesday.git
+    $ cd tuesday
+    $ pip install .
+
 
 ``tuesday`` is available on PyPI and can be installed with standard
 tools like ``pip`` or ``uv``::
@@ -47,52 +53,13 @@ You can create a new environment with ``uv``::
     $ uv sync
     $ source .venv/bin/activate
 
-Contribute
-----------
-
-``tuesday`` is a collection of useful functionality for 21cm simulations, bringing together many otherwise separate implementations, such as power spectrum calculations.
-To contribute to ``tuesday``, first find where your code belongs:
-if your code can be written in a simulator-independent manner (preferred), it goes into ``core``.
-On the other hand, if it requires a simulator-dependent input, then it goes into ``simulators/your_simulator``.
-
-To contribute, open a `pull request <https://github.com/21cmFAST/21cmEMU/pulls>`_ with your code including tests for all lines and docstrings for everything you add.
-Please also add a notebook with a tutorial demonstrating the uses of your code as part of the documentation.
-
 Documentation
 -------------
 
 See the `documentation <https://tuesday.readthedocs.io/en/latest/>`_ for more information on how to use ``tuesday``.
 
-Development
------------
+Contribute
+----------
 
-If you are developing ``tuesday``, here are some basic steps to follow to get setup.
-
-First create a development environment with ``uv``::
-
-    $ uv sync --all-extras --dev
-
-
-Then install ``pre-commit`` in your repo so that style checks can be done on the fly::
-
-    $ pre-commit install
-
-
-Make changes in a branch::
-
-    $ git checkout -b my-new-feature
-
-Make sure to run the tests::
-
-    $ uv run pytest
-
-
-If you add new dependencies, use ``uv`` to manage this::
-
-    $ uv add my-new-dependency
-
-If it is a development dependency, use the ``--dev`` flag::
-
-    $ uv add my-new-dev-dependency --dev
-
-When you are ready to submit your changes, open a pull request on GitHub.
+Contributions are very welcome.
+To learn more, see the `Contributor Guide <https://github.com/21cmfast/tuesday/blob/main/CONTRIBUTING.rst>`_.
