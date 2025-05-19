@@ -42,9 +42,9 @@ def plot_1d_power_spectrum(
         colors = ['k'] * N
     if xlabel is None:
         if wavemodes.unit == 1/un.Mpc:
-            xlabel = r'$k \, [h \, Mpc^{-1}]$'
+            xlabel = r'$k \, [\rm{Mpc}^{-1}]$'
         elif wavemodes.unit == littleh/un.Mpc:
-            xlabel = r'$k \, [h \, Mpc^{-1}]$'
+            xlabel = r'$k \, [h \, \rm{Mpc}^{-1}]$'
         else:
             raise ValueError("Wavemodes must be in units of 1/Mpc or h/Mpc.")
     if ylabel is None:
