@@ -1,4 +1,4 @@
-"""The Ultimate EoR Simulation  Data AnalYser (TUESDAY) package."""
+"""The Ultimate EoR Simulation Data AnalYser (TUESDAY) package."""
 
 __all__ = ["__version__", "core", "simulators"]
 from . import core, simulators
