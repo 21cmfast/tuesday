@@ -13,7 +13,7 @@ Here is a list of important resources for contributors:
 - :ref:`CODE OF CONDUCT`
 
 How to report a bug
-===================
+-------------------
 
 Report bugs on the `issue tracker <https://github.com/21cmfast/tuesday/issues>`_.
 
@@ -29,12 +29,12 @@ The best way to get your bug fixed is to provide a test case,
 and/or steps to reproduce the issue.
 
 How to request a feature
-========================
+------------------------
 
 Request features on the `issue tracker <https://github.com/21cmfast/tuesday/issues>`_.
 
 How to set up your development environment
-==========================================
+------------------------------------------
 
 
 ```console
@@ -42,20 +42,19 @@ $ pip install -e ".[dev]"
 ```
 
 How to test the project
-=======================
+-----------------------
 
-Run the full test suite:
+Run the full test suite::
 
-```console
-$ pytest
-```
+    $ pytest
+
 
 Unit tests are located in the _tests_ directory,
 and are written using the `pytest <https://pytest.readthedocs.io/>`_ testing framework.
 
 
 How to submit changes
-=====================
+---------------------
 
 Open a `pull request <https://github.com/21cmfast/tuesday/pulls>`_ to submit changes to this project.
 
@@ -67,11 +66,9 @@ Your pull request needs to meet the following guidelines for acceptance:
 
 Feel free to submit early, though we can always iterate on this.
 
-To run linting and code formatting checks before committing your change, you can install pre-commit as a Git hook by running the following command:
+To run linting and code formatting checks before committing your change, you can install pre-commit as a Git hook by running the following command::
 
-```console
-$ pre-commit intsall
-```
+    $ pre-commit intsall
 
 It is recommended to open an issue before starting work on anything.
 This will allow a chance to talk it over with the owners and validate your approach.

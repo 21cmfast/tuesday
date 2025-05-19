@@ -23,14 +23,14 @@ A collection of lightcone postprocessing tools such as calculating power spectra
 .. |Docs| image:: https://readthedocs.org/projects/tuesday/badge/?version=latest
     :target: http://tuesday.readthedocs.io/?badge=latest
     :alt: Documentation Status
-.. |Code Style| image:: https://img.shields.io/badge/code%20style-black-000000.svg
-    :target: https://github.com/psf/black
+.. |Code Style| image:: https://img.shields.io/badge/code%20style-ruff-red.svg
+    :target: https://github.com/astral-sh/ruff
 .. |Codecov| image:: https://codecov.io/gh/21cmfast/tuesday/branch/main/graph/badge.svg
     :target: https://app.codecov.io/gh/21cmfast/tuesday
     :alt: Code Coverage
 
 Installation
-============
+------------
 
 ``tuesday`` is available on PyPI and can be installed with standard
 tools like ``pip`` or ``uv``::
@@ -48,7 +48,7 @@ You can create a new environment with ``uv``::
     $ source .venv/bin/activate
 
 Contribute
-==========
+----------
 
 ``tuesday`` is a collection of useful functionality for 21cm simulations, bringing together many otherwise separate implementations, such as power spectrum calculations.
 To contribute to ``tuesday``, first find where your code belongs:
@@ -59,12 +59,12 @@ To contribute, open a `pull request <https://github.com/21cmFAST/21cmEMU/pulls>`
 Please also add a notebook with a tutorial demonstrating the uses of your code as part of the documentation.
 
 Documentation
-=============
+-------------
 
 See the `documentation <https://tuesday.readthedocs.io/en/latest/>`_ for more information on how to use ``tuesday``.
 
 Development
-===========
+-----------
 
 If you are developing ``tuesday``, here are some basic steps to follow to get setup.
 
