@@ -1,9 +1,9 @@
-import astropy.units as un
+"""Plotting functions for 1D and 2D power spectra."""
+
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.cosmology.units import littleh
-from matplotlib import rcParams
-
+from typing import Optional
 
 def plot_1d_power_spectrum(
     wavemodes: un.Quantity,
@@ -36,10 +36,10 @@ def plot_1d_power_spectrum(
         Path to save the plot. If None, the plot will be shown instead.
     """
     plt.figure(figsize=(8, 6))
-    rcParams.update({"font.size": fontsize})
-    N = power_spectrum.shape[0]
+    rcParams.update({'font.size': fontsize})
+    n = power_spectrum.shape[0]
     if colors is None:
-        colors = ["k"] * N
+        colors = ["k"] * n
     if xlabel is None:
         if wavemodes.unit == 1 / un.Mpc:
             xlabel = r"$k \, [\rm{Mpc}^{-1}]$"
@@ -55,11 +55,9 @@ def plot_1d_power_spectrum(
         elif power_spectrum.unit == un.mK**2:
             ylabel = r"$\Delta^2_{21} [\rm{mK}^2]$"
         else:
-            raise ValueError(
-                "Power spectrum must be in units of mK^2 * Mpc^3 or mK^2 * Mpc^3 / h^3 or mK^2."
-            )
-    for i in range(N):
-        plt.plot(wavemodes, power_spectrum[i], color=colors[i])
+            raise ValueError("Accepted power spectrum units: mK^2 Mpc^3, mK^2 Mpc^3/h^3 or mK^2.")
+    for i in range(n):
+        plt.plot(wavemodes, power_spectrum[i], color = colors[i])
     if title is not None:
         plt.title(title, fontsize=fontsize)
     plt.xlabel(xlabel, fontsize=fontsize)
@@ -142,9 +140,7 @@ def plot_2d_power_spectrum(
         elif power_spectrum.unit == un.mK**2:
             clabel = r"$\Delta^2_{21} [\rm{mK}^2]$"
         else:
-            raise ValueError(
-                "Power spectrum must be in units of mK^2 * Mpc^3 or mK^2 * Mpc^3 / h^3 or mK^2."
-            )
+            raise ValueError("Accepted power spectrum units: mK^2 Mpc^3, mK^2 Mpc^3/h^3 or mK^2.")
     if vmin is None:
         vmin = np.percentile(power_spectrum, 5)
     if vmax is None:
