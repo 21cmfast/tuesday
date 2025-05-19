@@ -53,7 +53,7 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: true
-      
+
       - name: Upload documentation
         if: matrix.session == 'docs-build'
         uses: actions/upload-artifact@v4
