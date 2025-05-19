@@ -6,5 +6,5 @@ __all__ = [
     "plot_power_spectrum",
 ]
 
-from .summaries.powerspectra import calculate_ps, cylindrical_to_spherical
 from .plotting.powerspectra import plot_power_spectrum
+from .summaries.powerspectra import calculate_ps, cylindrical_to_spherical
