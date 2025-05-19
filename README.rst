@@ -8,7 +8,7 @@ A collection of lightcone postprocessing tools such as calculating power spectra
 .. |PyPI| image:: https://badgen.net/pypi/v/tuesday-eor/
    :target: https://pypi.org/project/tuesday-eor
    :alt: PyPI version
-.. |Status| image:: https://badgen.net/github/status/tuesday.svg
+.. |Status| image:: https://img.shields.io/pypi/status/tuesday.svg
     :target: https://pypi.org/project/tuesday-eor
     :alt: Status
 .. |License| image:: https://img.shields.io/badge/License-MIT-yellow.svg
