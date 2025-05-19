@@ -10,7 +10,7 @@ To contribute to ``tuesday``, first find where your code belongs:
 if your code can be written in a simulator-independent manner (preferred), it goes into ``core``.
 On the other hand, if it requires a simulator-dependent input, then it goes into ``simulators/your_simulator``.
 
-In some cases, multiple implementations of similar functionality might exist -- one general-purpose tool that can act on raw arrays, 
+In some cases, multiple implementations of similar functionality might exist -- one general-purpose tool that can act on raw arrays,
 and other higher-level implementations that act on bespoke simulator outputs, that call the more general methods under the hood.
 
 To contribute, open a `pull request <https://github.com/21cmFAST/21cmEMU/pulls>`_ with your code including tests for all lines and docstrings for everything you add.
