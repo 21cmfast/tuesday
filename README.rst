@@ -50,8 +50,14 @@ or::
 If you are developing ``tuesday``, we recommend using a virtual environment.
 You can create a new environment with ``uv``::
 
-    $ uv sync
+    $ uv venv --python=3.12 [env-name]
     $ source .venv/bin/activate
+    $ uv pip install -e ".[dev]"
+
+Then use::
+    $ deactivate
+
+to exit the virtual environment.
 
 Documentation
 -------------
