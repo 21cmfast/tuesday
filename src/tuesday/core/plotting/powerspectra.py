@@ -186,6 +186,8 @@ def plot_2d_power_spectrum(  # noqa: C901
             axs = [axs]
     if axs is None and fig is not None:
         axs = fig.get_axes()
+        if isinstance(axs, plt.Axes):
+            axs = [axs]
     rcParams.update({"font.size": fontsize})
     if log is None:
         log = [True, True, False]
