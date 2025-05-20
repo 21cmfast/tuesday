@@ -8,7 +8,7 @@ from matplotlib import rcParams
 from scipy.ndimage import gaussian_filter
 
 
-def plot_1d_power_spectrum( # noqa: C901
+def plot_1d_power_spectrum(  # noqa: C901
     wavemodes: un.Quantity,
     power_spectrum: un.Quantity,
     fig: plt.Figure | None = None,
@@ -51,7 +51,7 @@ def plot_1d_power_spectrum( # noqa: C901
     labels : list, optional
         List of labels for each line in the plot.
     smooth : float, optional
-        Standard deviation for Gaussian smoothing. 
+        Standard deviation for Gaussian smoothing.
         If True, uses a standard deviation of 1.
     leg_kwargs : dict, optional
         Keyword arguments for the legend.
@@ -117,7 +117,7 @@ def plot_1d_power_spectrum( # noqa: C901
     return fig, ax
 
 
-def plot_2d_power_spectrum( # noqa: C901
+def plot_2d_power_spectrum(  # noqa: C901
     wavemodes: un.Quantity,
     power_spectrum: un.Quantity,
     fig: plt.Figure | None = None,
@@ -170,7 +170,7 @@ def plot_2d_power_spectrum( # noqa: C901
     labels : list, optional
         Label for the plot legend.
     smooth : float, optional
-        Standard deviation for Gaussian smoothing. 
+        Standard deviation for Gaussian smoothing.
         If True, uses a standard deviation of 1.
     leg_kwargs : dict, optional
         Keyword arguments for the legend.
@@ -269,7 +269,7 @@ def plot_2d_power_spectrum( # noqa: C901
     return fig, axs
 
 
-def plot_power_spectrum( # noqa: C901
+def plot_power_spectrum(
     wavemodes: un.Quantity,
     power_spectrum: un.Quantity,
     fig: plt.Figure | None = None,
@@ -324,7 +324,7 @@ def plot_power_spectrum( # noqa: C901
     labels : list, optional
         List of labels for each line in the plot.
     smooth : bool or float, optional
-        Standard deviation for Gaussian smoothing. 
+        Standard deviation for Gaussian smoothing.
         If True, uses a standard deviation of 1.
     leg_kwargs : dict, optional
         Keyword arguments for the legend.
