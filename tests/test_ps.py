@@ -18,7 +18,6 @@ def test_calculate_ps(log_bins):
         test_lc * un.dimensionless_unscaled,
         test_redshifts,
         box_length=200 * un.Mpc,
-        box_side_shape=100,
         zs=zs,
         calc_2d=False,
         calc_1d=True,

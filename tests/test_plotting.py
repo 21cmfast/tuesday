@@ -63,7 +63,7 @@ def test_2d_ps_plot(unit):
     zs = [6.0, 10.0, 27.0]
 
     ps = calculate_ps(
-        test_lc,
+        test_lc * un.dimensionless_unscaled,
         test_redshifts,
         box_length=200 * unit,
         zs=zs,
@@ -121,7 +121,7 @@ def test_ps_plot_units(unit):
     zs = [6.0, 10.0, 27.0]
 
     ps = calculate_ps(
-        test_lc,
+        test_lc * un.dimensionless_unscaled,
         test_redshifts,
         box_length=200 * unit,
         zs=zs,
