@@ -83,19 +83,21 @@ def plot_1d_power_spectrum(
             raise ValueError(
                 "Accepted power spectrum units: mK^2 Mpc^3, mK^2 Mpc^3/h^3 or mK^2."
             )
-    if (isinstance(smooth, bool) and smooth) or (
-        isinstance(smooth, float) and smooth > 0
-    ):
+    if isinstance(labels, str):
+        labels = [labels]
+    if (isinstance(smooth, bool) and smooth) or (isinstance(smooth, float) and smooth > 0):
         if isinstance(smooth, bool):
             smooth = 1.0
         power_spectrum = gaussian_filter(power_spectrum, sigma=smooth)
     for i in range(n):
-        ax.plot(
-            wavemodes,
-            power_spectrum[i],
-            color=colors[i],
-            label=labels[i] if labels is not None else None,
-        )
+        if labels is not None:
+            if len(labels) == n:
+                label = labels[i]
+            elif len(labels) == 1 and i == 0:
+                label = labels[0]
+            else:
+                label = None
+        ax.plot(wavemodes, power_spectrum[i], color=colors[i], label = label)
     if title is not None:
         ax.set_title(title, fontsize=fontsize)
     ax.set_xlabel(xlabel, fontsize=fontsize)
@@ -174,8 +176,6 @@ def plot_2d_power_spectrum(
             axs = [axs]
     else:
         axs = fig.get_axes()
-    if isinstance(labels, str):
-        labels = [labels] * n
     rcParams.update({"font.size": fontsize})
     if log is None:
         log = [True, True, False]
@@ -226,15 +226,19 @@ def plot_2d_power_spectrum(
             unit = power_spectrum.unit
         power_spectrum = gaussian_filter(power_spectrum, sigma=smooth) * unit
     for i in range(n):
-        im = axs[i].pcolormesh(
-            kperp.value,
-            kpar.value,
-            power_spectrum[i].value.T,
-            cmap=cmap,
-            vmin=vmin,
-            vmax=vmax,
-            label=labels[i] if labels is not None else None,
-        )
+        if labels is not None:
+            if len(labels) == n:
+                label = labels[i]
+            elif len(labels) == 1 and i == 0:
+                label = labels[0]
+            else:
+                label = None
+        im = axs[i].pcolormesh(kperp.value, kpar.value, power_spectrum[i].value.T, cmap=cmap, vmin=vmin, vmax=vmax, label = label)
+        if len(labels) == n:
+            axs[i].legend(**leg_kwargs)
+        elif len(labels) == 1 and i == 0:
+            axs[0].legend(**leg_kwargs)
+        
         if title is not None and isinstance(title, list):
             axs[i].set_title(title[i], fontsize=fontsize)
         axs[i].set_xlabel(xlabel, fontsize=fontsize)
