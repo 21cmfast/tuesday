@@ -238,14 +238,14 @@ def plot_2d_power_spectrum(  # noqa: C901
     cmap_kwargs = {}
     if vmin is None:
         if log[2]:
-            cmap_kwargs["vmin"] = np.percentile(np.log10(power_spectrum.value), 5)
+            cmap_kwargs["vmin"] = np.nanpercentile(np.log10(power_spectrum.value), 5)
         else:
-            cmap_kwargs["vmin"] = np.percentile(power_spectrum.value, 5)
+            cmap_kwargs["vmin"] = np.nanpercentile(power_spectrum.value, 5)
     if vmax is None:
         if log[2]:
-            cmap_kwargs["vmax"] = np.percentile(np.log10(power_spectrum.value), 95)
+            cmap_kwargs["vmax"] = np.nanpercentile(np.log10(power_spectrum.value), 95)
         else:
-            cmap_kwargs["vmax"] = np.percentile(power_spectrum.value, 95)
+            cmap_kwargs["vmax"] = np.nanpercentile(power_spectrum.value, 95)
     if log[2]:
         cmap_kwargs = {}
         cmap_kwargs["norm"] = LogNorm(vmin=vmin, vmax=vmax)
