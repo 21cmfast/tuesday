@@ -219,7 +219,8 @@ def plot_2d_power_spectrum(  # noqa: C901
                 "Accepted power spectrum units: mK^2 Mpc^3, mK^2 Mpc^3/h^3 or mK^2."
             )
     if log[2]:
-        power_spectrum = np.log10(power_spectrum)
+        unit = power_spectrum.unit
+        power_spectrum = np.log10(power_spectrum.value) * unit
         clabel = r"$\log_{10}$ " + clabel
     if vmin is None:
         vmin = np.percentile(power_spectrum.value, 5)
