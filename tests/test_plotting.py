@@ -92,20 +92,23 @@ def test_2d_ps_plot():
         [ps["final_kperp"], ps["final_kpar"]],
         ps["final_ps_2D"],
         smooth=True,
-    )
-    fig, _ = plt.subplots()
-    plot_power_spectrum(
-        [ps["final_kperp"], ps["final_kpar"]],
-        ps["final_ps_2D"],
-        fig=fig,
         title="Test Title",
         labels="foo",
         log=[True, True],
     )
+    with np.testing.assert_raises(ValueError):
+        fig, _ = plt.subplots()
+        plot_power_spectrum(
+            [ps["final_kperp"], ps["final_kpar"]],
+            ps["final_ps_2D"],
+            fig=fig,
+            title="Test Title",
+            labels="foo",
+            log=[True, True],
+        )
     plot_power_spectrum(
         [ps["final_kperp"], ps["final_kpar"]],
         ps["final_ps_2D"],
-        fig=fig,
         title="Test Title",
         labels=["z=6", "z=10", "z=27"],
         log=False,
@@ -126,7 +129,7 @@ def test_ps_plot_units(unit):
         box_length=200 * unit,
         zs=zs,
         calc_2d=True,
-        calc_1d=False,
+        calc_1d=True,
     )
     ps1 = calculate_ps(
         test_lc * un.mK,
@@ -134,7 +137,7 @@ def test_ps_plot_units(unit):
         box_length=200 * unit,
         zs=zs,
         calc_2d=True,
-        calc_1d=False,
+        calc_1d=True,
     )
 
     plot_power_spectrum(

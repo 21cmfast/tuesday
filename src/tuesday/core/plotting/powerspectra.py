@@ -197,6 +197,10 @@ def plot_2d_power_spectrum(  # noqa: C901
         axs = fig.get_axes()
         if isinstance(axs, plt.Axes):
             axs = [axs]
+        if len(axs) != n:
+            raise ValueError(
+                "Number of axes on fig does not match number of power spectra!"
+            )
     rcParams.update({"font.size": fontsize})
     if log is None:
         log = [True, True, False]
