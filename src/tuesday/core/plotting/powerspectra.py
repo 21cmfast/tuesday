@@ -2,10 +2,12 @@
 
 import astropy.units as un
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 import numpy as np
 from astropy.cosmology.units import littleh
 from matplotlib import rcParams
 from scipy.ndimage import gaussian_filter
+import warnings
 
 
 def plot_1d_power_spectrum(  # noqa: C901
@@ -83,9 +85,15 @@ def plot_1d_power_spectrum(  # noqa: C901
             ylabel = r"$P(k) \, [\rm{mK}^2 \, h^{-3} \, \rm{Mpc}^{3}]$"
         elif power_spectrum.unit == un.mK**2:
             ylabel = r"$\Delta^2_{21} \, [\rm{mK}^2]$"
+        elif power_spectrum.unit == un.Mpc**3:
+            ylabel = r"$P(k) \, [\rm{Mpc}^{3}]$"
+        elif power_spectrum.unit == un.Mpc**3 / littleh**3:
+            ylabel = r"$P(k) \, [h^{-3} \, \rm{Mpc}^{3}]$"
+        elif power_spectrum.unit == un.dimensionless_unscaled:
+            ylabel = r"$\Delta^2_{21}$"
         else:
             raise ValueError(
-                "Accepted power spectrum units: mK^2 Mpc^3, mK^2 Mpc^3/h^3 or mK^2."
+                "Accepted power spectrum units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2 or dimless."
             )
     if isinstance(labels, str):
         labels = [labels]
@@ -131,9 +139,7 @@ def plot_2d_power_spectrum(  # noqa: C901
     vmin: float | None = None,
     vmax: float | None = None,
     log: list[bool] | None = None,
-    labels: list | str | None = None,
     smooth: float | bool = False,
-    leg_kwargs: dict | None = None,
 ) -> tuple[plt.Figure, plt.Axes]:
     """
     Plot a 2D power spectrum.
@@ -167,13 +173,9 @@ def plot_2d_power_spectrum(  # noqa: C901
         Maximum value for the color scale.
     log : list[bool], optional
         List of booleans to set the kperp, kpar, and PS axes to log scale.
-    labels : list, optional
-        Label for the plot legend.
     smooth : float, optional
         Standard deviation for Gaussian smoothing.
         If True, uses a standard deviation of 1.
-    leg_kwargs : dict, optional
-        Keyword arguments for the legend.
     """
     if power_spectrum.ndim == 2:
         power_spectrum = np.expand_dims(power_spectrum, axis=0)
@@ -216,18 +218,31 @@ def plot_2d_power_spectrum(  # noqa: C901
             clabel = r"$P(k) \, [\rm{mK}^2 \, h^{-3} \, \rm{Mpc}^{3}]$"
         elif power_spectrum.unit == un.mK**2:
             clabel = r"$\Delta^2_{21} \, [\rm{mK}^2]$"
+        elif power_spectrum.unit == un.Mpc**3:
+            clabel = r"$P(k) \, [\rm{Mpc}^{3}]$"
+        elif power_spectrum.unit == un.Mpc**3 / littleh**3:
+            clabel = r"$P(k) \, [h^{-3} \, \rm{Mpc}^{3}]$"
+        elif power_spectrum.unit == un.dimensionless_unscaled:
+            clabel = r"$\Delta^2_{21}$"
         else:
             raise ValueError(
-                "Accepted power spectrum units: mK^2 Mpc^3, mK^2 Mpc^3/h^3 or mK^2."
+                "Accepted power spectrum units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2 or dimless."
             )
-    if log[2]:
-        unit = power_spectrum.unit
-        power_spectrum = np.log10(power_spectrum.value) * unit
-        clabel = r"$\log_{10}$ " + clabel
+    cmap_kwargs = {}
     if vmin is None:
-        vmin = np.percentile(power_spectrum.value, 5)
+        if log[2]:
+            cmap_kwargs['vmin'] = np.percentile(np.log10(power_spectrum.value), 5)
+        else:
+            cmap_kwargs['vmin'] = np.percentile(power_spectrum.value, 5)
     if vmax is None:
-        vmax = np.percentile(power_spectrum.value, 95)
+        if log[2]:
+            cmap_kwargs['vmax'] = np.percentile(np.log10(power_spectrum.value), 95)
+        else:
+            cmap_kwargs['vmax'] = np.percentile(power_spectrum.value, 95)
+    if log[2]:
+        cmap_kwargs = {}
+        cmap_kwargs['norm'] = LogNorm(vmin=vmin, vmax=vmax)
+    
     if title is not None and isinstance(title, str):
         axs[0].set_title(title, fontsize=fontsize)
     axs[0].set_ylabel(ylabel, fontsize=fontsize)
@@ -239,24 +254,13 @@ def plot_2d_power_spectrum(  # noqa: C901
             unit = power_spectrum.unit
         power_spectrum = gaussian_filter(power_spectrum, sigma=smooth) * unit
     for i in range(n):
-        if labels is not None:
-            if len(labels) == n:
-                label = labels[i]
-            elif len(labels) == 1 and i == 0:
-                label = labels[0]
-        else:
-            label = None
         im = axs[i].pcolormesh(
             kperp.value,
             kpar.value,
             power_spectrum[i].value.T,
             cmap=cmap,
-            vmin=vmin,
-            vmax=vmax,
-            label=label,
+            **cmap_kwargs,
         )
-        if label is not None:
-            axs[i].legend(**leg_kwargs)
 
         if title is not None and isinstance(title, list):
             axs[i].set_title(title[i], fontsize=fontsize)
@@ -330,9 +334,15 @@ def plot_power_spectrum(
     leg_kwargs : dict, optional
         Keyword arguments for the legend.
     """
-    if leg_kwargs is None:
-        leg_kwargs = {}
+    if isinstance(labels, str):
+        labels = [labels]
+    if not np.iterable(log):
+        log = [log]
     if (hasattr(wavemodes, "ndim") and wavemodes.ndim == 1) or len(wavemodes) == 1:
+        if leg_kwargs is None:
+            leg_kwargs = {}
+        if len(log) == 1:
+            log = [log[0], log[0]]
         fig, ax = plot_1d_power_spectrum(
             wavemodes,
             power_spectrum,
@@ -348,6 +358,14 @@ def plot_power_spectrum(
             leg_kwargs=leg_kwargs,
         )
     elif (hasattr(wavemodes, "ndim") and wavemodes.ndim == 2) or len(wavemodes) == 2:
+        if labels is not None or leg_kwargs is not None:
+            warnings.warn(
+                "Cylindrical PS plots do not support labels and legends."
+            )
+        if len(log) == 1:
+            log = [log[0], log[0], True]
+        if len(log) == 2:
+            log = [log[0], log[1], True]
         fig, ax = plot_2d_power_spectrum(
             wavemodes,
             power_spectrum,
@@ -361,9 +379,7 @@ def plot_power_spectrum(
             vmin=vmin,
             vmax=vmax,
             log=log,
-            labels=labels,
             smooth=smooth,
-            leg_kwargs=leg_kwargs,
         )
     else:
         raise ValueError("Wavemodes must be 1D or 2D arrays.")

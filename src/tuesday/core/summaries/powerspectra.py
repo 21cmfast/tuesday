@@ -11,33 +11,35 @@ from powerbox.tools import (
     regular_angular_generator,
 )
 from scipy.interpolate import RegularGridInterpolator
+import astropy.units as un
+from typing import Callable
+import warnings
 
 
 def calculate_ps(  # noqa: C901
-    lc,
-    lc_redshifts,
-    box_length,
-    box_side_shape=None,
-    zs=None,
-    chunk_size=None,
-    chunk_skip=37,
-    calc_2d=True,
-    nbins=50,
-    k_weights=ignore_zero_ki,
-    postprocess=True,
-    kpar_bins=None,
-    log_bins=True,
-    crop=None,
-    calc_1d=False,
-    nbins_1d=14,
-    calc_global=False,
-    mu=None,
-    bin_ave=True,
-    interp=None,
-    prefactor_fnc=power2delta,
-    interp_points_generator=None,
-    get_variance=False,
-):
+    lc: un.Quantity,
+    lc_redshifts: np.ndarray,
+    box_length: un.Quantity,
+    zs: float | np.ndarray | None = None,
+    chunk_size: int | None = None,
+    chunk_skip: int | None = 37,
+    calc_2d: bool | None = True,
+    nbins: int | None = None,
+    k_weights: Callable | None = ignore_zero_ki,
+    postprocess: bool | None = True,
+    kpar_bins: int | np.ndarray | None = None,
+    log_bins: bool | None = True,
+    crop: list | np.ndarray | None = None,
+    calc_1d: bool | None = False,
+    nbins_1d: int | None = None,
+    calc_global: bool | None = False,
+    mu: float | None = None,
+    bin_ave: bool | None = True,
+    interp: bool | None = None,
+    prefactor_fnc: Callable | None = power2delta,
+    interp_points_generator: Callable | None = None,
+    get_variance: bool | None = False,
+) -> dict:
     r"""Calculate power spectra from a lightcone.
 
     Parameters
@@ -118,10 +120,14 @@ def calculate_ps(  # noqa: C901
     """
     if not interp:
         interp = None
+    if not isinstance(lc, un.Quantity):
+        raise TypeError("lc should be a Quantity.")
+
+    if not isinstance(box_length, un.Quantity):
+        raise TypeError("box_length should be a Quantity.")
     # Split the lightcone into chunks for each redshift bin
     # Infer HII_DIM from lc side shape
-    if box_side_shape is None:
-        box_side_shape = lc.shape[0]
+    box_side_shape = lc.shape[0]
     if get_variance and interp is not None:
         raise NotImplementedError("Cannot get variance while interpolating.")
     if zs is None:
@@ -130,6 +136,8 @@ def calculate_ps(  # noqa: C901
         n_slices = lc.shape[-1]
         chunk_indices = list(range(0, n_slices - chunk_size, chunk_skip))
     else:
+        if not np.iterable(zs):
+            zs = np.array([zs])
         if np.min(zs) < np.min(lc_redshifts) or np.max(zs) > np.max(lc_redshifts):
             raise ValueError("zs should be within the range of lc_redshifts")
         if chunk_size is None:
@@ -176,7 +184,7 @@ def calculate_ps(  # noqa: C901
             # Shift the chunk forward if it starts before the start of the lc
             end += -start
             start = 0
-        chunk = lc[..., start:end]
+        chunk = lc[..., start:end].value
         zs.append(lc_redshifts[(start + end) // 2])
         if calc_global:
             tb.append(np.mean(chunk))
@@ -184,9 +192,9 @@ def calculate_ps(  # noqa: C901
             results = get_power(
                 chunk,
                 (
-                    box_length,
-                    box_length,
-                    box_length * chunk.shape[-1] / box_side_shape,
+                    box_length.value,
+                    box_length.value,
+                    box_length.value * chunk.shape[-1] / box_side_shape,
                 ),
                 res_ndim=2,
                 bin_ave=bin_ave,
@@ -208,7 +216,7 @@ def calculate_ps(  # noqa: C901
             lc_ps_2d.append(ps_2d)
             if postprocess:
                 clean_ps_2d, clean_kperp, clean_kpar, clean_nmodes = postprocess_ps(
-                    ps_2d,
+                    ps_2d.squeeze(),
                     kperp,
                     kpar,
                     log_bins=log_bins,
@@ -221,7 +229,7 @@ def calculate_ps(  # noqa: C901
                 clean_lc_ps_2d.append(clean_ps_2d)
                 if get_variance:
                     clean_var_2d, _, _ = postprocess_ps(
-                        var,
+                        var.squeeze(),
                         kperp,
                         kpar,
                         log_bins=log_bins,
@@ -261,9 +269,9 @@ def calculate_ps(  # noqa: C901
             results = get_power(
                 chunk,
                 (
-                    box_length,
-                    box_length,
-                    box_length * chunk.shape[-1] / box_side_shape,
+                    box_length.value,
+                    box_length.value,
+                    box_length.value * chunk.shape[-1] / box_side_shape,
                 ),
                 bin_ave=bin_ave,
                 bins=nbins_1d,
@@ -282,29 +290,38 @@ def calculate_ps(  # noqa: C901
                 ps_1d, k, nmodes_1d = results
             lc_ps_1d.append(ps_1d)
 
+    if prefactor_fnc is None:
+        ps_unit = lc.unit**2 * box_length.unit**3
+    elif prefactor_fnc == power2delta:
+        ps_unit = lc.unit**2
+    else:
+        warnings.warn(
+            "The prefactor function is not the default. The unit of the PS may not be correct."
+        )
+        ps_unit = lc.unit**2
     if calc_1d:
-        out["k"] = k
-        out["ps_1D"] = np.array(lc_ps_1d)
+        out["k"] = k / box_length.unit
+        out["ps_1D"] = np.array(lc_ps_1d) * ps_unit
         out["Nmodes_1D"] = nmodes_1d
         out["mu"] = mu
         if get_variance:
-            out["var_1D"] = np.array(lc_var_1d)
+            out["var_1D"] = np.array(lc_var_1d) * ps_unit**2
     if calc_2d:
-        out["full_kperp"] = kperp
-        out["full_kpar"] = kpar[0]
-        out["full_ps_2D"] = np.array(lc_ps_2d)
+        out["full_kperp"] = kperp / box_length.unit
+        out["full_kpar"] = kpar[0] / box_length.unit
+        out["full_ps_2D"] = np.array(lc_ps_2d) * ps_unit
         out["full_Nmodes"] = nmodes
         if get_variance:
-            out["full_var_2D"] = np.array(lc_var_2d)
+            out["full_var_2D"] = np.array(lc_var_2d) * ps_unit**2
         if postprocess:
-            out["final_ps_2D"] = np.array(clean_lc_ps_2d)
-            out["final_kpar"] = clean_kpar
-            out["final_kperp"] = clean_kperp
+            out["final_ps_2D"] = np.array(clean_lc_ps_2d) * ps_unit
+            out["final_kpar"] = clean_kpar / box_length.unit
+            out["final_kperp"] = clean_kperp / box_length.unit
             out["final_Nmodes"] = clean_nmodes
             if get_variance:
-                out["final_var_2D"] = np.array(clean_lc_var_2d)
+                out["final_var_2D"] = np.array(clean_lc_var_2d) * ps_unit**2
     if calc_global:
-        out["global_Tb"] = np.array(tb)
+        out["global_Tb"] = np.array(tb) * lc.unit
     out["redshifts"] = np.array(zs)
 
     return out
@@ -446,7 +463,7 @@ def postprocess_ps(
         ps, kperp, kpar, bins=kpar_bins, interp=interp, log=log_bins
     )
     if crop is None:
-        crop = [0, rebinned_ps.shape[0] + 1, 0, rebinned_ps.shape[1] + 1]
+        crop = [0, rebinned_ps.shape[-2] + 1, 0, rebinned_ps.shape[-1] + 1]
     # Find last bin that is NaN and cut out all bins before
     try:
         lastnan_perp = np.where(np.isnan(np.nanmean(rebinned_ps, axis=1)))[0][-1] + 1
@@ -459,26 +476,26 @@ def postprocess_ps(
     except IndexError:
         pass
     if kperp_modes is not None:
-        final_kperp_modes = kperp_modes[crop[0] : crop[1]]
+        kperp_modes = kperp_modes[crop[0] : crop[1]]
         kpar_grid, kperp_grid = np.meshgrid(
-            kpar_weights[crop[2] : crop[3]], final_kperp_modes
+            kpar_weights[crop[2] : crop[3]], kperp_modes
         )
 
         nmodes = np.sqrt(kperp_grid**2 + kpar_grid**2)
         if return_modes:
             return (
-                rebinned_ps[crop[0] : crop[1]][:, crop[2] : crop[3]],
+                rebinned_ps[...,crop[0] : crop[1],:][..., crop[2] : crop[3]],
                 kperp[crop[0] : crop[1]],
                 log_kpar[crop[2] : crop[3]],
                 nmodes,
             )
         return (
-            rebinned_ps[crop[0] : crop[1]][:, crop[2] : crop[3]],
+            rebinned_ps[...,crop[0] : crop[1],:][..., crop[2] : crop[3]],
             kperp[crop[0] : crop[1]],
             log_kpar[crop[2] : crop[3]],
         )
     return (
-        rebinned_ps[crop[0] : crop[1]][:, crop[2] : crop[3]],
+        rebinned_ps[...,crop[0] : crop[1],:][..., crop[2] : crop[3]],
         kperp[crop[0] : crop[1]],
         log_kpar[crop[2] : crop[3]],
     )

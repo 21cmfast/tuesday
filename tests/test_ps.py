@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+import astropy.units as un
 
 from tuesday.core import calculate_ps, cylindrical_to_spherical
 
@@ -14,9 +15,9 @@ def test_calculate_ps(log_bins):
     zs = [6.0, 10.0, 27.0]
 
     calculate_ps(
-        test_lc,
+        test_lc*un.dimensionless_unscaled,
         test_redshifts,
-        box_length=200,
+        box_length=200*un.Mpc,
         box_side_shape=100,
         zs=zs,
         calc_2d=False,
@@ -26,10 +27,10 @@ def test_calculate_ps(log_bins):
     )
 
     calculate_ps(
-        test_lc,
+        test_lc*un.dimensionless_unscaled,
         test_redshifts,
-        box_length=200,
-        zs=zs,
+        box_length=200*un.Mpc,
+        zs=6.8,
         calc_1d=True,
         calc_global=True,
         interp=True,
@@ -37,9 +38,9 @@ def test_calculate_ps(log_bins):
     )
 
     calculate_ps(
-        test_lc,
+        test_lc*un.dimensionless_unscaled,
         test_redshifts,
-        box_length=200,
+        box_length=200*un.Mpc,
         zs=zs,
         calc_1d=True,
         calc_global=True,
@@ -48,9 +49,9 @@ def test_calculate_ps(log_bins):
     )
 
     calculate_ps(
-        test_lc,
+        test_lc*un.dimensionless_unscaled,
         test_redshifts,
-        box_length=200,
+        box_length=200*un.Mpc,
         zs=zs,
         calc_1d=True,
         calc_global=True,
@@ -67,10 +68,9 @@ def test_calculate_ps_w_var():
     zs = [6.0, 10.0, 27.0]
 
     out = calculate_ps(
-        test_lc,
+        test_lc*un.dimensionless_unscaled,
         test_redshifts,
-        box_length=200,
-        box_side_shape=100,
+        box_length=200*un.Mpc,
         zs=zs,
         calc_2d=False,
         calc_1d=True,
@@ -80,10 +80,9 @@ def test_calculate_ps_w_var():
     )
     out["var_1D"]
     out = calculate_ps(
-        test_lc,
+        test_lc*un.dimensionless_unscaled,
         test_redshifts,
-        box_length=200,
-        box_side_shape=100,
+        box_length=200*un.Mpc,
         zs=zs,
         calc_2d=True,
         calc_1d=True,
@@ -94,9 +93,9 @@ def test_calculate_ps_w_var():
     out["full_var_2D"]
     out["var_1D"]
     out = calculate_ps(
-        test_lc,
+        test_lc*un.dimensionless_unscaled,
         test_redshifts,
-        box_length=200,
+        box_length=200*un.Mpc,
         zs=zs,
         calc_1d=True,
         calc_2d=True,
@@ -107,7 +106,7 @@ def test_calculate_ps_w_var():
     out["final_var_2D"]
     with np.testing.assert_raises(NotImplementedError):
         calculate_ps(
-            test_lc,
+            test_lc*un.dimensionless_unscaled,
             test_redshifts,
             box_length=200,
             zs=zs,
@@ -120,7 +119,7 @@ def test_calculate_ps_w_var():
 
     with np.testing.assert_raises(ValueError):
         calculate_ps(
-            test_lc,
+            test_lc*un.dimensionless_unscaled,
             test_redshifts,
             box_length=200,
             zs=[4.0],  # outside test_redshifts
@@ -131,7 +130,7 @@ def test_calculate_ps_w_var():
         )
     with np.testing.assert_raises(ValueError):
         calculate_ps(
-            test_lc,
+            test_lc*un.dimensionless_unscaled,
             test_redshifts,
             box_length=200,
             zs=[50.0],  # outside test_redshifts
