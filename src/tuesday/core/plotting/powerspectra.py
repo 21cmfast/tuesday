@@ -8,7 +8,7 @@ from matplotlib import rcParams
 from scipy.ndimage import gaussian_filter
 
 
-def plot_1d_power_spectrum(
+def plot_1d_power_spectrum( # noqa: C901
     wavemodes: un.Quantity,
     power_spectrum: un.Quantity,
     fig: plt.Figure | None = None,
@@ -17,11 +17,11 @@ def plot_1d_power_spectrum(
     xlabel: str | None = None,
     ylabel: str | None = None,
     colors: list | None = None,
-    log: list[bool] = None,
+    log: list[bool] | None = None,
     fontsize: float | None = 16,
     labels: list | None = None,
     smooth: float | bool = False,
-    leg_kwargs: dict = {},
+    leg_kwargs: dict | None = None,
 ) -> tuple[plt.Figure, plt.Axes]:
     """
     Plot a 1D power spectrum.
@@ -51,7 +51,8 @@ def plot_1d_power_spectrum(
     labels : list, optional
         List of labels for each line in the plot.
     smooth : float, optional
-        Standard deviation for Gaussian smoothing. If True, uses a standard deviation of 1.
+        Standard deviation for Gaussian smoothing. 
+        If True, uses a standard deviation of 1.
     leg_kwargs : dict, optional
         Keyword arguments for the legend.
 
@@ -116,7 +117,7 @@ def plot_1d_power_spectrum(
     return fig, ax
 
 
-def plot_2d_power_spectrum(
+def plot_2d_power_spectrum( # noqa: C901
     wavemodes: un.Quantity,
     power_spectrum: un.Quantity,
     fig: plt.Figure | None = None,
@@ -129,10 +130,10 @@ def plot_2d_power_spectrum(
     fontsize: float | None = 16,
     vmin: float | None = None,
     vmax: float | None = None,
-    log: list[bool] = None,
+    log: list[bool] | None = None,
     labels: list | str | None = None,
     smooth: float | bool = False,
-    leg_kwargs: dict = {},
+    leg_kwargs: dict | None = None,
 ) -> tuple[plt.Figure, plt.Axes]:
     """
     Plot a 2D power spectrum.
@@ -169,7 +170,8 @@ def plot_2d_power_spectrum(
     labels : list, optional
         Label for the plot legend.
     smooth : float, optional
-        Standard deviation for Gaussian smoothing. If True, uses a standard deviation of 1.
+        Standard deviation for Gaussian smoothing. 
+        If True, uses a standard deviation of 1.
     leg_kwargs : dict, optional
         Keyword arguments for the legend.
     """
@@ -267,7 +269,7 @@ def plot_2d_power_spectrum(
     return fig, axs
 
 
-def plot_power_spectrum(
+def plot_power_spectrum( # noqa: C901
     wavemodes: un.Quantity,
     power_spectrum: un.Quantity,
     fig: plt.Figure | None = None,
@@ -281,10 +283,10 @@ def plot_power_spectrum(
     fontsize: float | None = 16,
     vmin: float | None = None,
     vmax: float | None = None,
-    log: list[bool] = None,
+    log: list[bool] | None = None,
     labels: list | None = None,
     smooth: float | bool = False,
-    leg_kwargs: dict = {},
+    leg_kwargs: dict | None = None,
 ) -> tuple[plt.Figure, plt.Axes]:
     """
     Plot the power spectrum.
@@ -322,10 +324,13 @@ def plot_power_spectrum(
     labels : list, optional
         List of labels for each line in the plot.
     smooth : bool or float, optional
-        Standard deviation for Gaussian smoothing. If True, uses a standard deviation of 1.
+        Standard deviation for Gaussian smoothing. 
+        If True, uses a standard deviation of 1.
     leg_kwargs : dict, optional
         Keyword arguments for the legend.
     """
+    if leg_kwargs is None:
+        leg_kwargs = {}
     if (hasattr(wavemodes, "ndim") and wavemodes.ndim == 1) or len(wavemodes) == 1:
         fig, ax = plot_1d_power_spectrum(
             wavemodes,
