@@ -109,7 +109,7 @@ def plot_1d_power_spectrum(  # noqa: C901
         power_spectrum = gaussian_filter(power_spectrum, sigma=smooth)
     for i in range(n):
         if labels is not None:
-            if len(labels) == n:
+            if len(labels) >= n:
                 label = labels[i]
             elif len(labels) == 1 and i == 0:
                 label = labels[0]

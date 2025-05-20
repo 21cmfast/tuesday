@@ -47,11 +47,10 @@ def test_1d_ps_plot():
     )
     plot_power_spectrum(
         ps["k"],
-        ps["ps_1D"],
+        ps["ps_1D"][0],
         fig=fig,
         title="Test Title",
         labels=["z=6", "z=10", "z=27"],
-        log=True,
     )
 
 
@@ -88,6 +87,16 @@ def test_2d_ps_plot():
             [ps["final_kperp"].value * un.mK, ps["final_kpar"]],
             ps["final_ps_2D"],
         )  # Wrong units on k
+    with np.testing.assert_raises(ValueError):
+        plot_power_spectrum(
+            [ps["final_kperp"], ps["final_kpar"].value * un.mK],
+            ps["final_ps_2D"],
+        )  # Wrong units on k
+    with np.testing.assert_raises(ValueError):
+        plot_power_spectrum(
+            [ps["final_kperp"], ps["final_kpar"], ps["final_kpar"]],
+            ps["final_ps_2D"],
+        )  # Wrong ks
     plot_power_spectrum(
         [ps["final_kperp"], ps["final_kpar"]],
         ps["final_ps_2D"],
@@ -139,7 +148,7 @@ def test_ps_plot_units(unit):
         calc_2d=True,
         calc_1d=True,
     )
-
+    print("CHECK", ps["final_ps_2D"].unit, ps1["final_ps_2D"].unit)
     plot_power_spectrum(
         [ps["final_kperp"], ps["final_kpar"]],
         ps["final_ps_2D"],
@@ -150,8 +159,7 @@ def test_ps_plot_units(unit):
     plot_power_spectrum(
         ps["k"],
         ps["ps_1D"],
-        title="Test Title",
-        labels=["z=6", "z=10", "z=27"],
+        title=["z=6", "z=10", "z=27"],
         log=False,
     )
 
