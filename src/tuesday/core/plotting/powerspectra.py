@@ -31,10 +31,13 @@ def plot_1d_power_spectrum(  # noqa: C901
 
     Parameters
     ----------
-    wavemodes : np.ndarray
+    wavemodes : un.Quantity
         Wavemodes corresponding to the power spectrum.
-    power_spectrum : np.ndarray
-        Power spectrum values.
+        Accepted units are 1/Mpc or h/Mpc.
+    power_spectrum : un.Quantity
+        Power spectrum array of shape [Nsamples, Nwavemodes] or [Nwavemodes].
+        There are six accepted units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2, 
+        or dimensionless instead of mK^2.
     fig : plt.Figure, optional
         Figure object to plot on. If None, a new figure is created.
     ax : plt.Axes, optional
@@ -94,7 +97,7 @@ def plot_1d_power_spectrum(  # noqa: C901
             ylabel = r"$\Delta^2_{21}$"
         else:
             raise ValueError(
-                "Accepted power spectrum units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2 or dimless."
+                "Accepted PS units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2 or dimless."
             )
     if isinstance(labels, str):
         labels = [labels]
@@ -147,11 +150,14 @@ def plot_2d_power_spectrum(  # noqa: C901
 
     Parameters
     ----------
-    wavemodes : np.ndarray
-        Wavemodes corresponding to the power spectrum.
-        wavemodes[0] is kperp, wavemodes[1] is kpar.
-    power_spectrum : np.ndarray
-        Power spectrum values.
+    wavemodes : un.Quantity
+        Wavemodes [kperp, kpar].
+        Accepted units are 1/Mpc or h/Mpc.
+    power_spectrum : un.Quantity
+        Power spectrum array of shape [Nsamples, Nkperp, Nkpar] 
+        or [Nkperp, Nkpar].
+        There are six accepted units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2, 
+        or dimensionless instead of mK^2.
     fig : plt.Figure, optional
         Figure object to plot on. If None, a new figure is created.
     axs : plt.Axes | list[plt.Axes], optional
@@ -227,7 +233,7 @@ def plot_2d_power_spectrum(  # noqa: C901
             clabel = r"$\Delta^2_{21}$"
         else:
             raise ValueError(
-                "Accepted power spectrum units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2 or dimless."
+                "Accepted PS units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2 or dimless."
             )
     cmap_kwargs = {}
     if vmin is None:
@@ -360,7 +366,7 @@ def plot_power_spectrum(
         )
     elif (hasattr(wavemodes, "ndim") and wavemodes.ndim == 2) or len(wavemodes) == 2:
         if labels is not None or leg_kwargs is not None:
-            warnings.warn("Cylindrical PS plots do not support labels and legends.")
+            warnings.warn("Cylindrical PS plots do not support labels and legends.", stacklevel=2)
         if len(log) == 1:
             log = [log[0], log[0], True]
         if len(log) == 2:

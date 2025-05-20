@@ -45,17 +45,16 @@ def calculate_ps(  # noqa: C901
 
     Parameters
     ----------
-    lc : np.ndarray
-        The lightcone whose power spectrum we want to calculate.
-        The lightcone should be a 3D array with shape
-        [box_side_shape, box_side_shape, len(lc_redshifts)].
+    lc : un.Quantity
+        The 3D box whose power spectrum we want to calculate.
+        The box 3D array with shape
+        [X, Y, len(lc_redshifts)].
     lc_redshifts : np.ndarray
-        The redshifts of the lightcone.
-    box_length : float
-        The side length of the box in cMpc.
-    box_side_shape : int, optional
-        The number of pixels in one side of the box
-        (HII_DIM parameter in 21cmFAST).
+        The values at the last axis of the `lc` array,
+        typically the redshifts for a lightcone.
+    box_length : un.Quantity
+        The side length of the box.
+        Accepted units are: Mpc and Mpc/h.
     zs : np.ndarray, optional
         The redshifts at which to calculate the power spectrum.
         If None, the lightcone is broken up into chunks using arguments
@@ -297,7 +296,8 @@ def calculate_ps(  # noqa: C901
         ps_unit = lc.unit**2
     else:
         warnings.warn(
-            "The prefactor function is not the default. The unit of the PS may not be correct."
+            "The prefactor function is not the default. The PS unit may not be correct.",
+            stacklevel=2
         )
         ps_unit = lc.unit**2
     if calc_1d:
