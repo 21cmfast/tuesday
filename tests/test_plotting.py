@@ -65,7 +65,7 @@ def test_2d_ps_plot():
     ps = calculate_ps(
         test_lc * un.dimensionless_unscaled,
         test_redshifts,
-        box_length=200 * unit,
+        box_length=200 * un.mK,
         zs=zs,
         calc_2d=True,
         calc_1d=False,
