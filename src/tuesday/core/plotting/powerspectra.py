@@ -101,8 +101,8 @@ def plot_1d_power_spectrum(  # noqa: C901
                 label = labels[i]
             elif len(labels) == 1 and i == 0:
                 label = labels[0]
-            else:
-                label = None
+        else:
+            label = None
         ax.plot(wavemodes, power_spectrum[i], color=colors[i], label=label)
     if title is not None:
         ax.set_title(title, fontsize=fontsize)
@@ -241,8 +241,8 @@ def plot_2d_power_spectrum(  # noqa: C901
                 label = labels[i]
             elif len(labels) == 1 and i == 0:
                 label = labels[0]
-            else:
-                label = None
+        else:
+            label = None
         im = axs[i].pcolormesh(
             kperp.value,
             kpar.value,
