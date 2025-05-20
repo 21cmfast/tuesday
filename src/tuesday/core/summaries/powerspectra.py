@@ -491,12 +491,12 @@ def postprocess_ps(
                 nmodes,
             )
         return (
-            rebinned_ps[None,..., crop[0] : crop[1], :][..., crop[2] : crop[3]],
+            rebinned_ps[None, ..., crop[0] : crop[1], :][..., crop[2] : crop[3]],
             kperp[crop[0] : crop[1]],
             log_kpar[crop[2] : crop[3]],
         )
     return (
-        rebinned_ps[None,..., crop[0] : crop[1], :][..., crop[2] : crop[3]],
+        rebinned_ps[None, ..., crop[0] : crop[1], :][..., crop[2] : crop[3]],
         kperp[crop[0] : crop[1]],
         log_kpar[crop[2] : crop[3]],
     )
