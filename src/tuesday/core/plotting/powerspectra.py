@@ -88,7 +88,9 @@ def plot_1d_power_spectrum(
             )
     if isinstance(labels, str):
         labels = [labels]
-    if (isinstance(smooth, bool) and smooth) or (isinstance(smooth, float) and smooth > 0):
+    if (isinstance(smooth, bool) and smooth) or (
+        isinstance(smooth, float) and smooth > 0
+    ):
         if isinstance(smooth, bool):
             smooth = 1.0
         power_spectrum = gaussian_filter(power_spectrum, sigma=smooth)
@@ -100,7 +102,7 @@ def plot_1d_power_spectrum(
                 label = labels[0]
             else:
                 label = None
-        ax.plot(wavemodes, power_spectrum[i], color=colors[i], label = label)
+        ax.plot(wavemodes, power_spectrum[i], color=colors[i], label=label)
     if title is not None:
         ax.set_title(title, fontsize=fontsize)
     ax.set_xlabel(xlabel, fontsize=fontsize)
@@ -239,12 +241,20 @@ def plot_2d_power_spectrum(
                 label = labels[0]
             else:
                 label = None
-        im = axs[i].pcolormesh(kperp.value, kpar.value, power_spectrum[i].value.T, cmap=cmap, vmin=vmin, vmax=vmax, label = label)
+        im = axs[i].pcolormesh(
+            kperp.value,
+            kpar.value,
+            power_spectrum[i].value.T,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            label=label,
+        )
         if len(labels) == n:
             axs[i].legend(**leg_kwargs)
         elif len(labels) == 1 and i == 0:
             axs[0].legend(**leg_kwargs)
-        
+
         if title is not None and isinstance(title, list):
             axs[i].set_title(title[i], fontsize=fontsize)
         axs[i].set_xlabel(xlabel, fontsize=fontsize)
