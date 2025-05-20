@@ -76,7 +76,7 @@ def test_2d_ps_plot():
     plot_power_spectrum(
         [ps["final_kperp"] * littleh / un.Mpc, ps["final_kpar"] * littleh / un.Mpc],
         ps["final_ps_2D"] * un.mK**2 * un.Mpc**3 / littleh**3,
-        log=[True, True],
+        log=[True, True, True],
         labels=["foo"],
     )  # This should not raise any exceptions
     with np.testing.assert_raises(ValueError):
