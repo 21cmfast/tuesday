@@ -406,7 +406,7 @@ def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None)
             new_ps[..., i] = np.nanmean(ps[..., m], axis=-1)
             modes[i] = np.sum(m)
 
-    return new_ps, kperp, bin_centers, modes
+    return new_ps.squeeze(), kperp, bin_centers, modes
 
 
 def postprocess_ps(
@@ -491,12 +491,12 @@ def postprocess_ps(
                 nmodes,
             )
         return (
-            rebinned_ps[..., crop[0] : crop[1], :][..., crop[2] : crop[3]],
+            rebinned_ps[None,..., crop[0] : crop[1], :][..., crop[2] : crop[3]],
             kperp[crop[0] : crop[1]],
             log_kpar[crop[2] : crop[3]],
         )
     return (
-        rebinned_ps[..., crop[0] : crop[1], :][..., crop[2] : crop[3]],
+        rebinned_ps[None,..., crop[0] : crop[1], :][..., crop[2] : crop[3]],
         kperp[crop[0] : crop[1]],
         log_kpar[crop[2] : crop[3]],
     )
