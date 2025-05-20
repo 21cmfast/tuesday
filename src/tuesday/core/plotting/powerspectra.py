@@ -12,6 +12,7 @@ def plot_1d_power_spectrum(
     wavemodes: un.Quantity,
     power_spectrum: un.Quantity,
     fig: plt.Figure | None = None,
+    ax: plt.Axes | None = None,
     title: str | None = None,
     xlabel: str | None = None,
     ylabel: str | None = None,
@@ -33,6 +34,8 @@ def plot_1d_power_spectrum(
         Power spectrum values.
     fig : plt.Figure, optional
         Figure object to plot on. If None, a new figure is created.
+    ax : plt.Axes, optional
+        Axes object to plot on. If None, a new axes is created.
     title : str, optional
         Title of the plot.
     xlabel : str, optional
@@ -115,6 +118,7 @@ def plot_2d_power_spectrum(
     wavemodes: un.Quantity,
     power_spectrum: un.Quantity,
     fig: plt.Figure | None = None,
+    axs: plt.Axes | list[plt.Axes] | None = None,
     title: list[str] | str | None = None,
     xlabel: str | None = None,
     ylabel: str | None = None,
@@ -140,6 +144,8 @@ def plot_2d_power_spectrum(
         Power spectrum values.
     fig : plt.Figure, optional
         Figure object to plot on. If None, a new figure is created.
+    axs : plt.Axes | list[plt.Axes], optional
+        Axes object(s) to plot on. If None, new axes are created.
     title : str, optional
         Title(s) of the plot.
     xlabel : str, optional
@@ -174,7 +180,7 @@ def plot_2d_power_spectrum(
         )
         if n == 1:
             axs = [axs]
-    else:
+    if axs is None and fig is not None:
         axs = fig.get_axes()
     rcParams.update({"font.size": fontsize})
     if log is None:
@@ -247,8 +253,7 @@ def plot_2d_power_spectrum(
         axs[0].set_xscale("log")
     if log[1]:
         axs[0].set_yscale("log")
-    if labels is not None:
-        axs[0].legend(**leg_kwargs)
+
     return fig, axs
 
 
@@ -256,6 +261,7 @@ def plot_power_spectrum(
     wavemodes: un.Quantity,
     power_spectrum: un.Quantity,
     fig: plt.Figure | None = None,
+    ax: plt.Axes | list[plt.Axes] | None = None,
     title: str | None = None,
     xlabel: str | None = None,
     ylabel: str | None = None,
@@ -279,12 +285,36 @@ def plot_power_spectrum(
         Wavemodes corresponding to the power spectrum.
     power_spectrum : np.ndarray
         Power spectrum values.
+    fig : plt.Figure, optional
+        Figure object to plot on. If None, a new figure is created.
+    ax : plt.Axes | list[plt.Axes], optional
+        Axes object(s) to plot on. If None, new axes are created.
     title : str, optional
         Title of the plot.
     xlabel : str, optional
         Label for the x-axis.
     ylabel : str, optional
         Label for the y-axis.
+    clabel : str, optional
+        Label for the colorbar.
+    cmap : str, optional
+        Colormap for the plot.
+    colors : list, optional
+        List of colors for each line in the plot.
+    fontsize : float, optional
+        Font size for the plot labels.
+    vmin : float, optional
+        Minimum value for the color scale.
+    vmax : float, optional
+        Maximum value for the color scale.
+    log : list[bool], optional
+        List of booleans to set the axes to log scale.
+    labels : list, optional
+        List of labels for each line in the plot.
+    smooth : bool or float, optional
+        Standard deviation for Gaussian smoothing. If True, uses a standard deviation of 1.
+    leg_kwargs : dict, optional
+        Keyword arguments for the legend.
     """
     if (hasattr(wavemodes, "ndim") and wavemodes.ndim == 1) or len(wavemodes) == 1:
         fig, ax = plot_1d_power_spectrum(
