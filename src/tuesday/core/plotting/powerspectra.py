@@ -68,8 +68,6 @@ def plot_1d_power_spectrum(  # noqa: C901
     else:
         ax = fig.get_axes()[0]
     rcParams.update({"font.size": fontsize})
-    if log is None:
-        log = [True, True]
     if power_spectrum.ndim == 1:
         power_spectrum = np.expand_dims(power_spectrum, axis=0)
     n = power_spectrum.shape[0]
@@ -99,8 +97,7 @@ def plot_1d_power_spectrum(  # noqa: C901
             raise ValueError(
                 "Accepted PS units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2 or dimless."
             )
-    if isinstance(labels, str):
-        labels = [labels]
+
     if (isinstance(smooth, bool) and smooth) or (
         isinstance(smooth, float) and smooth > 0
     ):
@@ -202,8 +199,6 @@ def plot_2d_power_spectrum(  # noqa: C901
                 "Number of axes on fig does not match number of power spectra!"
             )
     rcParams.update({"font.size": fontsize})
-    if log is None:
-        log = [True, True, False]
     kperp = wavemodes[0]
     kpar = wavemodes[1]
     if xlabel is None:

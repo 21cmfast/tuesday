@@ -70,10 +70,11 @@ def test_2d_ps_plot():
         calc_1d=False,
         interp=True,
     )
-
+    fig, _ = plt.subplots()
     plot_power_spectrum(
         [ps["final_kperp"], ps["final_kpar"]],
-        ps["final_ps_2D"],
+        ps["final_ps_2D"][0],
+        fig=fig,
         log=[True, True, True],
         labels=["foo"],
     )  # This should not raise any exceptions
@@ -111,8 +112,7 @@ def test_2d_ps_plot():
             [ps["final_kperp"], ps["final_kpar"]],
             ps["final_ps_2D"],
             fig=fig,
-            title="Test Title",
-            labels="foo",
+            title=["z=6", "z=10", "z=27"],
             log=[True, True],
         )
     plot_power_spectrum(
@@ -140,15 +140,6 @@ def test_ps_plot_units(unit):
         calc_2d=True,
         calc_1d=True,
     )
-    ps1 = calculate_ps(
-        test_lc * un.mK,
-        test_redshifts,
-        box_length=200 * unit,
-        zs=zs,
-        calc_2d=True,
-        calc_1d=True,
-    )
-    print("CHECK", ps["final_ps_2D"].unit, ps1["final_ps_2D"].unit)
     plot_power_spectrum(
         [ps["final_kperp"], ps["final_kpar"]],
         ps["final_ps_2D"],
@@ -162,17 +153,25 @@ def test_ps_plot_units(unit):
         title=["z=6", "z=10", "z=27"],
         log=False,
     )
+    ps = calculate_ps(
+        test_lc * un.mK,
+        test_redshifts,
+        box_length=200 * unit,
+        zs=zs,
+        calc_2d=True,
+        calc_1d=True,
+    )
 
     plot_power_spectrum(
-        [ps1["final_kperp"], ps1["final_kpar"]],
-        ps1["final_ps_2D"],
+        [ps["final_kperp"], ps["final_kpar"]],
+        ps["final_ps_2D"],
         log=[True, True, False],
         labels=["foo"],
     )
 
     plot_power_spectrum(
-        ps1["k"],
-        ps1["ps_1D"],
+        ps["k"],
+        ps["ps_1D"],
         title="Test Title",
         labels=["z=6", "z=10", "z=27"],
         log=False,
