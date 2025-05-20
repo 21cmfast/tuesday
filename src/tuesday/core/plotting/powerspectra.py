@@ -36,7 +36,7 @@ def plot_1d_power_spectrum(  # noqa: C901
         Accepted units are 1/Mpc or h/Mpc.
     power_spectrum : un.Quantity
         Power spectrum array of shape [Nsamples, Nwavemodes] or [Nwavemodes].
-        There are six accepted units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2, 
+        There are six accepted units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2,
         or dimensionless instead of mK^2.
     fig : plt.Figure, optional
         Figure object to plot on. If None, a new figure is created.
@@ -154,9 +154,9 @@ def plot_2d_power_spectrum(  # noqa: C901
         Wavemodes [kperp, kpar].
         Accepted units are 1/Mpc or h/Mpc.
     power_spectrum : un.Quantity
-        Power spectrum array of shape [Nsamples, Nkperp, Nkpar] 
+        Power spectrum array of shape [Nsamples, Nkperp, Nkpar]
         or [Nkperp, Nkpar].
-        There are six accepted units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2, 
+        There are six accepted units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2,
         or dimensionless instead of mK^2.
     fig : plt.Figure, optional
         Figure object to plot on. If None, a new figure is created.
@@ -366,7 +366,9 @@ def plot_power_spectrum(
         )
     elif (hasattr(wavemodes, "ndim") and wavemodes.ndim == 2) or len(wavemodes) == 2:
         if labels is not None or leg_kwargs is not None:
-            warnings.warn("Cylindrical PS plots do not support labels and legends.", stacklevel=2)
+            warnings.warn(
+                "Cylindrical PS plots do not support labels and legends.", stacklevel=2
+            )
         if len(log) == 1:
             log = [log[0], log[0], True]
         if len(log) == 2:

@@ -297,7 +297,7 @@ def calculate_ps(  # noqa: C901
     else:
         warnings.warn(
             "The prefactor function is not the default. The PS unit may not be correct.",
-            stacklevel=2
+            stacklevel=2,
         )
         ps_unit = lc.unit**2
     if calc_1d:
