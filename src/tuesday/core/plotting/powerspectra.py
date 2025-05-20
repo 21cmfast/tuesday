@@ -5,9 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.cosmology.units import littleh
 from matplotlib import rcParams
-from typing import Tuple
 from scipy.ndimage import gaussian_filter
-
 
 
 def plot_1d_power_spectrum(
@@ -23,8 +21,7 @@ def plot_1d_power_spectrum(
     labels: list | None = None,
     smooth: float | bool = False,
     leg_kwargs: dict = {},
-
-    ) -> Tuple[plt.Figure, plt.Axes]:
+) -> tuple[plt.Figure, plt.Axes]:
     """
     Plot a 1D power spectrum.
 
@@ -57,7 +54,7 @@ def plot_1d_power_spectrum(
 
     """
     if fig is None:
-        fig, ax = plt.subplots(1,1,figsize=(8, 6))
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
     else:
         ax = fig.get_axes()[0]
     rcParams.update({"font.size": fontsize})
@@ -67,7 +64,7 @@ def plot_1d_power_spectrum(
         power_spectrum = np.expand_dims(power_spectrum, axis=0)
     n = power_spectrum.shape[0]
     if colors is None:
-        colors = [f'C{i}' for i in range(n)]
+        colors = [f"C{i}" for i in range(n)]
     if xlabel is None:
         if wavemodes.unit == 1 / un.Mpc:
             xlabel = r"$k \, [\rm{Mpc}^{-1}]$"
@@ -86,12 +83,19 @@ def plot_1d_power_spectrum(
             raise ValueError(
                 "Accepted power spectrum units: mK^2 Mpc^3, mK^2 Mpc^3/h^3 or mK^2."
             )
-    if (isinstance(smooth, bool) and smooth) or (isinstance(smooth, float) and smooth > 0):
+    if (isinstance(smooth, bool) and smooth) or (
+        isinstance(smooth, float) and smooth > 0
+    ):
         if isinstance(smooth, bool):
-            smooth = 1.
+            smooth = 1.0
         power_spectrum = gaussian_filter(power_spectrum, sigma=smooth)
     for i in range(n):
-        ax.plot(wavemodes, power_spectrum[i], color=colors[i], label = labels[i] if labels is not None else None)
+        ax.plot(
+            wavemodes,
+            power_spectrum[i],
+            color=colors[i],
+            label=labels[i] if labels is not None else None,
+        )
     if title is not None:
         ax.set_title(title, fontsize=fontsize)
     ax.set_xlabel(xlabel, fontsize=fontsize)
@@ -103,7 +107,6 @@ def plot_1d_power_spectrum(
     if labels is not None:
         ax.legend(**leg_kwargs)
     return fig, ax
-
 
 
 def plot_2d_power_spectrum(
@@ -122,7 +125,7 @@ def plot_2d_power_spectrum(
     labels: list | str | None = None,
     smooth: float | bool = False,
     leg_kwargs: dict = {},
-) -> Tuple[plt.Figure, plt.Axes]:
+) -> tuple[plt.Figure, plt.Axes]:
     """
     Plot a 2D power spectrum.
 
@@ -164,7 +167,9 @@ def plot_2d_power_spectrum(
         power_spectrum = np.expand_dims(power_spectrum, axis=0)
     n = power_spectrum.shape[0]
     if fig is None:
-        fig, axs = plt.subplots(nrows = 1,ncols = n,figsize=(7*n, 6), sharey=True, sharex=True)
+        fig, axs = plt.subplots(
+            nrows=1, ncols=n, figsize=(7 * n, 6), sharey=True, sharex=True
+        )
         if n == 1:
             axs = [axs]
     else:
@@ -213,13 +218,23 @@ def plot_2d_power_spectrum(
     if title is not None and isinstance(title, str):
         axs[0].set_title(title, fontsize=fontsize)
     axs[0].set_ylabel(ylabel, fontsize=fontsize)
-    if (isinstance(smooth, bool) and smooth) or (isinstance(smooth, float) and smooth > 0):
+    if (isinstance(smooth, bool) and smooth) or (
+        isinstance(smooth, float) and smooth > 0
+    ):
         if isinstance(smooth, bool):
-            smooth = 1.
+            smooth = 1.0
             unit = power_spectrum.unit
         power_spectrum = gaussian_filter(power_spectrum, sigma=smooth) * unit
     for i in range(n):
-        im = axs[i].pcolormesh(kperp.value, kpar.value, power_spectrum[i].value.T, cmap=cmap, vmin=vmin, vmax=vmax, label = labels[i] if labels is not None else None)
+        im = axs[i].pcolormesh(
+            kperp.value,
+            kpar.value,
+            power_spectrum[i].value.T,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            label=labels[i] if labels is not None else None,
+        )
         if title is not None and isinstance(title, list):
             axs[i].set_title(title[i], fontsize=fontsize)
         axs[i].set_xlabel(xlabel, fontsize=fontsize)
@@ -250,7 +265,7 @@ def plot_power_spectrum(
     labels: list | None = None,
     smooth: float | bool = False,
     leg_kwargs: dict = {},
-) -> Tuple[plt.Figure, plt.Axes]:
+) -> tuple[plt.Figure, plt.Axes]:
     """
     Plot the power spectrum.
 
@@ -267,7 +282,7 @@ def plot_power_spectrum(
     ylabel : str, optional
         Label for the y-axis.
     """
-    if (hasattr(wavemodes, 'ndim') and wavemodes.ndim == 1) or len(wavemodes) == 1:
+    if (hasattr(wavemodes, "ndim") and wavemodes.ndim == 1) or len(wavemodes) == 1:
         fig, ax = plot_1d_power_spectrum(
             wavemodes,
             power_spectrum,
@@ -282,7 +297,7 @@ def plot_power_spectrum(
             smooth=smooth,
             leg_kwargs=leg_kwargs,
         )
-    elif (hasattr(wavemodes, 'ndim') and wavemodes.ndim == 2) or len(wavemodes) == 2:
+    elif (hasattr(wavemodes, "ndim") and wavemodes.ndim == 2) or len(wavemodes) == 2:
         fig, ax = plot_2d_power_spectrum(
             wavemodes,
             power_spectrum,
