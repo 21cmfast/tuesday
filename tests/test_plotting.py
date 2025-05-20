@@ -81,11 +81,11 @@ def test_2d_ps_plot():
     with np.testing.assert_raises(ValueError):
         plot_power_spectrum(
             [ps["final_kperp"], ps["final_kpar"]],
-            ps["final_ps_2D"].value*un.Mpc,
+            ps["final_ps_2D"].value * un.Mpc,
         )  # Wrong units on PS
     with np.testing.assert_raises(ValueError):
         plot_power_spectrum(
-            [ps["final_kperp"].value *un.mK, ps["final_kpar"]],
+            [ps["final_kperp"].value * un.mK, ps["final_kpar"]],
             ps["final_ps_2D"],
         )  # Wrong units on k
     plot_power_spectrum(
