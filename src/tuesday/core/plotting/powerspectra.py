@@ -253,10 +253,8 @@ def plot_2d_power_spectrum(  # noqa: C901
             vmax=vmax,
             label=label,
         )
-        if len(labels) == n:
+        if label is not None:
             axs[i].legend(**leg_kwargs)
-        elif len(labels) == 1 and i == 0:
-            axs[0].legend(**leg_kwargs)
 
         if title is not None and isinstance(title, list):
             axs[i].set_title(title[i], fontsize=fontsize)
