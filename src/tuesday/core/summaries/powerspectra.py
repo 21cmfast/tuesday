@@ -1,5 +1,9 @@
 """Code to calculate the 1D and 2D power spectrum of a lightcone."""
 
+import warnings
+from collections.abc import Callable
+
+import astropy.units as un
 import numpy as np
 from powerbox.tools import (
     _magnitude_grid,
@@ -11,9 +15,6 @@ from powerbox.tools import (
     regular_angular_generator,
 )
 from scipy.interpolate import RegularGridInterpolator
-import astropy.units as un
-from typing import Callable
-import warnings
 
 
 def calculate_ps(  # noqa: C901
@@ -484,18 +485,18 @@ def postprocess_ps(
         nmodes = np.sqrt(kperp_grid**2 + kpar_grid**2)
         if return_modes:
             return (
-                rebinned_ps[...,crop[0] : crop[1],:][..., crop[2] : crop[3]],
+                rebinned_ps[..., crop[0] : crop[1], :][..., crop[2] : crop[3]],
                 kperp[crop[0] : crop[1]],
                 log_kpar[crop[2] : crop[3]],
                 nmodes,
             )
         return (
-            rebinned_ps[...,crop[0] : crop[1],:][..., crop[2] : crop[3]],
+            rebinned_ps[..., crop[0] : crop[1], :][..., crop[2] : crop[3]],
             kperp[crop[0] : crop[1]],
             log_kpar[crop[2] : crop[3]],
         )
     return (
-        rebinned_ps[...,crop[0] : crop[1],:][..., crop[2] : crop[3]],
+        rebinned_ps[..., crop[0] : crop[1], :][..., crop[2] : crop[3]],
         kperp[crop[0] : crop[1]],
         log_kpar[crop[2] : crop[3]],
     )

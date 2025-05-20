@@ -1,13 +1,14 @@
 """Plotting functions for 1D and 2D power spectra."""
 
+import warnings
+
 import astropy.units as un
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
 import numpy as np
 from astropy.cosmology.units import littleh
 from matplotlib import rcParams
+from matplotlib.colors import LogNorm
 from scipy.ndimage import gaussian_filter
-import warnings
 
 
 def plot_1d_power_spectrum(  # noqa: C901
@@ -231,18 +232,18 @@ def plot_2d_power_spectrum(  # noqa: C901
     cmap_kwargs = {}
     if vmin is None:
         if log[2]:
-            cmap_kwargs['vmin'] = np.percentile(np.log10(power_spectrum.value), 5)
+            cmap_kwargs["vmin"] = np.percentile(np.log10(power_spectrum.value), 5)
         else:
-            cmap_kwargs['vmin'] = np.percentile(power_spectrum.value, 5)
+            cmap_kwargs["vmin"] = np.percentile(power_spectrum.value, 5)
     if vmax is None:
         if log[2]:
-            cmap_kwargs['vmax'] = np.percentile(np.log10(power_spectrum.value), 95)
+            cmap_kwargs["vmax"] = np.percentile(np.log10(power_spectrum.value), 95)
         else:
-            cmap_kwargs['vmax'] = np.percentile(power_spectrum.value, 95)
+            cmap_kwargs["vmax"] = np.percentile(power_spectrum.value, 95)
     if log[2]:
         cmap_kwargs = {}
-        cmap_kwargs['norm'] = LogNorm(vmin=vmin, vmax=vmax)
-    
+        cmap_kwargs["norm"] = LogNorm(vmin=vmin, vmax=vmax)
+
     if title is not None and isinstance(title, str):
         axs[0].set_title(title, fontsize=fontsize)
     axs[0].set_ylabel(ylabel, fontsize=fontsize)
@@ -359,9 +360,7 @@ def plot_power_spectrum(
         )
     elif (hasattr(wavemodes, "ndim") and wavemodes.ndim == 2) or len(wavemodes) == 2:
         if labels is not None or leg_kwargs is not None:
-            warnings.warn(
-                "Cylindrical PS plots do not support labels and legends."
-            )
+            warnings.warn("Cylindrical PS plots do not support labels and legends.")
         if len(log) == 1:
             log = [log[0], log[0], True]
         if len(log) == 2:
