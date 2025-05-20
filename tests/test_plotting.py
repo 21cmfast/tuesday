@@ -7,7 +7,7 @@ from astropy.cosmology.units import littleh
 from tuesday.core import calculate_ps, plot_power_spectrum
 
 
-def test_1d_ps_plot(unit):
+def test_1d_ps_plot():
     """Test the 1D power spectrum plot."""
     rng = np.random.default_rng()
     test_lc = rng.random((100, 100, 1000))
@@ -55,7 +55,7 @@ def test_1d_ps_plot(unit):
     )
 
 
-def test_2d_ps_plot(unit):
+def test_2d_ps_plot():
     """Test the 2D power spectrum plot."""
     rng = np.random.default_rng()
     test_lc = rng.random((100, 100, 1000))
@@ -140,7 +140,7 @@ def test_ps_plot_units(unit):
     plot_power_spectrum(
         [ps["final_kperp"], ps["final_kpar"]],
         ps["final_ps_2D"],
-        log=[True, True, True],
+        log=[True, True, False],
         labels=["foo"],
     )
 
@@ -149,13 +149,13 @@ def test_ps_plot_units(unit):
         ps["ps_1D"],
         title="Test Title",
         labels=["z=6", "z=10", "z=27"],
-        log=True,
+        log=False,
     )
 
     plot_power_spectrum(
         [ps1["final_kperp"], ps1["final_kpar"]],
         ps1["final_ps_2D"],
-        log=[True, True, True],
+        log=[True, True, False],
         labels=["foo"],
     )
 
@@ -164,5 +164,5 @@ def test_ps_plot_units(unit):
         ps1["ps_1D"],
         title="Test Title",
         labels=["z=6", "z=10", "z=27"],
-        log=True,
+        log=False,
     )

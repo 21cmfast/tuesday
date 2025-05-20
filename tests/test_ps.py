@@ -107,7 +107,7 @@ def test_calculate_ps_w_var():
         calculate_ps(
             test_lc * un.dimensionless_unscaled,
             test_redshifts,
-            box_length=200,
+            box_length=200 * un.Mpc,
             zs=zs,
             calc_1d=True,
             calc_global=True,
@@ -120,7 +120,7 @@ def test_calculate_ps_w_var():
         calculate_ps(
             test_lc * un.dimensionless_unscaled,
             test_redshifts,
-            box_length=200,
+            box_length=200 * un.Mpc,
             zs=[4.0],  # outside test_redshifts
             calc_1d=True,
             calc_global=True,
@@ -131,7 +131,7 @@ def test_calculate_ps_w_var():
         calculate_ps(
             test_lc * un.dimensionless_unscaled,
             test_redshifts,
-            box_length=200,
+            box_length=200 * un.Mpc,
             zs=[50.0],  # outside test_redshifts
             calc_1d=True,
             calc_global=True,
