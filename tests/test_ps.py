@@ -12,7 +12,7 @@ def test_calculate_ps(log_bins):
     rng = np.random.default_rng()
     test_lc = rng.random((100, 100, 1000))
     test_redshifts = np.logspace(np.log10(5), np.log10(30), 1000)
-    zs = [6.0, 10.0, 27.0]
+    zs = [5.0, 10.0, 27.0]
 
     calculate_ps(
         test_lc * un.dimensionless_unscaled,
@@ -47,17 +47,66 @@ def test_calculate_ps(log_bins):
         log_bins=log_bins,
     )
 
+def test_calculate_ps():
+    rng = np.random.default_rng()
+    test_lc = rng.random((100, 100, 1000))
+    test_redshifts = np.logspace(np.log10(5), np.log10(30), 1000)
+    zs = [6.0, 10.0, 27.0]
+
+    with np.testing.assert_raises(ValueError):
+        calculate_ps(
+            test_lc * un.dimensionless_unscaled,
+            test_redshifts,
+            box_length=200 * un.Mpc,
+            zs=3.,
+            calc_1d=True,
+            calc_global=True,
+        )
     calculate_ps(
         test_lc * un.dimensionless_unscaled,
         test_redshifts,
         box_length=200 * un.Mpc,
-        zs=zs,
         calc_1d=True,
         calc_global=True,
         interp=True,
         mu=0.5,
-        log_bins=log_bins,
+        prefactor_fnc=None,
     )
+    def prefactor(freq: list):
+        return 1.0
+    calculate_ps(
+        test_lc * un.dimensionless_unscaled,
+        test_redshifts,
+        box_length=200 * un.Mpc,
+        calc_1d=True,
+        calc_global=True,
+        interp=True,
+        mu=0.5,
+        prefactor_fnc= prefactor,
+    )
+
+    with np.testing.assert_raises(TypeError):
+        calculate_ps(
+            test_lc,
+            test_redshifts,
+            box_length=200 * un.Mpc,
+            zs=[50.0],  # outside test_redshifts
+            calc_1d=True,
+            calc_global=True,
+            get_variance=True,
+            postprocess=True,
+        )
+    with np.testing.assert_raises(TypeError):
+        calculate_ps(
+            test_lc * un.dimensionless_unscaled,
+            test_redshifts,
+            box_length=200,
+            zs=[50.0],  # outside test_redshifts
+            calc_1d=True,
+            calc_global=True,
+            get_variance=True,
+            postprocess=True,
+        )
 
 
 def test_calculate_ps_w_var():
@@ -138,6 +187,8 @@ def test_calculate_ps_w_var():
             get_variance=True,
             postprocess=True,
         )
+
+    
 
 
 def test_ps_avg():
