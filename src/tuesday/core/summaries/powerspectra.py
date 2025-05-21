@@ -154,6 +154,9 @@ def calculate_ps(  # noqa: C901
         A function that generates the points at which to interpolate the PS.
         See powerbox.tools.get_power documentation for more details.
     """
+    if not calc_1d and not calc_2d:
+        raise ValueError("At least one of calc_1d or calc_2d must be True.")
+    
     if not interp:
         interp = None
     if not isinstance(box, un.Quantity):
@@ -175,8 +178,6 @@ def calculate_ps(  # noqa: C901
                 box_side_shape,
                 ps_redshifts=ps_redshifts,
             )
-    if lc_redshifts is not None:
-        zs = []  # ps center redshift
 
     out = {}
 
@@ -200,7 +201,7 @@ def calculate_ps(  # noqa: C901
 
         chunk = box[..., start:end].value
         if lc_redshifts is not None:
-            zs.append(lc_redshifts[(start + end) // 2])
+            chunk_z = lc_redshifts[(start + end) // 2]
         if calc_2d:
             results = get_power(
                 chunk,
@@ -225,14 +226,17 @@ def calculate_ps(  # noqa: C901
                 lc_var_2d = var
             else:
                 ps_2d, kperp, nmodes, kpar = results
+                lc_var_2d = None
 
-            lc_ps_2d = ps_2d
+            kpar = np.array(kpar).squeeze()
+            lc_ps_2d = ps_2d[...,kpar>0]
+            kpar = kpar[kpar>0]
         else:
             lc_ps_2d = None
             kperp = None
             kpar = None
             nmodes = None
-            var_2d = None
+            lc_var_2d = None
 
 
         if calc_1d:
@@ -259,26 +263,28 @@ def calculate_ps(  # noqa: C901
                 lc_var_1d = var_1d
             else:
                 ps_1d, k, nmodes_1d = results
+                lc_var_1d = None
             lc_ps_1d = ps_1d
         else:
             lc_ps_1d = None
             nmodes_1d = None
             k = None
-            var_1d = None
-        dc = PowerSpectrum(ps_1d=lc_ps_1d * ps_unit, 
-                                   ps_2d=lc_ps_2d * ps_unit, 
-                                   k=k / box_length.unit, 
-                                   kperp=kperp / box_length.unit, 
-                                   kpar=kpar / box_length.unit, 
-                                   redshifts=zs if lc_redshifts is not None else None,
-                                   Nmodes_1D=nmodes_1d,
+            lc_var_1d = None
+        dc = PowerSpectrum(ps_1d=lc_ps_1d * ps_unit if lc_ps_1d is not None else None, 
+                                   ps_2d=lc_ps_2d * ps_unit if lc_ps_2d is not None else None, 
+                                   k=k.squeeze() / box_length.unit if k is not None else None, 
+                                   kperp=kperp.squeeze() / box_length.unit if kperp is not None else None, 
+                                   kpar=kpar / box_length.unit if kpar is not None else None, 
+                                   redshifts=chunk_z if lc_redshifts is not None else None,
+                                   Nmodes_1D=nmodes_1d.squeeze(),
                                    Nmodes_2D=nmodes,
-                                   var_1d=lc_var_1d * ps_unit**2,
-                                   var_2d=lc_var_2d * ps_unit**2)
+                                   var_1d=lc_var_1d * ps_unit**2 if lc_var_1d is not None else None,
+                                   var_2d=lc_var_2d * ps_unit**2 if lc_var_2d is not None else None,
+                                   )
         if len(chunk_indices) == 1:
             out = dc
         else:
-            out[str((start+end)//2)] = dc
+            out["z = " + str(np.round(chunk_z,2))] = dc
 
     return out
 
@@ -289,7 +295,7 @@ def calculate_ps_lc(
     ps_redshifts: float | np.ndarray | None = None,
     chunk_indices: list | None = None,
     chunk_size: int | None = None,
-    chunk_skip: int | None = 0,
+    chunk_skip: int | None = None,
     calc_2d: bool | None = True,
     kperp_bins: int | None = None,
     k_weights_2d: Callable | None = ignore_zero_ki,
@@ -298,7 +304,7 @@ def calculate_ps_lc(
     kpar_bins: int | np.ndarray | None = None,
     log_bins: bool | None = True,
     crop: list | np.ndarray | None = None,
-    calc_1d: bool | None = False,
+    calc_1d: bool | None = True,
     k_bins: int | None = None,
     mu_min: float | None = None,
     bin_ave: bool | None = True,
@@ -356,8 +362,6 @@ def calculate_ps_lc(
     kperp_bins=kperp_bins,
     k_weights_2d=k_weights_2d,
     k_weights_1d=k_weights_1d,
-    postprocess=postprocess,
-    kpar_bins=kpar_bins,
     log_bins=log_bins,
     crop=crop,
     calc_1d=calc_1d,
@@ -380,7 +384,7 @@ def calculate_ps_coeval(
     kpar_bins: int | np.ndarray | None = None,
     log_bins: bool | None = True,
     crop: list | np.ndarray | None = None,
-    calc_1d: bool | None = False,
+    calc_1d: bool | None = True,
     k_bins: int | None = None,
     mu_min: float | None = None,
     bin_ave: bool | None = True,
@@ -419,8 +423,6 @@ def calculate_ps_coeval(
     kperp_bins=kperp_bins,
     k_weights_2d=k_weights_2d,
     k_weights_1d=k_weights_1d,
-    postprocess=postprocess,
-    kpar_bins=kpar_bins,
     log_bins=log_bins,
     crop=crop,
     calc_1d=calc_1d,
