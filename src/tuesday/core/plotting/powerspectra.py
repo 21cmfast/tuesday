@@ -331,7 +331,7 @@ def plot_power_spectrum(
             title=title,
             xlabel=xlabel,
             ylabel=ylabel,
-            colors=color,
+            color=color,
             fontsize=fontsize,
             log=log,
             label=label,

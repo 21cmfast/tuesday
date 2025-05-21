@@ -1,4 +1,4 @@
-"""Test cases for the __main__ module."""
+"""Test cases for the core/summaries/powerspectra.py module."""
 
 import astropy.units as un
 import numpy as np
