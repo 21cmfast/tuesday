@@ -64,6 +64,8 @@ def get_chunk_indices(lc_redshifts: np.ndarray, box_side_shape: int,
             dtype=np.int32,
         )
         chunk_ends = np.min([np.array(chunk_starts) + chunk_size, np.zeros_like(ps_redshifts) + n_slices], axis=0)          
+    chunk_starts = np.array(chunk_starts, dtype=np.int32)
+    chunk_ends = np.array(chunk_ends, dtype=np.int32)
     chunk_indices = [(s,e) for s,e in zip(chunk_starts, chunk_ends)]
     return chunk_indices
 
@@ -276,7 +278,7 @@ def calculate_ps(  # noqa: C901
                                    kperp=kperp.squeeze() / box_length.unit if kperp is not None else None, 
                                    kpar=kpar / box_length.unit if kpar is not None else None, 
                                    redshifts=chunk_z if lc_redshifts is not None else None,
-                                   Nmodes_1D=nmodes_1d.squeeze(),
+                                   Nmodes_1D=nmodes_1d.squeeze() if nmodes_1d is not None else None,
                                    Nmodes_2D=nmodes,
                                    var_1d=lc_var_1d * ps_unit**2 if lc_var_1d is not None else None,
                                    var_2d=lc_var_2d * ps_unit**2 if lc_var_2d is not None else None,

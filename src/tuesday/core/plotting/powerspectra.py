@@ -262,6 +262,7 @@ def plot_power_spectrum(
     vmin: float | None = None,
     vmax: float | None = None,
     log: list[bool] | None = False,
+    cbar: bool | None = True,
     label: list | None = None,
     smooth: float | bool = False,
     legend_kwargs: dict | None = None,

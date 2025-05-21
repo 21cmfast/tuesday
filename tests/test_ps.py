@@ -29,18 +29,17 @@ def test_calculate_ps_lc(log_bins, test_lc, test_redshifts):
     
     calculate_ps_lc(
         test_lc * un.dimensionless_unscaled,
+        200 * un.Mpc,
         test_redshifts,
-        box_length=200 * un.Mpc,
         ps_redshifts=[6.0],
         calc_2d=False,
-        calc_global=True,
         log_bins=log_bins,
     )
 
     calculate_ps_lc(
         test_lc * un.dimensionless_unscaled,
+        200 * un.Mpc,
         test_redshifts,
-        box_length=200 * un.Mpc,
         ps_redshifts=6.8,
         calc_1d=False,
         interp=True,
@@ -50,8 +49,8 @@ def test_calculate_ps_lc(log_bins, test_lc, test_redshifts):
 
     calculate_ps_lc(
         test_lc * un.dimensionless_unscaled,
+        200 * un.Mpc,
         test_redshifts,
-        box_length=200 * un.Mpc,
         mu_min=0.5,
         log_bins=log_bins,
     )
@@ -81,18 +80,17 @@ def test_calculate_ps_corner_cases(test_lc, test_redshifts):
     with np.testing.assert_raises(ValueError):
         calculate_ps_lc(
             test_lc * un.dimensionless_unscaled,
+            200 * un.Mpc,
             test_redshifts,
-            box_length=200 * un.Mpc,
-            zs=3.0,
+            ps_redshifts=3.0,
             calc_1d=True,
             calc_global=True,
         )
     calculate_ps_lc(
         test_lc * un.dimensionless_unscaled,
+        200 * un.Mpc,
         test_redshifts,
-        box_length=200 * un.Mpc,
         calc_1d=True,
-        calc_global=True,
         interp=True,
         mu=0.5,
         prefactor_fnc=None,
@@ -103,10 +101,9 @@ def test_calculate_ps_corner_cases(test_lc, test_redshifts):
 
     calculate_ps_lc(
         test_lc * un.dimensionless_unscaled,
+        200 * un.Mpc,
         test_redshifts,
-        box_length=200 * un.Mpc,
         calc_1d=True,
-        calc_global=True,
         interp=True,
         mu=0.5,
         prefactor_fnc=prefactor,
@@ -115,11 +112,10 @@ def test_calculate_ps_corner_cases(test_lc, test_redshifts):
     with np.testing.assert_raises(TypeError):
         calculate_ps_lc(
             test_lc * un.dimensionless_unscaled,
+            200 * un.Mpc,
             test_redshifts,
-            box_length=200,
-            zs=[50.0],  # outside test_redshifts
+            ps_redshifts=[50.0],  # outside test_redshifts
             calc_1d=True,
-            calc_global=True,
             get_variance=True,
             postprocess=True,
         )
@@ -133,8 +129,8 @@ def test_calculate_ps_w_var(test_lc, test_redshifts):
 
     out = calculate_ps_lc(
         test_lc * un.dimensionless_unscaled,
+        200 * un.Mpc,
         test_redshifts,
-        box_length=200 * un.Mpc,
         ps_redshifts=zs,
         calc_2d=False,
         calc_1d=True,
@@ -143,8 +139,8 @@ def test_calculate_ps_w_var(test_lc, test_redshifts):
     out.var_1d
     out = calculate_ps_lc(
         test_lc * un.dimensionless_unscaled,
+        200 * un.Mpc,
         test_redshifts,
-        box_length=200 * un.Mpc,
         ps_redshifts=zs,
         calc_2d=True,
         calc_1d=True,
@@ -156,8 +152,8 @@ def test_calculate_ps_w_var(test_lc, test_redshifts):
     with np.testing.assert_raises(NotImplementedError):
         calculate_ps_lc(
             test_lc * un.dimensionless_unscaled,
+            200 * un.Mpc,
             test_redshifts,
-            box_length=200 * un.Mpc,
             ps_redshifts=zs,
             calc_1d=True,
             get_variance=True,
