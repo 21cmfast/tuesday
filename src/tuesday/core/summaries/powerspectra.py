@@ -138,7 +138,10 @@ def calculate_ps(  # noqa: C901
     else:
         if not np.iterable(zs):
             zs = np.array([zs])
-        if np.min(zs) < np.min(lc_redshifts) or np.max(zs) > np.max(lc_redshifts):
+
+        if np.min(np.round(zs, 5)) < np.min(np.round(lc_redshifts, 5)) or np.max(
+            np.round(zs, 5)
+        ) > np.max(np.round(lc_redshifts, 5)):
             raise ValueError("zs should be within the range of lc_redshifts")
         if chunk_size is None:
             chunk_size = box_side_shape
