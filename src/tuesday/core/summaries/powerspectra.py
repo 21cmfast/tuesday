@@ -1,6 +1,8 @@
 """Code to calculate the 1D and 2D power spectrum of a lightcone."""
 
 import warnings
+from collections.abc import Callable
+from dataclasses import dataclass
 
 import astropy.units as un
 import numpy as np
@@ -14,8 +16,7 @@ from powerbox.tools import (
     regular_angular_generator,
 )
 from scipy.interpolate import RegularGridInterpolator
-from typing import Callable
-from dataclasses import dataclass
+
 
 @dataclass(frozen=True)
 class PowerSpectrum:
@@ -33,11 +34,13 @@ class PowerSpectrum:
     var_2d: np.ndarray | None = None
 
 
-
-def get_chunk_indices(lc_redshifts: np.ndarray, box_side_shape: int,
-    ps_redshifts: np.ndarray | None = None, 
-    chunk_size: int | np.ndarray | None = None, 
-    chunk_skip: np.ndarray | None = None,):
+def get_chunk_indices(
+    lc_redshifts: np.ndarray,
+    box_side_shape: int,
+    ps_redshifts: np.ndarray | None = None,
+    chunk_size: int | np.ndarray | None = None,
+    chunk_skip: np.ndarray | None = None,
+):
     """Get the start and end indices for each lightcone chunk."""
     n_slices = lc_redshifts.shape[0]
     if chunk_size is None:
@@ -49,29 +52,40 @@ def get_chunk_indices(lc_redshifts: np.ndarray, box_side_shape: int,
             chunk_starts = list(range(0, n_slices - chunk_size, chunk_skip))
             chunk_ends = np.array(chunk_starts) + chunk_size
         if isinstance(chunk_size, np.ndarray):
-            raise ValueError("chunk_size should be an int or ps_redshifts should be provided.")
+            raise ValueError(
+                "chunk_size should be an int or ps_redshifts should be provided."
+            )
     else:
         if not np.iterable(ps_redshifts):
             ps_redshifts = np.array([ps_redshifts])
 
-        if np.min(np.round(ps_redshifts, 5)) < np.min(np.round(lc_redshifts, 5)) or np.max(
-            np.round(ps_redshifts, 5)
-        ) > np.max(np.round(lc_redshifts, 5)):
+        if np.min(np.round(ps_redshifts, 5)) < np.min(
+            np.round(lc_redshifts, 5)
+        ) or np.max(np.round(ps_redshifts, 5)) > np.max(np.round(lc_redshifts, 5)):
             raise ValueError("ps_redshifts should be within the range of lc_redshifts")
         if isinstance(chunk_size, int):
             chunk_size = np.array([chunk_size] * len(ps_redshifts))
-        chunk_starts = np.array([np.max([np.argmin(abs(lc_redshifts - z)) - s // 2, 0]) for z,s in zip(ps_redshifts, chunk_size)],
+        chunk_starts = np.array(
+            [
+                np.max([np.argmin(abs(lc_redshifts - z)) - s // 2, 0])
+                for z, s in zip(ps_redshifts, chunk_size, strict=False)
+            ],
             dtype=np.int32,
         )
-        chunk_ends = np.min([np.array(chunk_starts) + chunk_size, np.zeros_like(ps_redshifts) + n_slices], axis=0)          
+        chunk_ends = np.min(
+            [
+                np.array(chunk_starts) + chunk_size,
+                np.zeros_like(ps_redshifts) + n_slices,
+            ],
+            axis=0,
+        )
     chunk_starts = np.array(chunk_starts, dtype=np.int32)
     chunk_ends = np.array(chunk_ends, dtype=np.int32)
-    chunk_indices = [(s,e) for s,e in zip(chunk_starts, chunk_ends)]
+    chunk_indices = [(s, e) for s, e in zip(chunk_starts, chunk_ends, strict=False)]
     return chunk_indices
 
 
-
-def calculate_ps(  # noqa: C901
+def calculate_ps(
     box: un.Quantity,
     box_length: un.Quantity,
     lc_redshifts: np.ndarray | None = None,
@@ -158,7 +172,7 @@ def calculate_ps(  # noqa: C901
     """
     if not calc_1d and not calc_2d:
         raise ValueError("At least one of calc_1d or calc_2d must be True.")
-    
+
     if not interp:
         interp = None
     if not isinstance(box, un.Quantity):
@@ -231,8 +245,8 @@ def calculate_ps(  # noqa: C901
                 lc_var_2d = None
 
             kpar = np.array(kpar).squeeze()
-            lc_ps_2d = ps_2d[...,kpar>0]
-            kpar = kpar[kpar>0]
+            lc_ps_2d = ps_2d[..., kpar > 0]
+            kpar = kpar[kpar > 0]
         else:
             lc_ps_2d = None
             kperp = None
@@ -240,9 +254,7 @@ def calculate_ps(  # noqa: C901
             nmodes = None
             lc_var_2d = None
 
-
         if calc_1d:
-
             results = get_power(
                 chunk,
                 (
@@ -272,23 +284,25 @@ def calculate_ps(  # noqa: C901
             nmodes_1d = None
             k = None
             lc_var_1d = None
-        dc = PowerSpectrum(ps_1d=lc_ps_1d * ps_unit if lc_ps_1d is not None else None, 
-                                   ps_2d=lc_ps_2d * ps_unit if lc_ps_2d is not None else None, 
-                                   k=k.squeeze() / box_length.unit if k is not None else None, 
-                                   kperp=kperp.squeeze() / box_length.unit if kperp is not None else None, 
-                                   kpar=kpar / box_length.unit if kpar is not None else None, 
-                                   redshifts=chunk_z if lc_redshifts is not None else None,
-                                   Nmodes_1D=nmodes_1d.squeeze() if nmodes_1d is not None else None,
-                                   Nmodes_2D=nmodes,
-                                   var_1d=lc_var_1d * ps_unit**2 if lc_var_1d is not None else None,
-                                   var_2d=lc_var_2d * ps_unit**2 if lc_var_2d is not None else None,
-                                   )
+        dc = PowerSpectrum(
+            ps_1d=lc_ps_1d * ps_unit if lc_ps_1d is not None else None,
+            ps_2d=lc_ps_2d * ps_unit if lc_ps_2d is not None else None,
+            k=k.squeeze() / box_length.unit if k is not None else None,
+            kperp=kperp.squeeze() / box_length.unit if kperp is not None else None,
+            kpar=kpar / box_length.unit if kpar is not None else None,
+            redshifts=chunk_z if lc_redshifts is not None else None,
+            Nmodes_1D=nmodes_1d.squeeze() if nmodes_1d is not None else None,
+            Nmodes_2D=nmodes,
+            var_1d=lc_var_1d * ps_unit**2 if lc_var_1d is not None else None,
+            var_2d=lc_var_2d * ps_unit**2 if lc_var_2d is not None else None,
+        )
         if len(chunk_indices) == 1:
             out = dc
         else:
-            out["z = " + str(np.round(chunk_z,2))] = dc
+            out["z = " + str(np.round(chunk_z, 2))] = dc
 
     return out
+
 
 def calculate_ps_lc(
     box: un.Quantity,
@@ -324,15 +338,16 @@ def calculate_ps_lc(
     """
     if chunk_indices is None:
         chunk_indices = get_chunk_indices(
-                    lc_redshifts,
-                    box.shape[0],
-                    ps_redshifts=ps_redshifts,
-                    chunk_size=chunk_size,
-                    chunk_skip=chunk_skip,
-                )
+            lc_redshifts,
+            box.shape[0],
+            ps_redshifts=ps_redshifts,
+            chunk_size=chunk_size,
+            chunk_skip=chunk_skip,
+        )
     if mu_min is not None:
         if interp is None:
             k_weights_1d_input = k_weights_1d
+
             def mask_fnc(freq, absk):
                 kz_mesh = np.zeros((len(freq[0]), len(freq[1]), len(freq[2])))
                 kz = freq[2]
@@ -355,25 +370,26 @@ def calculate_ps_lc(
             interp_points_generator = regular_angular_generator()
 
     return calculate_ps(
-    box=box,
-    box_length=box_length,
-    lc_redshifts=lc_redshifts,
-    ps_redshifts=ps_redshifts,
-    chunk_indices=chunk_indices,
-    calc_2d=calc_2d,
-    kperp_bins=kperp_bins,
-    k_weights_2d=k_weights_2d,
-    k_weights_1d=k_weights_1d,
-    log_bins=log_bins,
-    crop=crop,
-    calc_1d=calc_1d,
-    k_bins=k_bins,
-    bin_ave=bin_ave,
-    interp=interp,
-    prefactor_fnc=prefactor_fnc,
-    interp_points_generator=interp_points_generator,
-    get_variance=get_variance,
+        box=box,
+        box_length=box_length,
+        lc_redshifts=lc_redshifts,
+        ps_redshifts=ps_redshifts,
+        chunk_indices=chunk_indices,
+        calc_2d=calc_2d,
+        kperp_bins=kperp_bins,
+        k_weights_2d=k_weights_2d,
+        k_weights_1d=k_weights_1d,
+        log_bins=log_bins,
+        crop=crop,
+        calc_1d=calc_1d,
+        k_bins=k_bins,
+        bin_ave=bin_ave,
+        interp=interp,
+        prefactor_fnc=prefactor_fnc,
+        interp_points_generator=interp_points_generator,
+        get_variance=get_variance,
     )
+
 
 def calculate_ps_coeval(
     box: un.Quantity,
@@ -398,6 +414,7 @@ def calculate_ps_coeval(
     if mu_min is not None:
         if interp is None:
             k_weights_1d_input = k_weights_1d
+
             def mask_fnc(freq, absk):
                 kz_mesh = np.zeros((len(freq[0]), len(freq[1]), len(freq[2])))
                 kz = freq[2]
@@ -419,22 +436,23 @@ def calculate_ps_coeval(
         if interp is not None:
             interp_points_generator = regular_angular_generator()
     return calculate_ps(
-    box=box,
-    box_length=box_length,
-    calc_2d=calc_2d,
-    kperp_bins=kperp_bins,
-    k_weights_2d=k_weights_2d,
-    k_weights_1d=k_weights_1d,
-    log_bins=log_bins,
-    crop=crop,
-    calc_1d=calc_1d,
-    k_bins=k_bins,
-    bin_ave=bin_ave,
-    interp=interp,
-    prefactor_fnc=prefactor_fnc,
-    interp_points_generator=interp_points_generator,
-    get_variance=get_variance,
+        box=box,
+        box_length=box_length,
+        calc_2d=calc_2d,
+        kperp_bins=kperp_bins,
+        k_weights_2d=k_weights_2d,
+        k_weights_1d=k_weights_1d,
+        log_bins=log_bins,
+        crop=crop,
+        calc_1d=calc_1d,
+        k_bins=k_bins,
+        bin_ave=bin_ave,
+        interp=interp,
+        prefactor_fnc=prefactor_fnc,
+        interp_points_generator=interp_points_generator,
+        get_variance=get_variance,
     )
+
 
 def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None):
     r"""

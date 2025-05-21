@@ -6,6 +6,7 @@ from astropy.cosmology.units import littleh
 
 from tuesday.core import calculate_ps_lc, plot_power_spectrum
 
+
 @pytest.fixture
 def ps():
     """Fixture to create a random power spectrum."""
@@ -25,6 +26,7 @@ def ps():
     )
     return ps
 
+
 @pytest.fixture
 def ps2():
     """Fixture to create a random power spectrum."""
@@ -42,6 +44,7 @@ def ps2():
         calc_1d=False,
     )
     return ps
+
 
 def test_1d_ps_plot(ps):
     """Test the 1d power spectrum plot."""
@@ -66,13 +69,13 @@ def test_1d_ps_plot(ps):
         label=["z=6", "z=10", "z=27"],
     )
 
+
 def test_1d_ps_units(ps):
     with np.testing.assert_raises(ValueError):
-        plot_power_spectrum(
-            ps.k, ps.ps_1d * un.mK**2 * un.Mpc**2
-        )  # Wrong units on PS
+        plot_power_spectrum(ps.k, ps.ps_1d * un.mK**2 * un.Mpc**2)  # Wrong units on PS
     with np.testing.assert_raises(ValueError):
         plot_power_spectrum(ps.k / un.Mpc**4, ps.ps_1d)  # Wrong units on k
+
 
 def test_2d_ps_plot(ps2):
     """Test the 2d power spectrum plot."""
@@ -119,7 +122,7 @@ def test_2d_ps_units(ps):
             ps.ps_2d,
         )  # Wrong ks
 
-       
+
 @pytest.mark.parametrize("unit", [un.Mpc, un.Mpc / littleh])
 def test_ps_plot_units(unit):
     """Test the 2d power spectrum plot."""

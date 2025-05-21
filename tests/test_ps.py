@@ -6,6 +6,7 @@ import pytest
 
 from tuesday.core import calculate_ps_coeval, calculate_ps_lc, cylindrical_to_spherical
 
+
 @pytest.fixture
 def test_coeval():
     """Fixture to create a random power spectrum."""
@@ -13,20 +14,22 @@ def test_coeval():
     test_coeval = rng.random((100, 100, 100))
     return test_coeval
 
+
 @pytest.fixture
 def test_lc():
     rng = np.random.default_rng()
     test_lc = rng.random((100, 100, 300))
     return test_lc
 
+
 @pytest.fixture
 def test_redshifts():
     test_redshifts = np.logspace(np.log10(5), np.log10(30), 300)
     return test_redshifts
 
+
 @pytest.mark.parametrize("log_bins", [True, False])
 def test_calculate_ps_lc(log_bins, test_lc, test_redshifts):
-    
     calculate_ps_lc(
         test_lc * un.dimensionless_unscaled,
         200 * un.Mpc,
@@ -43,7 +46,7 @@ def test_calculate_ps_lc(log_bins, test_lc, test_redshifts):
         ps_redshifts=6.8,
         calc_1d=False,
         interp=True,
-        mu_min = 0.5,
+        mu_min=0.5,
         log_bins=log_bins,
     )
 
@@ -55,6 +58,7 @@ def test_calculate_ps_lc(log_bins, test_lc, test_redshifts):
         log_bins=log_bins,
     )
 
+
 def test_calculate_ps_coeval(test_coeval):
     with np.testing.assert_raises(TypeError):
         calculate_ps_coeval(
@@ -63,15 +67,15 @@ def test_calculate_ps_coeval(test_coeval):
             ps_redshifts=6.8,
             calc_1d=False,
             interp=True,
-            mu_min = 0.5,
+            mu_min=0.5,
         )
     calculate_ps_coeval(
-            test_coeval * un.dimensionless_unscaled,
-            box_length=200 * un.Mpc,
-            calc_1d=False,
-            interp=True,
-            mu_min = 0.5,
-        )
+        test_coeval * un.dimensionless_unscaled,
+        box_length=200 * un.Mpc,
+        calc_1d=False,
+        interp=True,
+        mu_min=0.5,
+    )
 
     calculate_ps_coeval(
         test_coeval * un.dimensionless_unscaled,
@@ -81,7 +85,6 @@ def test_calculate_ps_coeval(test_coeval):
 
 
 def test_calculate_ps_corner_cases(test_lc, test_redshifts):
-
     with np.testing.assert_raises(ValueError):
         calculate_ps_lc(
             test_lc * un.dimensionless_unscaled,
@@ -165,7 +168,6 @@ def test_calculate_ps_w_var(test_lc, test_redshifts):
         )
 
 
-
 def test_ps_avg():
     rng = np.random.default_rng()
     ps_2d = rng.random((32, 32))
@@ -179,5 +181,7 @@ def test_ps_avg():
     mu_mesh = np.cos(theta)
     mask = mu_mesh >= 0.9
     ps_2d[mask] = 1000
-    ps, k, sws = cylindrical_to_spherical(ps_2d, x, x, nbins=32, interp=True, mu_min=0.98)
+    ps, k, sws = cylindrical_to_spherical(
+        ps_2d, x, x, nbins=32, interp=True, mu_min=0.98
+    )
     assert np.nanmean(ps[-20:]) == 1000.0

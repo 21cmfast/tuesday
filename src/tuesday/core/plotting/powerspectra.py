@@ -11,7 +11,7 @@ from matplotlib.colors import LogNorm
 from scipy.ndimage import gaussian_filter
 
 
-def plot_1d_power_spectrum(  # noqa: C901
+def plot_1d_power_spectrum(
     wavemodes: un.Quantity,
     power_spectrum: un.Quantity,
     fig: plt.Figure | None = None,
@@ -227,7 +227,7 @@ def plot_2d_power_spectrum(  # noqa: C901
             smooth = 1.0
             unit = power_spectrum.unit
         power_spectrum = gaussian_filter(power_spectrum, sigma=smooth) * unit
-    
+
     im = ax.pcolormesh(
         kperp.value,
         kpar.value,
