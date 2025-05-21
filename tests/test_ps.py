@@ -47,8 +47,7 @@ def test_calculate_ps(log_bins):
         log_bins=log_bins,
     )
 
-
-def test_calculate_ps():
+def test_calculate_ps_corner_cases():
     rng = np.random.default_rng()
     test_lc = rng.random((100, 100, 1000))
     test_redshifts = np.logspace(np.log10(5), np.log10(30), 1000)
