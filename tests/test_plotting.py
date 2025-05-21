@@ -127,7 +127,7 @@ def test_ps_plot_units(unit, ps):
         [ps["final_kperp"], ps["final_kpar"]],
         ps["final_ps_2D"],
         log=[True, True, False],
-        labels=["foo"],
+        label=["foo"],
     )
 
     plot_power_spectrum(
