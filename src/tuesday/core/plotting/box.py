@@ -1,14 +1,13 @@
 """Plot lightcones, coeval cubes, etc."""
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib import rcParams
-from matplotlib.colors import LogNorm
-from astropy import units as un
-from astropy.cosmology.units import littleh
-from types import Callable
-from scipy.ndimage import gaussian_filter
 
-def plot_3d_box(box: un.Quantity,
+from types import Callable
+
+import matplotlib.pyplot as plt
+from astropy import units as un
+
+
+def plot_3d_box(
+    box: un.Quantity,
     box_length: un.Quantity,
     zaxis: un.Quantity | None = None,
     x_axis: int = 0,
@@ -67,6 +66,7 @@ def plot_3d_box(box: un.Quantity,
     ax : matplotlib.axes.Axes
         The axes object containing the plot.
     """
+
 
 def plot_2d_slice(
     box: un.Quantity,
@@ -136,31 +136,30 @@ def plot_1d_pdf(
     log: list[bool] | None = None,
     labels: list | None = None,
     leg_kwargs: dict | None = None,
-    ):
+):
     """Plot the pixel distribution function: a histogram of the lc or coeval box.
-    
+
     Parameters
     ----------
     box : un.Quantity
         The lightcone or coeval box.
     box_length : un.Quantity
         The length of the box in cMpc.
-    
-    
-    
-    
-    
+
+
+
+
+
     """
-   
-
-
 
 
 def lightcone_sliceplot():
     return plot_2d_slice()
 
+
 def coeval_sliceplot():
     return plot_2d_slice()
+
 
 def plot_global_history(
     box: un.Quantity,
@@ -174,9 +173,9 @@ def plot_global_history(
     log: list[bool] | None = None,
     labels: list | None = None,
     leg_kwargs: dict | None = None,
-    ):
+):
     """Plot the global history of the lightcone or coeval box.
-    
+
     Parameters
     ----------
     box : un.Quantity
@@ -201,7 +200,7 @@ def plot_global_history(
         The labels to use for the plot.
     leg_kwargs : dict, optional
         Additional keyword arguments to pass to the legend.
-    
+
     Returns
     -------
     fig : matplotlib.figure.Figure

@@ -47,6 +47,7 @@ def test_calculate_ps(log_bins):
         log_bins=log_bins,
     )
 
+
 def test_calculate_ps():
     rng = np.random.default_rng()
     test_lc = rng.random((100, 100, 1000))
@@ -58,7 +59,7 @@ def test_calculate_ps():
             test_lc * un.dimensionless_unscaled,
             test_redshifts,
             box_length=200 * un.Mpc,
-            zs=3.,
+            zs=3.0,
             calc_1d=True,
             calc_global=True,
         )
@@ -72,8 +73,10 @@ def test_calculate_ps():
         mu=0.5,
         prefactor_fnc=None,
     )
+
     def prefactor(freq: list):
         return 1.0
+
     calculate_ps(
         test_lc * un.dimensionless_unscaled,
         test_redshifts,
@@ -82,7 +85,7 @@ def test_calculate_ps():
         calc_global=True,
         interp=True,
         mu=0.5,
-        prefactor_fnc= prefactor,
+        prefactor_fnc=prefactor,
     )
 
     with np.testing.assert_raises(TypeError):
@@ -187,8 +190,6 @@ def test_calculate_ps_w_var():
             get_variance=True,
             postprocess=True,
         )
-
-    
 
 
 def test_ps_avg():
