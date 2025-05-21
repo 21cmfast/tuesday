@@ -332,7 +332,7 @@ def calculate_ps_lc(
                 )
     if mu_min is not None:
         if interp is None:
-
+            k_weights_1d_input = k_weights_1d
             def mask_fnc(freq, absk):
                 kz_mesh = np.zeros((len(freq[0]), len(freq[1]), len(freq[2])))
                 kz = freq[2]
@@ -341,7 +341,7 @@ def calculate_ps_lc(
                 phi = np.arccos(kz_mesh / absk)
                 mu_mesh = abs(np.cos(phi))
                 kmag = _magnitude_grid([c for i, c in enumerate(freq) if i < 2])
-                return np.logical_and(mu_mesh > mu_min, k_weights_1d(freq, kmag))
+                return np.logical_and(mu_mesh > mu_min, k_weights_1d_input(freq, kmag))
 
             k_weights_1d = mask_fnc
 
@@ -397,7 +397,7 @@ def calculate_ps_coeval(
 ) -> dict:
     if mu_min is not None:
         if interp is None:
-
+            k_weights_1d_input = k_weights_1d
             def mask_fnc(freq, absk):
                 kz_mesh = np.zeros((len(freq[0]), len(freq[1]), len(freq[2])))
                 kz = freq[2]
@@ -406,7 +406,7 @@ def calculate_ps_coeval(
                 phi = np.arccos(kz_mesh / absk)
                 mu_mesh = abs(np.cos(phi))
                 kmag = _magnitude_grid([c for i, c in enumerate(freq) if i < 2])
-                return np.logical_and(mu_mesh > mu_min, k_weights_1d(freq, kmag))
+                return np.logical_and(mu_mesh > mu_min, k_weights_1d_input(freq, kmag))
 
             k_weights_1d = mask_fnc
 
