@@ -15,6 +15,24 @@ from powerbox.tools import (
 )
 from scipy.interpolate import RegularGridInterpolator
 from typing import Callable
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class PowerSpectrum:
+    """Class to hold the power spectrum data."""
+
+    ps_1d: np.ndarray | None = None
+    ps_2d: np.ndarray | None = None
+    k: np.ndarray | None = None
+    kperp: np.ndarray | None = None
+    kpar: np.ndarray | None = None
+    redshifts: np.ndarray | None = None
+    Nmodes_1D: np.ndarray | None = None
+    Nmodes_2D: np.ndarray | None = None
+    var_1d: np.ndarray | None = None
+    var_2d: np.ndarray | None = None
+
+
 
 def get_chunk_indices(lc_redshifts: np.ndarray, box_side_shape: int,
     ps_redshifts: np.ndarray | None = None, 
@@ -59,14 +77,12 @@ def calculate_ps(  # noqa: C901
     chunk_indices: list | None = None,
     calc_2d: bool | None = True,
     kperp_bins: int | np.ndarray | None = None,
-    k_weights: Callable | None = ignore_zero_ki,
-    postprocess: bool | None = True,
-    kpar_bins: int | np.ndarray | None = None,
+    k_weights_2d: Callable | None = ignore_zero_ki,
     log_bins: bool | None = True,
     crop: list | np.ndarray | None = None,
     calc_1d: bool | None = False,
     k_bins: int | None = None,
-    mu_min: float | None = None,
+    k_weights_1d: Callable | None = ignore_zero_ki,
     bin_ave: bool | None = True,
     interp: bool | None = None,
     prefactor_fnc: Callable | None = power2delta,
@@ -114,26 +130,12 @@ def calculate_ps(  # noqa: C901
     postprocess : bool, optional
         If True, postprocess the 2D PS.
         This step involves cropping out empty bins and/or log binning the kpar axis.
-    kpar_bins : int or np.ndarray, optional
-        Affects only the postprocessing step.
-        The number of bins or the bin edges to use for binning the kpar axis.
-        If None, produces 16 bins.
-    log_bins : bool, optional
-        Affects only the postprocessing step. If True, log bin the kpar axis.
-    crop : list, optional
-        Affects only the postprocessing step.
-        The crop range for the (log-binned) PS. If None, crops out only the empty bins.
     calc_1d : bool, optional
         If True, calculate the 1D power spectrum.
     k_bins : int, optional
         The number of bins on which to calculate 1D PS.
     calc_global : bool, optional
         If True, calculate the global brightness temperature.
-    mu_min : float, optional
-        The minimum value of
-        :math:`\\cos(\theta), \theta = \arctan (k_\\perp/k_\\parallel)`
-        for all calculated PS.
-        If None, all modes are included.
     bin_ave : bool, optional
         If True, return the center value of each kperp and kpar bin
         i.e. len(kperp) = ps_2d.shape[0].
@@ -175,21 +177,22 @@ def calculate_ps(  # noqa: C901
             )
     if lc_redshifts is not None:
         zs = []  # ps center redshift
-    lc_ps_2d = []
-    clean_lc_ps_2d = []
-    if get_variance:
-        if calc_2d:
-            lc_var_2d = []
-            if postprocess:
-                clean_lc_var_2d = []
-        if calc_1d:
-            lc_var_1d = []
-    if calc_1d:
-        lc_ps_1d = []
+
     out = {}
 
     if interp:
         interp = "linear"
+
+    if prefactor_fnc is None:
+        ps_unit = box.unit**2 * box_length.unit**3
+    elif prefactor_fnc == power2delta:
+        ps_unit = box.unit**2
+    else:
+        warnings.warn(
+            "The prefactor function is not the default. PS unit may not be correct.",
+            stacklevel=2,
+        )
+        ps_unit = box.unit**2
 
     for chunk in chunk_indices:
         start = chunk[0]
@@ -211,7 +214,7 @@ def calculate_ps(  # noqa: C901
                 bins=kperp_bins,
                 log_bins=log_bins,
                 nthreads=1,
-                k_weights=k_weights,
+                k_weights=k_weights_2d,
                 prefactor_fnc=prefactor_fnc,
                 interpolation_method=interp,
                 return_sumweights=True,
@@ -219,62 +222,20 @@ def calculate_ps(  # noqa: C901
             )
             if get_variance:
                 ps_2d, kperp, var, nmodes, kpar = results
-                lc_var_2d.append(var)
+                lc_var_2d = var
             else:
                 ps_2d, kperp, nmodes, kpar = results
 
-            lc_ps_2d.append(ps_2d)
-            if postprocess:
-                clean_ps_2d, clean_kperp, clean_kpar, clean_nmodes = postprocess_ps(
-                    ps_2d.squeeze(),
-                    kperp,
-                    kpar,
-                    log_bins=log_bins,
-                    kpar_bins=kpar_bins,
-                    crop=crop.copy() if crop is not None else crop,
-                    kperp_modes=nmodes,
-                    return_modes=True,
-                    interp=interp,
-                )
-                clean_lc_ps_2d.append(clean_ps_2d)
-                if get_variance:
-                    clean_var_2d, _, _ = postprocess_ps(
-                        var.squeeze(),
-                        kperp,
-                        kpar,
-                        log_bins=log_bins,
-                        kpar_bins=kpar_bins,
-                        crop=crop.copy() if crop is not None else crop,
-                        kperp_modes=nmodes,
-                        return_modes=False,
-                        interp=interp,
-                    )
-                    clean_lc_var_2d.append(clean_var_2d)
+            lc_ps_2d = ps_2d
+        else:
+            lc_ps_2d = None
+            kperp = None
+            kpar = None
+            nmodes = None
+            var_2d = None
+
 
         if calc_1d:
-            if mu_min is not None:
-                if interp is None:
-
-                    def mask_fnc(freq, absk):
-                        kz_mesh = np.zeros((len(freq[0]), len(freq[1]), len(freq[2])))
-                        kz = freq[2]
-                        for i in range(len(kz)):
-                            kz_mesh[:, :, i] = kz[i]
-                        phi = np.arccos(kz_mesh / absk)
-                        mu_mesh = abs(np.cos(phi))
-                        kmag = _magnitude_grid([c for i, c in enumerate(freq) if i < 2])
-                        return np.logical_and(mu_mesh > mu, ignore_zero_ki(freq, kmag))
-
-                    k_weights1d = mask_fnc
-
-                if interp is not None:
-                    k_weights1d = ignore_zero_ki
-
-                    interp_points_generator = above_mu_min_angular_generator(mu=mu_min)
-            else:
-                k_weights1d = ignore_zero_ki
-                if interp is not None:
-                    interp_points_generator = regular_angular_generator()
 
             results = get_power(
                 chunk,
@@ -286,7 +247,7 @@ def calculate_ps(  # noqa: C901
                 bin_ave=bin_ave,
                 bins=k_bins,
                 log_bins=log_bins,
-                k_weights=k_weights1d,
+                k_weights=k_weights_1d,
                 prefactor_fnc=prefactor_fnc,
                 interpolation_method=interp,
                 interp_points_generator=interp_points_generator,
@@ -295,44 +256,29 @@ def calculate_ps(  # noqa: C901
             )
             if get_variance:
                 ps_1d, k, var_1d, nmodes_1d = results
-                lc_var_1d.append(var_1d)
+                lc_var_1d = var_1d
             else:
                 ps_1d, k, nmodes_1d = results
-            lc_ps_1d.append(ps_1d)
-
-    if prefactor_fnc is None:
-        ps_unit = box.unit**2 * box_length.unit**3
-    elif prefactor_fnc == power2delta:
-        ps_unit = box.unit**2
-    else:
-        warnings.warn(
-            "The prefactor function is not the default. PS unit may not be correct.",
-            stacklevel=2,
-        )
-        ps_unit = box.unit**2
-    if calc_1d:
-        out["k"] = k / box_length.unit
-        out["ps_1D"] = np.array(lc_ps_1d) * ps_unit
-        out["Nmodes_1D"] = nmodes_1d
-        out["mu"] = mu
-        if get_variance:
-            out["var_1D"] = np.array(lc_var_1d) * ps_unit**2
-    if calc_2d:
-        out["full_kperp"] = kperp / box_length.unit
-        out["full_kpar"] = kpar[0] / box_length.unit
-        out["full_ps_2D"] = np.array(lc_ps_2d) * ps_unit
-        out["full_Nmodes"] = nmodes
-        if get_variance:
-            out["full_var_2D"] = np.array(lc_var_2d) * ps_unit**2
-        if postprocess:
-            out["final_ps_2D"] = np.array(clean_lc_ps_2d) * ps_unit
-            out["final_kpar"] = clean_kpar / box_length.unit
-            out["final_kperp"] = clean_kperp / box_length.unit
-            out["final_Nmodes"] = clean_nmodes
-            if get_variance:
-                out["final_var_2D"] = np.array(clean_lc_var_2d) * ps_unit**2
-    if lc_redshifts is not None:
-        out["redshifts"] = np.array(zs)
+            lc_ps_1d = ps_1d
+        else:
+            lc_ps_1d = None
+            nmodes_1d = None
+            k = None
+            var_1d = None
+        dc = PowerSpectrum(ps_1d=lc_ps_1d * ps_unit, 
+                                   ps_2d=lc_ps_2d * ps_unit, 
+                                   k=k / box_length.unit, 
+                                   kperp=kperp / box_length.unit, 
+                                   kpar=kpar / box_length.unit, 
+                                   redshifts=zs if lc_redshifts is not None else None,
+                                   Nmodes_1D=nmodes_1d,
+                                   Nmodes_2D=nmodes,
+                                   var_1d=lc_var_1d * ps_unit**2,
+                                   var_2d=lc_var_2d * ps_unit**2)
+        if len(chunk_indices) == 1:
+            out = dc
+        else:
+            out[str((start+end)//2)] = dc
 
     return out
 
@@ -346,20 +292,28 @@ def calculate_ps_lc(
     chunk_skip: int | None = 0,
     calc_2d: bool | None = True,
     kperp_bins: int | None = None,
-    k_weights: Callable | None = ignore_zero_ki,
+    k_weights_2d: Callable | None = ignore_zero_ki,
+    k_weights_1d: Callable | None = ignore_zero_ki,
     postprocess: bool | None = True,
     kpar_bins: int | np.ndarray | None = None,
     log_bins: bool | None = True,
     crop: list | np.ndarray | None = None,
     calc_1d: bool | None = False,
     k_bins: int | None = None,
-    mu: float | None = None,
+    mu_min: float | None = None,
     bin_ave: bool | None = True,
     interp: bool | None = None,
     prefactor_fnc: Callable | None = power2delta,
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
 ) -> dict:
+    """
+    mu_min : float, optional
+        The minimum value of
+        :math:`\\cos(\theta), \theta = \arctan (k_\\perp/k_\\parallel)`
+        for all calculated PS.
+        If None, all modes are included.
+    """
     if chunk_indices is None:
         chunk_indices = get_chunk_indices(
                     lc_redshifts,
@@ -368,6 +322,29 @@ def calculate_ps_lc(
                     chunk_size=chunk_size,
                     chunk_skip=chunk_skip,
                 )
+    if mu_min is not None:
+        if interp is None:
+
+            def mask_fnc(freq, absk):
+                kz_mesh = np.zeros((len(freq[0]), len(freq[1]), len(freq[2])))
+                kz = freq[2]
+                for i in range(len(kz)):
+                    kz_mesh[:, :, i] = kz[i]
+                phi = np.arccos(kz_mesh / absk)
+                mu_mesh = abs(np.cos(phi))
+                kmag = _magnitude_grid([c for i, c in enumerate(freq) if i < 2])
+                return np.logical_and(mu_mesh > mu_min, k_weights_1d(freq, kmag))
+
+            k_weights_1d = mask_fnc
+
+        if interp is not None:
+            k_weights_1d = ignore_zero_ki
+
+            interp_points_generator = above_mu_min_angular_generator(mu=mu_min)
+    else:
+        k_weights_1d = ignore_zero_ki
+        if interp is not None:
+            interp_points_generator = regular_angular_generator()
 
     return calculate_ps(
     box=box,
@@ -377,14 +354,14 @@ def calculate_ps_lc(
     chunk_indices=chunk_indices,
     calc_2d=calc_2d,
     kperp_bins=kperp_bins,
-    k_weights=k_weights,
+    k_weights_2d=k_weights_2d,
+    k_weights_1d=k_weights_1d,
     postprocess=postprocess,
     kpar_bins=kpar_bins,
     log_bins=log_bins,
     crop=crop,
     calc_1d=calc_1d,
     k_bins=k_bins,
-    mu_min=mu_min,
     bin_ave=bin_ave,
     interp=interp,
     prefactor_fnc=prefactor_fnc,
@@ -397,33 +374,57 @@ def calculate_ps_coeval(
     box_length: un.Quantity,
     calc_2d: bool | None = True,
     kperp_bins: int | None = None,
-    k_weights: Callable | None = ignore_zero_ki,
+    k_weights_2d: Callable | None = ignore_zero_ki,
+    k_weights_1d: Callable | None = ignore_zero_ki,
     postprocess: bool | None = True,
     kpar_bins: int | np.ndarray | None = None,
     log_bins: bool | None = True,
     crop: list | np.ndarray | None = None,
     calc_1d: bool | None = False,
     k_bins: int | None = None,
-    mu: float | None = None,
+    mu_min: float | None = None,
     bin_ave: bool | None = True,
     interp: bool | None = None,
     prefactor_fnc: Callable | None = power2delta,
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
 ) -> dict:
+    if mu_min is not None:
+        if interp is None:
+
+            def mask_fnc(freq, absk):
+                kz_mesh = np.zeros((len(freq[0]), len(freq[1]), len(freq[2])))
+                kz = freq[2]
+                for i in range(len(kz)):
+                    kz_mesh[:, :, i] = kz[i]
+                phi = np.arccos(kz_mesh / absk)
+                mu_mesh = abs(np.cos(phi))
+                kmag = _magnitude_grid([c for i, c in enumerate(freq) if i < 2])
+                return np.logical_and(mu_mesh > mu_min, k_weights_1d(freq, kmag))
+
+            k_weights_1d = mask_fnc
+
+        if interp is not None:
+            k_weights_1d = ignore_zero_ki
+
+            interp_points_generator = above_mu_min_angular_generator(mu=mu_min)
+    else:
+        k_weights_1d = ignore_zero_ki
+        if interp is not None:
+            interp_points_generator = regular_angular_generator()
     return calculate_ps(
     box=box,
     box_length=box_length,
     calc_2d=calc_2d,
     kperp_bins=kperp_bins,
-    k_weights=k_weights,
+    k_weights_2d=k_weights_2d,
+    k_weights_1d=k_weights_1d,
     postprocess=postprocess,
     kpar_bins=kpar_bins,
     log_bins=log_bins,
     crop=crop,
     calc_1d=calc_1d,
     k_bins=k_bins,
-    mu_min=mu_min,
     bin_ave=bin_ave,
     interp=interp,
     prefactor_fnc=prefactor_fnc,
