@@ -63,8 +63,6 @@ def plot_1d_power_spectrum(  # noqa: C901
         Keyword arguments for the legend.
     """
     rcParams.update({"font.size": fontsize})
-    if power_spectrum.ndim > 1:
-        raise ValueError("Plot one 1D PS at a time.")
     if color is None:
         color = "C0"
     if xlabel is None:
@@ -309,6 +307,7 @@ def plot_power_spectrum(
     legend_kwargs : dict, optional
         Keyword arguments for the legend.
     """
+    power_spectrum = power_spectrum.squeeze()
     if isinstance(label, str):
         label = [label]
     if not np.iterable(log):
@@ -318,6 +317,8 @@ def plot_power_spectrum(
             legend_kwargs = {}
         if len(log) == 1:
             log = [log[0], log[0]]
+        if power_spectrum.ndim > 1:
+            raise ValueError("Plot one 1D PS at a time.")
         if fig is None:
             fig, ax = plt.subplots(1, 1, figsize=(8, 6))
         if ax is None:
