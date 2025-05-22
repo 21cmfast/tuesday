@@ -579,7 +579,7 @@ def bin_kpar(
     Returns
     -------
     transform_ps : callable
-        A function that takes a CylindricalPS object and returns a new CylindricalPS 
+        A function that takes a CylindricalPS object and returns a new CylindricalPS
         object with the binned kpar axis.
 
     Raises
