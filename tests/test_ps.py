@@ -4,7 +4,12 @@ import astropy.units as un
 import numpy as np
 import pytest
 
-from tuesday.core import calculate_ps_coeval, calculate_ps_lc, cylindrical_to_spherical, bin_kpar
+from tuesday.core import (
+    bin_kpar,
+    calculate_ps_coeval,
+    calculate_ps_lc,
+    cylindrical_to_spherical,
+)
 
 
 @pytest.fixture
@@ -55,11 +60,13 @@ def test_calculate_ps_lc(log_bins, test_lc, test_redshifts):
         mu_min=0.5,
         log_bins=log_bins,
         get_variance=True,
-        transform_ps2d=bin_kpar(bins_kpar=None, 
-                                log_kpar=False, 
-                                interp_kpar=False, 
-                                crop_kpar=(0,3), 
-                                crop_kperp=(0,8)),
+        transform_ps2d=bin_kpar(
+            bins_kpar=None,
+            log_kpar=False,
+            interp_kpar=False,
+            crop_kpar=(0, 3),
+            crop_kperp=(0, 8),
+        ),
     )
 
 
