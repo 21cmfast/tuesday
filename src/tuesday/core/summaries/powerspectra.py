@@ -71,7 +71,7 @@ def get_chunk_indices(
 
 def calculate_ps(
     chunk: un.Quantity,
-    box_length: un.Quantity,
+    box_length: un.Quantity,*,
     chunk_redshift: float | None = None,
     calc_2d: bool | None = True,
     kperp_bins: int | np.ndarray | None = None,
@@ -247,7 +247,7 @@ def calculate_ps(
 def calculate_ps_lc(
     lc: un.Quantity,
     box_length: un.Quantity,
-    lc_redshifts: np.ndarray,
+    lc_redshifts: np.ndarray,*,
     ps_redshifts: float | np.ndarray | None = None,
     chunk_indices: list | None = None,
     chunk_size: int | None = None,
@@ -270,11 +270,57 @@ def calculate_ps_lc(
     get_variance: bool | None = False,
 ) -> dict:
     """
+    Calculate the PS by chunking a lightcone.
+    
+    Parameters
+    ----------
+    lc : un.Quantity
+        The lightcone with units of temperature or dimensionless.
+    box_length : un.Quantity
+        The side length of the box, accepted units are length.
+    lc_redshifts : np.ndarray
+        The redshift of each lightcone slice.
+        Array has same length as lc.shape[-1].
+    chunk_redshift : float, optional
+        The central redshift of the lightcone chunk or coeval box.
+    calc_2d : bool, optional
+        If True, calculate the 2D power spectrum.
+    kperp_bins : int, optional
+        The number of bins to use for the kperp axis of the 2D PS.
+    k_weights : callable, optional
+        A function that takes a frequency tuple and returns
+        a boolean mask for the k values to ignore.
+        See powerbox.tools.ignore_zero_ki for an example
+        and powerbox.tools.get_power documentation for more details.
+        Default is powerbox.tools.ignore_zero_ki, which excludes
+        the power any k_i = 0 mode.
+        Typically, only the central zero mode |k| = 0 is excluded,
+        in which case use powerbox.tools.ignore_zero_absk.
+    calc_1d : bool, optional
+        If True, calculate the 1D power spectrum.
+    k_bins : int, optional
+        The number of bins on which to calculate 1D PS.
     mu_min : float, optional
         The minimum value of
         :math:`\\cos(\theta), \theta = \arctan (k_\\perp/k_\\parallel)`
         for all calculated PS.
         If None, all modes are included.
+    bin_ave : bool, optional
+        If True, return the center value of each kperp and kpar bin
+        i.e. len(kperp) = ps_2d.shape[0].
+        If False, return the left edge of each bin
+        i.e. len(kperp) = ps_2d.shape[0] + 1.
+    interp : str, optional
+        If True, use linear interpolation to calculate the PS
+        at the points specified by interp_points_generator.
+        Note that this significantly slows down the calculation.
+    delta : bool, optional
+        Whether to convert the power P [mK^2 Mpc^{-3}] to the dimensionless 
+        power :math:`\\delta^2` [mK^2].
+        Default is True.
+    interp_points_generator : callable, optional
+        A function that generates the points at which to interpolate the PS.
+        See powerbox.tools.get_power documentation for more details.
     """
     validate(lc, "temperature")
     validate(box_length, "length")
@@ -351,7 +397,7 @@ def calculate_ps_lc(
 
 def calculate_ps_coeval(
     box: un.Quantity,
-    box_length: un.Quantity,
+    box_length: un.Quantity,*,
     box_redshift: float | None = None,
     calc_2d: bool | None = True,
     kperp_bins: int | None = None,
@@ -370,8 +416,60 @@ def calculate_ps_coeval(
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
 ) -> dict:
-    validate(box, "temperature")
-    validate(box_length, "length")
+    """
+    Calculate the PS by chunking a lightcone.
+    
+    Parameters
+    ----------
+    box : un.Quantity
+        The coeval box with units of temperature or dimensionless.
+    box_length : un.Quantity
+        The side length of the box, accepted units are length.
+    box_redshift : float, optional
+        The redshift value of the coeval box.
+    chunk_redshift : float, optional
+        The central redshift of the lightcone chunk or coeval box.
+    calc_2d : bool, optional
+        If True, calculate the 2D power spectrum.
+    kperp_bins : int, optional
+        The number of bins to use for the kperp axis of the 2D PS.
+    k_weights : callable, optional
+        A function that takes a frequency tuple and returns
+        a boolean mask for the k values to ignore.
+        See powerbox.tools.ignore_zero_ki for an example
+        and powerbox.tools.get_power documentation for more details.
+        Default is powerbox.tools.ignore_zero_ki, which excludes
+        the power any k_i = 0 mode.
+        Typically, only the central zero mode |k| = 0 is excluded,
+        in which case use powerbox.tools.ignore_zero_absk.
+    calc_1d : bool, optional
+        If True, calculate the 1D power spectrum.
+    k_bins : int, optional
+        The number of bins on which to calculate 1D PS.
+    mu_min : float, optional
+        The minimum value of
+        :math:`\\cos(\theta), \theta = \arctan (k_\\perp/k_\\parallel)`
+        for all calculated PS.
+        If None, all modes are included.
+    bin_ave : bool, optional
+        If True, return the center value of each kperp and kpar bin
+        i.e. len(kperp) = ps_2d.shape[0].
+        If False, return the left edge of each bin
+        i.e. len(kperp) = ps_2d.shape[0] + 1.
+    interp : str, optional
+        If True, use linear interpolation to calculate the PS
+        at the points specified by interp_points_generator.
+        Note that this significantly slows down the calculation.
+    delta : bool, optional
+        Whether to convert the power P [mK^2 Mpc^{-3}] to the dimensionless 
+        power :math:`\\delta^2` [mK^2].
+        Default is True.
+    interp_points_generator : callable, optional
+        A function that generates the points at which to interpolate the PS.
+        See powerbox.tools.get_power documentation for more details.
+    """
+    validate(box,'temperature')
+    validate(box_length, 'length')
     if mu_min is not None:
         if interp is None:
             k_weights_1d_input = k_weights_1d

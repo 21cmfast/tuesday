@@ -14,7 +14,7 @@ from tuesday.core.units import validatePS as validate
 
 
 def plot_1d_power_spectrum(
-    power_spectrum: SphericalPS,
+    power_spectrum: SphericalPS,*,
     ax: plt.Axes | None = None,
     title: str | None = None,
     xlabel: str | None = None,
@@ -88,7 +88,7 @@ def plot_1d_power_spectrum(
 
 
 def plot_2d_power_spectrum(
-    power_spectrum: CylindricalPS,
+    power_spectrum: CylindricalPS,*,
     ax: plt.Axes | None = None,
     title: str | None = None,
     xlabel: str | None = None,
@@ -197,7 +197,7 @@ def plot_2d_power_spectrum(
 
 
 def plot_power_spectrum(
-    power_spectrum: SphericalPS | CylindricalPS,
+    power_spectrum: SphericalPS | CylindricalPS,*,
     ax: plt.Axes | list[plt.Axes] | None = None,
     title: str | None = None,
     xlabel: str | None = None,
