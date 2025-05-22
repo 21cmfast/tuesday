@@ -1,7 +1,7 @@
 """Code to calculate the 1D and 2D power spectrum of a lightcone."""
 
 import warnings
-from typing import Callable
+from collections.abc import Callable
 
 import astropy.units as un
 import numpy as np
