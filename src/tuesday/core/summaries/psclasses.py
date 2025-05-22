@@ -1,6 +1,8 @@
 from dataclasses import dataclass
-import numpy as np
+
 import astropy.units as un
+import numpy as np
+
 
 @dataclass(frozen=True)
 class SphericalPS:
@@ -12,6 +14,7 @@ class SphericalPS:
     Nmodes: np.ndarray | None = None
     var: un.Quantity | None = None
     delta: bool = False
+
 
 @dataclass(frozen=True)
 class CylindricalPS:

@@ -5,14 +5,15 @@ import warnings
 import astropy.units as un
 import matplotlib.pyplot as plt
 import numpy as np
-from astropy.cosmology.units import littleh
 from matplotlib import rcParams
 from matplotlib.colors import LogNorm
 from scipy.ndimage import gaussian_filter
-from tuesday.core.units import validatePS as validate
-from tuesday.core import CylindricalPS, SphericalPS
 
-def plot_1d_power_spectrum(  # noqa: C901
+from tuesday.core import CylindricalPS, SphericalPS
+from tuesday.core.units import validatePS as validate
+
+
+def plot_1d_power_spectrum(
     power_spectrum: SphericalPS,
     ax: plt.Axes | None = None,
     title: str | None = None,
@@ -86,7 +87,7 @@ def plot_1d_power_spectrum(  # noqa: C901
     return ax
 
 
-def plot_2d_power_spectrum(  # noqa: C901
+def plot_2d_power_spectrum(
     power_spectrum: CylindricalPS,
     ax: plt.Axes | None = None,
     title: str | None = None,
@@ -136,7 +137,7 @@ def plot_2d_power_spectrum(  # noqa: C901
     kperp = power_spectrum.kperp
     kpar = power_spectrum.kpar
     power_spectrum = power_spectrum.ps
-    
+
     if xlabel is None:
         xlabel = r"k$_\perp \,$" + f"[{kperp.unit:latex_inline}]"
 
@@ -151,7 +152,7 @@ def plot_2d_power_spectrum(  # noqa: C901
             clabel = r"$\Delta^2_{21}$"
         else:
             clabel = r"$P(k) \,$" + clabel
-        
+
     cmap_kwargs = {}
     if vmin is None:
         if log[2]:
@@ -300,7 +301,6 @@ def plot_power_spectrum(
             fig = ax.get_figure()
             if len(fig.get_axes()) > 1:
                 cbar = False
-
 
         ax = plot_2d_power_spectrum(
             power_spectrum,

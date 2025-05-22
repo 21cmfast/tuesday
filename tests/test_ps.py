@@ -140,7 +140,7 @@ def test_calculate_ps_w_var(test_lc, test_redshifts):
         calc_1d=True,
         get_variance=True,
     )
-    out['ps_1d']['z = 6.0'].var
+    out["ps_1d"]["z = 6.0"].var
     out = calculate_ps_lc(
         test_lc * un.dimensionless_unscaled,
         200 * un.Mpc,
@@ -150,8 +150,8 @@ def test_calculate_ps_w_var(test_lc, test_redshifts):
         calc_1d=True,
         get_variance=True,
     )
-    out['ps_2d']['z = 6.0'].var
-    out['ps_1d']['z = 6.0'].var
+    out["ps_2d"]["z = 6.0"].var
+    out["ps_1d"]["z = 6.0"].var
 
     with np.testing.assert_raises(NotImplementedError):
         calculate_ps_lc(

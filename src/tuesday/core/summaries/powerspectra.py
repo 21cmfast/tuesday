@@ -2,7 +2,6 @@
 
 import warnings
 from collections.abc import Callable
-from dataclasses import dataclass
 
 import astropy.units as un
 import numpy as np
@@ -16,14 +15,17 @@ from powerbox.tools import (
     regular_angular_generator,
 )
 from scipy.interpolate import RegularGridInterpolator
-from typing import Callable
-from tuesday.core import SphericalPS, CylindricalPS
+
+from tuesday.core import CylindricalPS, SphericalPS
 from tuesday.core.units import validate
 
 
-def get_chunk_indices(lc_redshifts: np.ndarray, chunk_size: int | np.ndarray,
-    ps_redshifts: np.ndarray | None = None, 
-    chunk_skip: np.ndarray | None = None,):
+def get_chunk_indices(
+    lc_redshifts: np.ndarray,
+    chunk_size: int | np.ndarray,
+    ps_redshifts: np.ndarray | None = None,
+    chunk_skip: np.ndarray | None = None,
+):
     """Get the start and end indices for each lightcone chunk."""
     n_slices = lc_redshifts.shape[0]
 
@@ -67,8 +69,7 @@ def get_chunk_indices(lc_redshifts: np.ndarray, chunk_size: int | np.ndarray,
     return chunk_indices
 
 
-
-def calculate_ps(  # noqa: C901
+def calculate_ps(
     chunk: un.Quantity,
     box_length: un.Quantity,
     chunk_redshift: float | None = None,
@@ -168,7 +169,6 @@ def calculate_ps(  # noqa: C901
         )
         ps_unit = chunk.unit**2
 
-    
     if calc_2d:
         results = get_power(
             chunk,
@@ -195,21 +195,19 @@ def calculate_ps(  # noqa: C901
             ps_2d, kperp, nmodes, kpar = results
 
         kpar = np.array(kpar).squeeze()
-        lc_ps_2d = ps_2d[...,kpar>0]
-        kpar = kpar[kpar>0]
-        out["ps_2d"] = CylindricalPS( 
-                                ps=lc_ps_2d * ps_unit,
-                                kperp=kperp.squeeze() / box_length.unit , 
-                                kpar=kpar / box_length.unit, 
-                                redshift=chunk_redshift,
-                                Nmodes=nmodes,
-                                var=lc_var_2d * ps_unit**2 if get_variance else None,
-                                delta=True if prefactor_fnc is not None else False,
-                                )
-
+        lc_ps_2d = ps_2d[..., kpar > 0]
+        kpar = kpar[kpar > 0]
+        out["ps_2d"] = CylindricalPS(
+            ps=lc_ps_2d * ps_unit,
+            kperp=kperp.squeeze() / box_length.unit,
+            kpar=kpar / box_length.unit,
+            redshift=chunk_redshift,
+            Nmodes=nmodes,
+            var=lc_var_2d * ps_unit**2 if get_variance else None,
+            delta=True if prefactor_fnc is not None else False,
+        )
 
     if calc_1d:
-
         results = get_power(
             chunk,
             (
@@ -234,13 +232,14 @@ def calculate_ps(  # noqa: C901
             ps_1d, k, nmodes_1d = results
         lc_ps_1d = ps_1d
 
-        out["ps_1d"] = SphericalPS(ps=lc_ps_1d * ps_unit, 
-                        k=k.squeeze() / box_length.unit, 
-                        redshift=chunk_redshift,
-                        Nmodes=nmodes_1d.squeeze(),
-                        var=lc_var_1d * ps_unit**2 if get_variance else None,
-                        delta=True if prefactor_fnc is not None else False,
-                        )
+        out["ps_1d"] = SphericalPS(
+            ps=lc_ps_1d * ps_unit,
+            k=k.squeeze() / box_length.unit,
+            redshift=chunk_redshift,
+            Nmodes=nmodes_1d.squeeze(),
+            var=lc_var_1d * ps_unit**2 if get_variance else None,
+            delta=True if prefactor_fnc is not None else False,
+        )
 
     return out
 
@@ -277,15 +276,15 @@ def calculate_ps_lc(
         for all calculated PS.
         If None, all modes are included.
     """
-    validate(lc,'temperature')
-    validate(box_length, 'length')
+    validate(lc, "temperature")
+    validate(box_length, "length")
     if chunk_indices is None:
         chunk_indices = get_chunk_indices(
-                    lc_redshifts,
-                    lc.shape[0] if chunk_size is None else chunk_size,
-                    ps_redshifts=ps_redshifts,
-                    chunk_skip=chunk_skip,
-                )
+            lc_redshifts,
+            lc.shape[0] if chunk_size is None else chunk_size,
+            ps_redshifts=ps_redshifts,
+            chunk_skip=chunk_skip,
+        )
     if mu_min is not None:
         if interp is None:
             k_weights_1d_input = k_weights_1d
@@ -326,22 +325,23 @@ def calculate_ps_lc(
         chunk = lc[..., start:end]
         if lc_redshifts is not None:
             chunk_z = lc_redshifts[(start + end) // 2]
-        ps_chunk = calculate_ps(chunk=chunk,
-                                box_length=box_length,
-                                chunk_redshift=chunk_z,
-                                calc_2d=calc_2d,
-                                kperp_bins=kperp_bins,
-                                k_weights_2d=k_weights_2d,
-                                k_weights_1d=k_weights_1d,
-                                log_bins=log_bins,
-                                calc_1d=calc_1d,
-                                k_bins=k_bins,
-                                bin_ave=bin_ave,
-                                interp=interp,
-                                prefactor_fnc=prefactor_fnc,
-                                interp_points_generator=interp_points_generator,
-                                get_variance=get_variance,
-                                )
+        ps_chunk = calculate_ps(
+            chunk=chunk,
+            box_length=box_length,
+            chunk_redshift=chunk_z,
+            calc_2d=calc_2d,
+            kperp_bins=kperp_bins,
+            k_weights_2d=k_weights_2d,
+            k_weights_1d=k_weights_1d,
+            log_bins=log_bins,
+            calc_1d=calc_1d,
+            k_bins=k_bins,
+            bin_ave=bin_ave,
+            interp=interp,
+            prefactor_fnc=prefactor_fnc,
+            interp_points_generator=interp_points_generator,
+            get_variance=get_variance,
+        )
         if calc_1d:
             out["ps_1d"]["z = " + str(np.round(chunk_z, 2))] = ps_chunk["ps_1d"]
         if calc_2d:
@@ -370,8 +370,8 @@ def calculate_ps_coeval(
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
 ) -> dict:
-    validate(box,'temperature')
-    validate(box_length, 'length')
+    validate(box, "temperature")
+    validate(box_length, "length")
     if mu_min is not None:
         if interp is None:
             k_weights_1d_input = k_weights_1d
@@ -401,21 +401,21 @@ def calculate_ps_coeval(
     else:
         prefactor_fnc = None
     return calculate_ps(
-    chunk=box,
-    box_length=box_length,
-    chunk_redshift=box_redshift,
-    calc_2d=calc_2d,
-    kperp_bins=kperp_bins,
-    k_weights_2d=k_weights_2d,
-    k_weights_1d=k_weights_1d,
-    log_bins=log_bins,
-    calc_1d=calc_1d,
-    k_bins=k_bins,
-    bin_ave=bin_ave,
-    interp=interp,
-    prefactor_fnc=prefactor_fnc,
-    interp_points_generator=interp_points_generator,
-    get_variance=get_variance,
+        chunk=box,
+        box_length=box_length,
+        chunk_redshift=box_redshift,
+        calc_2d=calc_2d,
+        kperp_bins=kperp_bins,
+        k_weights_2d=k_weights_2d,
+        k_weights_1d=k_weights_1d,
+        log_bins=log_bins,
+        calc_1d=calc_1d,
+        k_bins=k_bins,
+        bin_ave=bin_ave,
+        interp=interp,
+        prefactor_fnc=prefactor_fnc,
+        interp_points_generator=interp_points_generator,
+        get_variance=get_variance,
     )
 
 
