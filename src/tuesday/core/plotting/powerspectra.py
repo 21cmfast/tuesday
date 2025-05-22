@@ -9,12 +9,11 @@ from astropy.cosmology.units import littleh
 from matplotlib import rcParams
 from matplotlib.colors import LogNorm
 from scipy.ndimage import gaussian_filter
+from tuesday.core.units import validatePS as validate
+from tuesday.core import CylindricalPS, SphericalPS
 
-
-def plot_1d_power_spectrum(
-    wavemodes: un.Quantity,
-    power_spectrum: un.Quantity,
-    fig: plt.Figure | None = None,
+def plot_1d_power_spectrum(  # noqa: C901
+    power_spectrum: SphericalPS,
     ax: plt.Axes | None = None,
     title: str | None = None,
     xlabel: str | None = None,
@@ -31,15 +30,8 @@ def plot_1d_power_spectrum(
 
     Parameters
     ----------
-    wavemodes : un.Quantity
-        Wavemodes corresponding to the power spectrum.
-        Accepted units are 1/Mpc or h/Mpc.
-    power_spectrum : un.Quantity
-        Power spectrum array of shape [Nsamples, Nwavemodes] or [Nwavemodes].
-        There are six accepted units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2,
-        or dimensionless instead of mK^2.
-    fig : plt.Figure, optional
-        Figure object to plot on. If None, a new figure is created.
+    power_spectrum : SphericalPS
+        Instance of the SphericalPS class.
     ax : plt.Axes, optional
         Axes object to plot on. If None, a new axes is created.
     title : str, optional
@@ -63,38 +55,22 @@ def plot_1d_power_spectrum(
         Keyword arguments for the legend.
     """
     rcParams.update({"font.size": fontsize})
+    wavemodes = power_spectrum.k
+    power_spectrum = power_spectrum.ps
     if color is None:
         color = "C0"
     if xlabel is None:
-        if wavemodes.unit == 1 / un.Mpc:
-            xlabel = r"$k \, [\rm{Mpc}^{-1}]$"
-        elif wavemodes.unit == littleh / un.Mpc:
-            xlabel = r"$k \, [h \, \rm{Mpc}^{-1}]$"
-        else:
-            raise ValueError("Wavemodes must be in units of 1/Mpc or h/Mpc.")
+        xlabel = f"k [{wavemodes.unit:latex_inline}]"
+
     if ylabel is None:
-        if power_spectrum.unit == un.mK**2 * un.Mpc**3:
-            ylabel = r"$P(k) \, [\rm{mK}^2 \, \rm{Mpc}^{3}]$"
-        elif power_spectrum.unit == un.mK**2 * un.Mpc**3 / littleh**3:
-            ylabel = r"$P(k) \, [\rm{mK}^2 \, h^{-3} \, \rm{Mpc}^{3}]$"
-        elif power_spectrum.unit == un.mK**2:
-            ylabel = r"$\Delta^2_{21} \, [\rm{mK}^2]$"
-        elif power_spectrum.unit == un.Mpc**3:
-            ylabel = r"$P(k) \, [\rm{Mpc}^{3}]$"
-        elif power_spectrum.unit == un.Mpc**3 / littleh**3:
-            ylabel = r"$P(k) \, [h^{-3} \, \rm{Mpc}^{3}]$"
+        ylabel = f"[{power_spectrum.unit:latex_inline}]"
+        if power_spectrum.unit == un.mK**2:
+            ylabel = r"$\Delta^2_{21} \,$" + ylabel
         elif power_spectrum.unit == un.dimensionless_unscaled:
             ylabel = r"$\Delta^2_{21}$"
         else:
-            raise ValueError(
-                "Accepted PS units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2 or dimless."
-            )
-
-    if (isinstance(smooth, bool) and smooth) or (
-        isinstance(smooth, float) and smooth > 0
-    ):
-        if isinstance(smooth, bool):
-            smooth = 1.0
+            ylabel = r"$P(k) \,$" + ylabel
+    if smooth:
         power_spectrum = gaussian_filter(power_spectrum, sigma=smooth)
     ax.plot(wavemodes, power_spectrum, color=color, label=label)
     if title is not None:
@@ -107,13 +83,11 @@ def plot_1d_power_spectrum(
         ax.set_yscale("log")
     if label is not None:
         ax.legend(**legend_kwargs)
-    return fig, ax
+    return ax
 
 
 def plot_2d_power_spectrum(  # noqa: C901
-    wavemodes: un.Quantity,
-    power_spectrum: un.Quantity,
-    fig: plt.Figure | None = None,
+    power_spectrum: CylindricalPS,
     ax: plt.Axes | None = None,
     title: str | None = None,
     xlabel: str | None = None,
@@ -132,16 +106,8 @@ def plot_2d_power_spectrum(  # noqa: C901
 
     Parameters
     ----------
-    wavemodes : un.Quantity
-        Wavemodes [kperp, kpar].
-        Accepted units are 1/Mpc or h/Mpc.
-    power_spectrum : un.Quantity
-        Power spectrum array of shape [Nsamples, Nkperp, Nkpar]
-        or [Nkperp, Nkpar].
-        There are six accepted units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2,
-        or dimensionless instead of mK^2.
-    fig : plt.Figure, optional
-        Figure object to plot on. If None, a new figure is created.
+    power_spectrum : CylindricalPS
+        Instance of the CylindricalPS class.
     axs : plt.Axes | list[plt.Axes], optional
         Axes object(s) to plot on. If None, new axes are created.
     title : str, optional
@@ -164,44 +130,28 @@ def plot_2d_power_spectrum(  # noqa: C901
         List of booleans to set the kperp, kpar, and PS axes to log scale.
     smooth : float, optional
         Standard deviation for Gaussian smoothing.
-        If True, uses a standard deviation of 1.
+        Default is False, if True, uses a standard deviation of 1.
     """
     rcParams.update({"font.size": fontsize})
-    kperp = wavemodes[0]
-    kpar = wavemodes[1]
+    kperp = power_spectrum.kperp
+    kpar = power_spectrum.kpar
+    power_spectrum = power_spectrum.ps
+    
     if xlabel is None:
-        if kperp.unit == 1 / un.Mpc:
-            xlabel = r"$k_\perp \, [\rm{Mpc}^{-1}]$"
-        elif kperp.unit == littleh / un.Mpc:
-            xlabel = r"$k_\perp \, [h \, \rm{Mpc}^{-1}]$"
-        else:
-            raise ValueError("kperp must be in units of 1/Mpc or h/Mpc.")
+        xlabel = r"k$_\perp \,$" + f"[{kperp.unit:latex_inline}]"
 
     if ylabel is None:
-        if kpar.unit == 1 / un.Mpc:
-            ylabel = r"$k_\parallel \, [\rm{Mpc}^{-1}]$"
-        elif kpar.unit == littleh / un.Mpc:
-            ylabel = r"$k_\parallel \, [h \, \rm{Mpc}^{-1}]$"
-        else:
-            raise ValueError("kpar must be in units of 1/Mpc or h/Mpc.")
+        ylabel = r"k$_\parallel \,$" + f"[{kpar.unit:latex_inline}]"
 
     if clabel is None:
-        if power_spectrum.unit == un.mK**2 * un.Mpc**3:
-            clabel = r"$P(k) \, [\rm{mK}^2 \, \rm{Mpc}^{3}]$"
-        elif power_spectrum.unit == un.mK**2 * un.Mpc**3 / littleh**3:
-            clabel = r"$P(k) \, [\rm{mK}^2 \, h^{-3} \, \rm{Mpc}^{3}]$"
-        elif power_spectrum.unit == un.mK**2:
-            clabel = r"$\Delta^2_{21} \, [\rm{mK}^2]$"
-        elif power_spectrum.unit == un.Mpc**3:
-            clabel = r"$P(k) \, [\rm{Mpc}^{3}]$"
-        elif power_spectrum.unit == un.Mpc**3 / littleh**3:
-            clabel = r"$P(k) \, [h^{-3} \, \rm{Mpc}^{3}]$"
+        clabel = f"[{power_spectrum.unit:latex_inline}]"
+        if power_spectrum.unit == un.mK**2:
+            clabel = r"$\Delta^2_{21} \,$" + clabel
         elif power_spectrum.unit == un.dimensionless_unscaled:
             clabel = r"$\Delta^2_{21}$"
         else:
-            raise ValueError(
-                "Accepted PS units: mK^2 Mpc^3, mK^2 Mpc^3/h^3, mK^2 or dimless."
-            )
+            clabel = r"$P(k) \,$" + clabel
+        
     cmap_kwargs = {}
     if vmin is None:
         if log[2]:
@@ -220,14 +170,12 @@ def plot_2d_power_spectrum(  # noqa: C901
     if title is not None:
         ax.set_title(title, fontsize=fontsize)
     ax.set_ylabel(ylabel, fontsize=fontsize)
-    if (isinstance(smooth, bool) and smooth) or (
-        isinstance(smooth, float) and smooth > 0
-    ):
-        if isinstance(smooth, bool):
-            smooth = 1.0
-            unit = power_spectrum.unit
+    if smooth:
+        unit = power_spectrum.unit
         power_spectrum = gaussian_filter(power_spectrum, sigma=smooth) * unit
-
+    mask = np.isnan(np.nanmean(power_spectrum, axis=-1))
+    power_spectrum = power_spectrum[~mask]
+    kperp = kperp[~mask]
     im = ax.pcolormesh(
         kperp.value,
         kpar.value,
@@ -244,13 +192,11 @@ def plot_2d_power_spectrum(  # noqa: C901
     if log[1]:
         ax.set_yscale("log")
 
-    return fig, ax
+    return ax
 
 
 def plot_power_spectrum(
-    wavemodes: un.Quantity,
-    power_spectrum: un.Quantity,
-    fig: plt.Figure | None = None,
+    power_spectrum: SphericalPS | CylindricalPS,
     ax: plt.Axes | list[plt.Axes] | None = None,
     title: str | None = None,
     xlabel: str | None = None,
@@ -261,23 +207,30 @@ def plot_power_spectrum(
     fontsize: float | None = 16,
     vmin: float | None = None,
     vmax: float | None = None,
-    log: list[bool] | None = False,
+    logx: bool | None = False,
+    logy: bool | None = False,
+    logc: bool | None = False,
     cbar: bool | None = True,
-    label: list | None = None,
+    label: str | None = None,
     smooth: float | bool = False,
     legend_kwargs: dict | None = None,
 ) -> tuple[plt.Figure, plt.Axes]:
     """
-    Plot the power spectrum.
+    Plot a power spectrum.
 
     Parameters
     ----------
-    wavemodes : np.ndarray
-        Wavemodes corresponding to the power spectrum.
     power_spectrum : np.ndarray
-        Power spectrum values.
-    fig : plt.Figure, optional
-        Figure object to plot on. If None, a new figure is created.
+        Power spectrum array.
+    k : un.Quantity, optional
+        Wavemodes corresponding to the spherical power spectrum.
+        Mandatory to plot a 1D power spectrum.
+    kperp : un.Quantity, optional
+        kperp wavemodes of the cylindrical power spectrum.
+        Mandatory to plot a 2D power spectrum.
+    kpar : un.Quantity, optional
+        kpar wavemodes of the cylindrical power spectrum.
+        Mandatory to plot a 2D power spectrum.
     ax : plt.Axes | list[plt.Axes], optional
         Axes object(s) to plot on. If None, new axes are created.
     title : str, optional
@@ -308,69 +261,49 @@ def plot_power_spectrum(
     legend_kwargs : dict, optional
         Keyword arguments for the legend.
     """
-    power_spectrum = power_spectrum.squeeze()
-    if isinstance(label, str):
-        label = [label]
-    if not np.iterable(log):
-        log = [log]
-    if (hasattr(wavemodes, "ndim") and wavemodes.ndim == 1) or len(wavemodes) == 1:
+    if isinstance(smooth, bool) and smooth:
+        smooth = 1.0
+    validate(power_spectrum)
+    if isinstance(power_spectrum, SphericalPS):
         if legend_kwargs is None:
             legend_kwargs = {}
-        if len(log) == 1:
-            log = [log[0], log[0]]
-        if power_spectrum.ndim > 1:
+        if power_spectrum.ps.ndim > 1:
             raise ValueError("Plot one 1D PS at a time.")
-        if fig is None:
-            fig, ax = plt.subplots(1, 1, figsize=(8, 6))
         if ax is None:
-            ax = fig.get_axes()[0]
-        fig, ax = plot_1d_power_spectrum(
-            wavemodes,
+            fig, ax = plt.subplots(
+                nrows=1, ncols=1, figsize=(7, 6), sharey=True, sharex=True
+            )
+        ax = plot_1d_power_spectrum(
             power_spectrum,
-            fig=fig,
             ax=ax,
             title=title,
             xlabel=xlabel,
             ylabel=ylabel,
             color=color,
             fontsize=fontsize,
-            log=log,
+            log=[logx, logy],
             label=label,
             smooth=smooth,
             legend_kwargs=legend_kwargs,
         )
-    elif (hasattr(wavemodes, "ndim") and wavemodes.ndim == 2) or len(wavemodes) == 2:
+    elif isinstance(power_spectrum, CylindricalPS):
         if label is not None or legend_kwargs is not None:
             warnings.warn(
                 "Cylindrical PS plots do not support labels and legends.", stacklevel=2
             )
-        if len(log) == 1:
-            log = [log[0], log[0], True]
-        if len(log) == 2:
-            log = [log[0], log[1], True]
-        if power_spectrum.ndim > 2:
-            raise ValueError("Plot one 2D PS at a time.")
-        if fig is None:
-            if ax is None:
-                fig, ax = plt.subplots(
-                    nrows=1, ncols=1, figsize=(7, 6), sharey=True, sharex=True
-                )
-                cbar = True
-            else:
-                fig = ax.get_figure()
-                if len(fig.get_axes()) > 1:
-                    cbar = False
-
         if ax is None:
-            ax = fig.get_axes()[0]
+            fig, ax = plt.subplots(
+                nrows=1, ncols=1, figsize=(7, 6), sharey=True, sharex=True
+            )
+            cbar = True
+        else:
+            fig = ax.get_figure()
             if len(fig.get_axes()) > 1:
                 cbar = False
-            else:
-                cbar = True
-        fig, ax = plot_2d_power_spectrum(
-            wavemodes,
+
+
+        ax = plot_2d_power_spectrum(
             power_spectrum,
-            fig=fig,
             ax=ax,
             title=title,
             xlabel=xlabel,
@@ -380,10 +313,10 @@ def plot_power_spectrum(
             fontsize=fontsize,
             vmin=vmin,
             vmax=vmax,
-            log=log,
+            log=[logx, logy, logc],
             smooth=smooth,
             cbar=cbar,
         )
     else:
-        raise ValueError("Wavemodes must be 1D or 2D arrays.")
-    return fig, ax
+        raise ValueError("Input must be SphericalPS or CylindricalPS object instances.")
+    return ax

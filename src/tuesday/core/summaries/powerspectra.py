@@ -16,38 +16,20 @@ from powerbox.tools import (
     regular_angular_generator,
 )
 from scipy.interpolate import RegularGridInterpolator
+from typing import Callable
+from tuesday.core import SphericalPS, CylindricalPS
+from tuesday.core.units import validate
 
 
-@dataclass(frozen=True)
-class PowerSpectrum:
-    """Class to hold the power spectrum data."""
-
-    ps_1d: np.ndarray | None = None
-    ps_2d: np.ndarray | None = None
-    k: np.ndarray | None = None
-    kperp: np.ndarray | None = None
-    kpar: np.ndarray | None = None
-    redshifts: np.ndarray | None = None
-    Nmodes_1D: np.ndarray | None = None
-    Nmodes_2D: np.ndarray | None = None
-    var_1d: np.ndarray | None = None
-    var_2d: np.ndarray | None = None
-
-
-def get_chunk_indices(
-    lc_redshifts: np.ndarray,
-    box_side_shape: int,
-    ps_redshifts: np.ndarray | None = None,
-    chunk_size: int | np.ndarray | None = None,
-    chunk_skip: np.ndarray | None = None,
-):
+def get_chunk_indices(lc_redshifts: np.ndarray, chunk_size: int | np.ndarray,
+    ps_redshifts: np.ndarray | None = None, 
+    chunk_skip: np.ndarray | None = None,):
     """Get the start and end indices for each lightcone chunk."""
     n_slices = lc_redshifts.shape[0]
-    if chunk_size is None:
-        chunk_size = box_side_shape
+
     if ps_redshifts is None:
         if chunk_skip is None:
-            chunk_skip = box_side_shape
+            chunk_skip = chunk_size
         if isinstance(chunk_size, int):
             chunk_starts = list(range(0, n_slices - chunk_size, chunk_skip))
             chunk_ends = np.array(chunk_starts) + chunk_size
@@ -85,17 +67,15 @@ def get_chunk_indices(
     return chunk_indices
 
 
-def calculate_ps(
-    box: un.Quantity,
+
+def calculate_ps(  # noqa: C901
+    chunk: un.Quantity,
     box_length: un.Quantity,
-    lc_redshifts: np.ndarray | None = None,
-    ps_redshifts: float | np.ndarray | None = None,
-    chunk_indices: list | None = None,
+    chunk_redshift: float | None = None,
     calc_2d: bool | None = True,
     kperp_bins: int | np.ndarray | None = None,
     k_weights_2d: Callable | None = ignore_zero_ki,
     log_bins: bool | None = True,
-    crop: list | np.ndarray | None = None,
     calc_1d: bool | None = False,
     k_bins: int | None = None,
     k_weights_1d: Callable | None = ignore_zero_ki,
@@ -109,27 +89,14 @@ def calculate_ps(
 
     Parameters
     ----------
-    box : un.Quantity
-        The 3D box whose power spectrum we want to calculate.
-        The box 3D array with shape
-        [X, Y, len(lc_redshifts)].
+    chunk : un.Quantity
+        The 3D chunk whose power spectrum we want to calculate.
+        This can be either a coeval box or a lightcone chunk.
     box_length : un.Quantity
         The side length of the box.
         Accepted units are: Mpc and Mpc/h.
-    lc_redshifts : np.ndarray, optional
-        If the input `box` is a lightcone, the lightcone redshifts
-        must be provided.
-    ps_redshifts : np.ndarray, optional
-        The redshifts at which to center the power spectrum chunks.
-        If None, the lightcone is broken up into chunks using arguments
-        `chunk_skip` and `chunk_size`.
-    chunk_size : int or np.ndarray, optional
-        The size of the chunks to break the lightcone into.
-        If None, the chunk is assumed to be a cube i.e. chunk_size = box.shape[0].
-        It can also have the same shape as `zs` to allow for different chunk sizes
-        for each redshift band.
-    chunk_skip : int, optional
-        The number of lightcone slices to skip between chunks.
+    chunk_redshift : float, optional
+        The central redshift of the lightcone chunk or coeval box.
     calc_2d : bool, optional
         If True, calculate the 2D power spectrum.
     kperp_bins : int, optional
@@ -143,15 +110,10 @@ def calculate_ps(
         the power any k_i = 0 mode.
         Typically, only the central zero mode |k| = 0 is excluded,
         in which case use powerbox.tools.ignore_zero_absk.
-    postprocess : bool, optional
-        If True, postprocess the 2D PS.
-        This step involves cropping out empty bins and/or log binning the kpar axis.
     calc_1d : bool, optional
         If True, calculate the 1D power spectrum.
     k_bins : int, optional
         The number of bins on which to calculate 1D PS.
-    calc_global : bool, optional
-        If True, calculate the global brightness temperature.
     bin_ave : bool, optional
         If True, return the center value of each kperp and kpar bin
         i.e. len(kperp) = ps_2d.shape[0].
@@ -175,137 +137,116 @@ def calculate_ps(
 
     if not interp:
         interp = None
-    if not isinstance(box, un.Quantity):
-        raise TypeError("lc should be a Quantity.")
+    if not isinstance(chunk, un.Quantity):
+        raise TypeError("chunk should be a Quantity.")
 
     if not isinstance(box_length, un.Quantity):
         raise TypeError("box_length should be a Quantity.")
     # Split the lightcone into chunks for each redshift bin
     # Infer HII_DIM from lc side shape
-    box_side_shape = box.shape[0]
+    box_side_shape = chunk.shape[0]
     if get_variance and interp is not None:
         raise NotImplementedError("Cannot get variance while interpolating.")
-    if chunk_indices is None:
-        if lc_redshifts is None:
-            chunk_indices = [(0, box_side_shape)]
-        else:
-            chunk_indices = get_chunk_indices(
-                lc_redshifts,
-                box_side_shape,
-                ps_redshifts=ps_redshifts,
-            )
 
     out = {}
+    if calc_1d:
+        out["ps_1d"] = {}
+    if calc_2d:
+        out["ps_2d"] = {}
 
     if interp:
         interp = "linear"
 
     if prefactor_fnc is None:
-        ps_unit = box.unit**2 * box_length.unit**3
+        ps_unit = chunk.unit**2 * box_length.unit**3
     elif prefactor_fnc == power2delta:
-        ps_unit = box.unit**2
+        ps_unit = chunk.unit**2
     else:
         warnings.warn(
             "The prefactor function is not the default. PS unit may not be correct.",
             stacklevel=2,
         )
-        ps_unit = box.unit**2
+        ps_unit = chunk.unit**2
 
-    for chunk in chunk_indices:
-        start = chunk[0]
-        end = chunk[1]
-
-        chunk = box[..., start:end].value
-        if lc_redshifts is not None:
-            chunk_z = lc_redshifts[(start + end) // 2]
-        if calc_2d:
-            results = get_power(
-                chunk,
-                (
-                    box_length.value,
-                    box_length.value,
-                    box_length.value * chunk.shape[-1] / box_side_shape,
-                ),
-                res_ndim=2,
-                bin_ave=bin_ave,
-                bins=kperp_bins,
-                log_bins=log_bins,
-                nthreads=1,
-                k_weights=k_weights_2d,
-                prefactor_fnc=prefactor_fnc,
-                interpolation_method=interp,
-                return_sumweights=True,
-                get_variance=get_variance,
-            )
-            if get_variance:
-                ps_2d, kperp, var, nmodes, kpar = results
-                lc_var_2d = var
-            else:
-                ps_2d, kperp, nmodes, kpar = results
-                lc_var_2d = None
-
-            kpar = np.array(kpar).squeeze()
-            lc_ps_2d = ps_2d[..., kpar > 0]
-            kpar = kpar[kpar > 0]
-        else:
-            lc_ps_2d = None
-            kperp = None
-            kpar = None
-            nmodes = None
-            lc_var_2d = None
-
-        if calc_1d:
-            results = get_power(
-                chunk,
-                (
-                    box_length.value,
-                    box_length.value,
-                    box_length.value * chunk.shape[-1] / box_side_shape,
-                ),
-                bin_ave=bin_ave,
-                bins=k_bins,
-                log_bins=log_bins,
-                k_weights=k_weights_1d,
-                prefactor_fnc=prefactor_fnc,
-                interpolation_method=interp,
-                interp_points_generator=interp_points_generator,
-                return_sumweights=True,
-                get_variance=get_variance,
-            )
-            if get_variance:
-                ps_1d, k, var_1d, nmodes_1d = results
-                lc_var_1d = var_1d
-            else:
-                ps_1d, k, nmodes_1d = results
-                lc_var_1d = None
-            lc_ps_1d = ps_1d
-        else:
-            lc_ps_1d = None
-            nmodes_1d = None
-            k = None
-            lc_var_1d = None
-        dc = PowerSpectrum(
-            ps_1d=lc_ps_1d * ps_unit if lc_ps_1d is not None else None,
-            ps_2d=lc_ps_2d * ps_unit if lc_ps_2d is not None else None,
-            k=k.squeeze() / box_length.unit if k is not None else None,
-            kperp=kperp.squeeze() / box_length.unit if kperp is not None else None,
-            kpar=kpar / box_length.unit if kpar is not None else None,
-            redshifts=chunk_z if lc_redshifts is not None else None,
-            Nmodes_1D=nmodes_1d.squeeze() if nmodes_1d is not None else None,
-            Nmodes_2D=nmodes,
-            var_1d=lc_var_1d * ps_unit**2 if lc_var_1d is not None else None,
-            var_2d=lc_var_2d * ps_unit**2 if lc_var_2d is not None else None,
+    
+    if calc_2d:
+        results = get_power(
+            chunk,
+            (
+                box_length.value,
+                box_length.value,
+                box_length.value * chunk.shape[-1] / box_side_shape,
+            ),
+            res_ndim=2,
+            bin_ave=bin_ave,
+            bins=kperp_bins,
+            log_bins=log_bins,
+            nthreads=1,
+            k_weights=k_weights_2d,
+            prefactor_fnc=prefactor_fnc,
+            interpolation_method=interp,
+            return_sumweights=True,
+            get_variance=get_variance,
         )
-        if len(chunk_indices) == 1:
-            out = dc
+        if get_variance:
+            ps_2d, kperp, var, nmodes, kpar = results
+            lc_var_2d = var
         else:
-            out["z = " + str(np.round(chunk_z, 2))] = dc
+            ps_2d, kperp, nmodes, kpar = results
+
+        kpar = np.array(kpar).squeeze()
+        lc_ps_2d = ps_2d[...,kpar>0]
+        kpar = kpar[kpar>0]
+        out["ps_2d"] = CylindricalPS( 
+                                ps=lc_ps_2d * ps_unit,
+                                kperp=kperp.squeeze() / box_length.unit , 
+                                kpar=kpar / box_length.unit, 
+                                redshift=chunk_redshift,
+                                Nmodes=nmodes,
+                                var=lc_var_2d * ps_unit**2 if get_variance else None,
+                                delta=True if prefactor_fnc is not None else False,
+                                )
+
+
+    if calc_1d:
+
+        results = get_power(
+            chunk,
+            (
+                box_length.value,
+                box_length.value,
+                box_length.value * chunk.shape[-1] / box_side_shape,
+            ),
+            bin_ave=bin_ave,
+            bins=k_bins,
+            log_bins=log_bins,
+            k_weights=k_weights_1d,
+            prefactor_fnc=prefactor_fnc,
+            interpolation_method=interp,
+            interp_points_generator=interp_points_generator,
+            return_sumweights=True,
+            get_variance=get_variance,
+        )
+        if get_variance:
+            ps_1d, k, var_1d, nmodes_1d = results
+            lc_var_1d = var_1d
+        else:
+            ps_1d, k, nmodes_1d = results
+        lc_ps_1d = ps_1d
+
+        out["ps_1d"] = SphericalPS(ps=lc_ps_1d * ps_unit, 
+                        k=k.squeeze() / box_length.unit, 
+                        redshift=chunk_redshift,
+                        Nmodes=nmodes_1d.squeeze(),
+                        var=lc_var_1d * ps_unit**2 if get_variance else None,
+                        delta=True if prefactor_fnc is not None else False,
+                        )
 
     return out
 
 
 def calculate_ps_lc(
-    box: un.Quantity,
+    lc: un.Quantity,
     box_length: un.Quantity,
     lc_redshifts: np.ndarray,
     ps_redshifts: float | np.ndarray | None = None,
@@ -325,7 +266,7 @@ def calculate_ps_lc(
     mu_min: float | None = None,
     bin_ave: bool | None = True,
     interp: bool | None = None,
-    prefactor_fnc: Callable | None = power2delta,
+    delta: bool | None = True,
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
 ) -> dict:
@@ -336,14 +277,15 @@ def calculate_ps_lc(
         for all calculated PS.
         If None, all modes are included.
     """
+    validate(lc,'temperature')
+    validate(box_length, 'length')
     if chunk_indices is None:
         chunk_indices = get_chunk_indices(
-            lc_redshifts,
-            box.shape[0],
-            ps_redshifts=ps_redshifts,
-            chunk_size=chunk_size,
-            chunk_skip=chunk_skip,
-        )
+                    lc_redshifts,
+                    lc.shape[0] if chunk_size is None else chunk_size,
+                    ps_redshifts=ps_redshifts,
+                    chunk_skip=chunk_skip,
+                )
     if mu_min is not None:
         if interp is None:
             k_weights_1d_input = k_weights_1d
@@ -368,32 +310,49 @@ def calculate_ps_lc(
         k_weights_1d = ignore_zero_ki
         if interp is not None:
             interp_points_generator = regular_angular_generator()
+    if delta:
+        prefactor_fnc = power2delta
+    else:
+        prefactor_fnc = None
+    out = {}
+    if calc_1d:
+        out["ps_1d"] = {}
+    if calc_2d:
+        out["ps_2d"] = {}
+    for chunk in chunk_indices:
+        start = chunk[0]
+        end = chunk[1]
 
-    return calculate_ps(
-        box=box,
-        box_length=box_length,
-        lc_redshifts=lc_redshifts,
-        ps_redshifts=ps_redshifts,
-        chunk_indices=chunk_indices,
-        calc_2d=calc_2d,
-        kperp_bins=kperp_bins,
-        k_weights_2d=k_weights_2d,
-        k_weights_1d=k_weights_1d,
-        log_bins=log_bins,
-        crop=crop,
-        calc_1d=calc_1d,
-        k_bins=k_bins,
-        bin_ave=bin_ave,
-        interp=interp,
-        prefactor_fnc=prefactor_fnc,
-        interp_points_generator=interp_points_generator,
-        get_variance=get_variance,
-    )
+        chunk = lc[..., start:end]
+        if lc_redshifts is not None:
+            chunk_z = lc_redshifts[(start + end) // 2]
+        ps_chunk = calculate_ps(chunk=chunk,
+                                box_length=box_length,
+                                chunk_redshift=chunk_z,
+                                calc_2d=calc_2d,
+                                kperp_bins=kperp_bins,
+                                k_weights_2d=k_weights_2d,
+                                k_weights_1d=k_weights_1d,
+                                log_bins=log_bins,
+                                calc_1d=calc_1d,
+                                k_bins=k_bins,
+                                bin_ave=bin_ave,
+                                interp=interp,
+                                prefactor_fnc=prefactor_fnc,
+                                interp_points_generator=interp_points_generator,
+                                get_variance=get_variance,
+                                )
+        if calc_1d:
+            out["ps_1d"]["z = " + str(np.round(chunk_z, 2))] = ps_chunk["ps_1d"]
+        if calc_2d:
+            out["ps_2d"]["z = " + str(np.round(chunk_z, 2))] = ps_chunk["ps_2d"]
+    return out
 
 
 def calculate_ps_coeval(
     box: un.Quantity,
     box_length: un.Quantity,
+    box_redshift: float | None = None,
     calc_2d: bool | None = True,
     kperp_bins: int | None = None,
     k_weights_2d: Callable | None = ignore_zero_ki,
@@ -407,10 +366,12 @@ def calculate_ps_coeval(
     mu_min: float | None = None,
     bin_ave: bool | None = True,
     interp: bool | None = None,
-    prefactor_fnc: Callable | None = power2delta,
+    delta: bool | None = True,
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
 ) -> dict:
+    validate(box,'temperature')
+    validate(box_length, 'length')
     if mu_min is not None:
         if interp is None:
             k_weights_1d_input = k_weights_1d
@@ -435,22 +396,26 @@ def calculate_ps_coeval(
         k_weights_1d = ignore_zero_ki
         if interp is not None:
             interp_points_generator = regular_angular_generator()
+    if delta:
+        prefactor_fnc = power2delta
+    else:
+        prefactor_fnc = None
     return calculate_ps(
-        box=box,
-        box_length=box_length,
-        calc_2d=calc_2d,
-        kperp_bins=kperp_bins,
-        k_weights_2d=k_weights_2d,
-        k_weights_1d=k_weights_1d,
-        log_bins=log_bins,
-        crop=crop,
-        calc_1d=calc_1d,
-        k_bins=k_bins,
-        bin_ave=bin_ave,
-        interp=interp,
-        prefactor_fnc=prefactor_fnc,
-        interp_points_generator=interp_points_generator,
-        get_variance=get_variance,
+    chunk=box,
+    box_length=box_length,
+    chunk_redshift=box_redshift,
+    calc_2d=calc_2d,
+    kperp_bins=kperp_bins,
+    k_weights_2d=k_weights_2d,
+    k_weights_1d=k_weights_1d,
+    log_bins=log_bins,
+    calc_1d=calc_1d,
+    k_bins=k_bins,
+    bin_ave=bin_ave,
+    interp=interp,
+    prefactor_fnc=prefactor_fnc,
+    interp_points_generator=interp_points_generator,
+    get_variance=get_variance,
     )
 
 
