@@ -23,16 +23,19 @@ def validate_ps(power_spectrum: SphericalPS | CylindricalPS) -> None:
     if isinstance(power_spectrum, SphericalPS):
         if power_spectrum.k.unit.physical_type != "wavenumber":
             raise ValueError(
-                f"Expected unit wavenumber, but got {power_spectrum.k.unit.physical_type}."
+                f"Expected unit wavenumber, but got"\
+                    " {power_spectrum.k.unit.physical_type}."
             )
     if isinstance(power_spectrum, CylindricalPS):
         if power_spectrum.kperp.unit.physical_type != "wavenumber":
             raise ValueError(
-                f"Expected unit wavenumber, but got {power_spectrum.kperp.unit.physical_type}."
+                f"Expected unit of kperp to be wavenumber, but got"\
+                    " {power_spectrum.kperp.unit.physical_type}."
             )
         if power_spectrum.kpar.unit.physical_type != "wavenumber":
             raise ValueError(
-                f"Expected unit wavenumber, but got {power_spectrum.kpar.unit.physical_type}."
+                f"Expected unit of kperp to be wavenumber, but got"\
+                    " {power_spectrum.kpar.unit.physical_type}."
             )
     if power_spectrum.delta:
         if (
@@ -41,11 +44,11 @@ def validate_ps(power_spectrum: SphericalPS | CylindricalPS) -> None:
             and power_spectrum.ps.unit.physical_type != "dimensionless"
         ):
             raise ValueError(
-                f"Expected unit of delta PS to be temperature squared or dimensionless, but got {power_spectrum.ps.unit.physical_type}."
+                f"Expected unit of delta PS to be temperature squared or"\
+                " dimensionless, but got {power_spectrum.ps.unit.physical_type}."
             )
     else:
-        wlittleh = True if "littleh" in power_spectrum.ps.unit.to_string() else False
-        if wlittleh:
+        if "littleh" in power_spectrum.ps.unit.to_string():
             temp2xvol = (
                 un.get_physical_type("temperature") ** 2
                 * un.get_physical_type("volume")

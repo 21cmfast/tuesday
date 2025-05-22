@@ -11,21 +11,18 @@ from tuesday.core import calculate_ps_coeval, calculate_ps_lc, cylindrical_to_sp
 def test_coeval():
     """Fixture to create a random power spectrum."""
     rng = np.random.default_rng()
-    test_coeval = rng.random((100, 100, 100))
-    return test_coeval
+    return rng.random((100, 100, 100))
 
 
 @pytest.fixture
 def test_lc():
     rng = np.random.default_rng()
-    test_lc = rng.random((100, 100, 300))
-    return test_lc
+    return rng.random((100, 100, 300))
 
 
 @pytest.fixture
 def test_redshifts():
-    test_redshifts = np.logspace(np.log10(5), np.log10(30), 300)
-    return test_redshifts
+    return np.logspace(np.log10(5), np.log10(30), 300)
 
 
 @pytest.mark.parametrize("log_bins", [True, False])
@@ -140,7 +137,7 @@ def test_calculate_ps_w_var(test_lc, test_redshifts):
         calc_1d=True,
         get_variance=True,
     )
-    out["ps_1d"]["z = 6.0"].var
+    v = out["ps_1d"]["z = 6.0"].var
     out = calculate_ps_lc(
         test_lc * un.dimensionless_unscaled,
         200 * un.Mpc,
@@ -150,8 +147,8 @@ def test_calculate_ps_w_var(test_lc, test_redshifts):
         calc_1d=True,
         get_variance=True,
     )
-    out["ps_2d"]["z = 6.0"].var
-    out["ps_1d"]["z = 6.0"].var
+    v = out["ps_2d"]["z = 6.0"].var
+    v = out["ps_1d"]["z = 6.0"].var
 
     with np.testing.assert_raises(NotImplementedError):
         calculate_ps_lc(

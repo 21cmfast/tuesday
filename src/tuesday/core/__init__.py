@@ -25,4 +25,4 @@ from .summaries.powerspectra import (
     cylindrical_to_spherical,
 )
 from .summaries.psclasses import CylindricalPS, SphericalPS
-from .units import validate, validate_ps, validatePS
+from .units import validate, validate_ps
