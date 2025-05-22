@@ -24,39 +24,34 @@ def test_lc():
 def test_redshifts():
     return np.logspace(np.log10(5), np.log10(30), 300)
 
-def test_calculate_ps_errors():
-    with np.testing.assert_raises(ValueError):
+def test_calculate_ps_errors(test_lc):
+    with np.testing.assert_raises(TypeError):
         calculate_ps(
             test_lc, # No unit
             200 * un.Mpc,
-            test_redshifts,
-            ps_redshifts=3.0,
             calc_1d=True,
         )
-    with np.testing.assert_raises(ValueError):
+    with np.testing.assert_raises(TypeError):
         calculate_ps(
             test_lc * un.mK, 
             200, # No unit
-            test_redshifts,
-            ps_redshifts=3.0,
             calc_1d=True,
         )
     with np.testing.assert_raises(ValueError):
         calculate_ps(
             test_lc * un.mK, 
             200 * un.Mpc,
-            test_redshifts,
-            ps_redshifts=3.0,
             calc_1d=False,
             calc_2d=False,
         )
     def prefactor(freq):
-        return freq
+        coords = np.meshgrid(*freq, sparse=True)
+        squares = [c**2 for c in coords]
+        absk = np.sqrt(sum(squares))
+        return absk
     calculate_ps(
         test_lc * un.mK, 
         200 * un.Mpc,
-        test_redshifts,
-        ps_redshifts=3.0,
         calc_1d=False,
         calc_2d=True,
         prefactor_fnc=prefactor,

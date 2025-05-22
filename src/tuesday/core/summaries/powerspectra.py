@@ -628,6 +628,7 @@ def bin_kpar(
         else:
             if not isinstance(bins_kpar, np.ndarray):
                 raise ValueError("bins_kpar must be an array of bin edges or centres.")
+            final_bins_kpar = bins_kpar
         if interp_kpar:
             mask = np.isnan(np.nanmean(ps.ps, axis=-1))
             interp_fnc = RegularGridInterpolator(
