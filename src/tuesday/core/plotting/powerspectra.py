@@ -57,8 +57,10 @@ def plot_1d_power_spectrum(
         Keyword arguments for the legend.
     """
     if not isinstance(power_spectrum, SphericalPS):
-        raise ValueError("power_spectrum must be a SphericalPS object,"\
-                         f" got {type(power_spectrum)} instead.")
+        raise ValueError(
+            "power_spectrum must be a SphericalPS object,"
+            f" got {type(power_spectrum)} instead."
+        )
     rcParams.update({"font.size": fontsize})
     wavemodes = power_spectrum.k
     is_deltasq = power_spectrum.is_deltasq
@@ -141,8 +143,10 @@ def plot_2d_power_spectrum(
         Default is False, if True, uses a standard deviation of 1.
     """
     if not isinstance(power_spectrum, CylindricalPS):
-        raise ValueError("power_spectrum must be a CylindricalPS object,"\
-                         f" got {type(power_spectrum)} instead.")
+        raise ValueError(
+            "power_spectrum must be a CylindricalPS object,"
+            f" got {type(power_spectrum)} instead."
+        )
     rcParams.update({"font.size": fontsize})
     kperp = power_spectrum.kperp
     kpar = power_spectrum.kpar
