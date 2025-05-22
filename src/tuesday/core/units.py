@@ -4,7 +4,7 @@ from astropy.cosmology.units import littleh
 from tuesday.core import CylindricalPS, SphericalPS
 
 
-def validatePS(power_spectrum: SphericalPS | CylindricalPS) -> None:
+def validate_ps(power_spectrum: SphericalPS | CylindricalPS) -> None:
     """
     Validate the unit of a given quantity.
 

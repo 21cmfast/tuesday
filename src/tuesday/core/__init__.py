@@ -11,8 +11,10 @@ __all__ = [
     "plot_2d_power_spectrum",
     "plot_power_spectrum",
     "validate",
-    "validatePS",
+    "validate_ps",
 ]
+from .summaries.psclasses import CylindricalPS, SphericalPS
+from .units import validate, validate_ps
 from .plotting.powerspectra import (
     plot_1d_power_spectrum,
     plot_2d_power_spectrum,

@@ -10,7 +10,7 @@ from matplotlib.colors import LogNorm
 from scipy.ndimage import gaussian_filter
 
 from tuesday.core import CylindricalPS, SphericalPS
-from tuesday.core.units import validatePS as validate
+from tuesday.core.units import validate_ps as validate
 
 
 def plot_1d_power_spectrum(

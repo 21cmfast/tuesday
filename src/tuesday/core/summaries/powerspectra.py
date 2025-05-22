@@ -65,8 +65,7 @@ def get_chunk_indices(
         )
     chunk_starts = np.array(chunk_starts, dtype=np.int32)
     chunk_ends = np.array(chunk_ends, dtype=np.int32)
-    chunk_indices = [(s, e) for s, e in zip(chunk_starts, chunk_ends, strict=False)]
-    return chunk_indices
+    return [(s, e) for s, e in zip(chunk_starts, chunk_ends, strict=False)]
 
 
 def calculate_ps(
@@ -205,7 +204,7 @@ def calculate_ps(
             redshift=chunk_redshift,
             Nmodes=nmodes,
             var=lc_var_2d * ps_unit**2 if get_variance else None,
-            delta=True if prefactor_fnc is not None else False,
+            delta=bool(prefactor_fnc is not None),
         )
 
     if calc_1d:
@@ -239,7 +238,7 @@ def calculate_ps(
             redshift=chunk_redshift,
             Nmodes=nmodes_1d.squeeze(),
             var=lc_var_1d * ps_unit**2 if get_variance else None,
-            delta=True if prefactor_fnc is not None else False,
+            delta=bool(prefactor_fnc is not None),
         )
 
     return out
@@ -271,7 +270,7 @@ def calculate_ps_lc(
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
 ) -> dict:
-    """
+    r"""
     Calculate the PS by chunking a lightcone.
 
     Parameters
@@ -357,10 +356,9 @@ def calculate_ps_lc(
         k_weights_1d = ignore_zero_ki
         if interp is not None:
             interp_points_generator = regular_angular_generator()
-    if delta:
-        prefactor_fnc = power2delta
-    else:
-        prefactor_fnc = None
+            
+    prefactor_fnc = power2delta if delta else None
+
     out = {}
     if calc_1d:
         out["ps_1d"] = {}
@@ -419,7 +417,7 @@ def calculate_ps_coeval(
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
 ) -> dict:
-    """
+    r"""
     Calculate the PS by chunking a lightcone.
 
     Parameters
