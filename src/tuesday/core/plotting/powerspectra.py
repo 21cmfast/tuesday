@@ -23,7 +23,7 @@ def plot_1d_power_spectrum(
     color: list | None = None,
     log: list[bool] | None = False,
     fontsize: float | None = 16,
-    label: str | None = None,
+    legend: str | None = None,
     smooth: float | bool = False,
     legend_kwargs: dict | None = None,
 ) -> tuple[plt.Figure, plt.Axes]:
@@ -48,14 +48,17 @@ def plot_1d_power_spectrum(
         List of booleans to set the x and y axes to log scale.
     fontsize : float, optional
         Font size for the plot labels.
-    label : str, optional
-        Label for the PS.
+    legend : str, optional
+        Legend label for the PS.
     smooth : float, optional
         Standard deviation for Gaussian smoothing.
         If True, uses a standard deviation of 1.
     legend_kwargs : dict, optional
         Keyword arguments for the legend.
     """
+    if not isinstance(power_spectrum, SphericalPS):
+        raise ValueError("power_spectrum must be a SphericalPS object,"\
+                         f" got {type(power_spectrum)} instead.")
     rcParams.update({"font.size": fontsize})
     wavemodes = power_spectrum.k
     is_deltasq = power_spectrum.is_deltasq
@@ -76,7 +79,7 @@ def plot_1d_power_spectrum(
             ylabel = r"$P(k) \,$" + ylabel
     if smooth:
         power_spectrum = gaussian_filter(power_spectrum, sigma=smooth)
-    ax.plot(wavemodes, power_spectrum, color=color, label=label)
+    ax.plot(wavemodes, power_spectrum, color=color, label=legend)
     if title is not None:
         ax.set_title(title, fontsize=fontsize)
     ax.set_xlabel(xlabel, fontsize=fontsize)
@@ -85,7 +88,7 @@ def plot_1d_power_spectrum(
         ax.set_xscale("log")
     if log[1]:
         ax.set_yscale("log")
-    if label is not None:
+    if legend is not None:
         ax.legend(**legend_kwargs)
     return ax
 
@@ -137,6 +140,9 @@ def plot_2d_power_spectrum(
         Standard deviation for Gaussian smoothing.
         Default is False, if True, uses a standard deviation of 1.
     """
+    if not isinstance(power_spectrum, CylindricalPS):
+        raise ValueError("power_spectrum must be a CylindricalPS object,"\
+                         f" got {type(power_spectrum)} instead.")
     rcParams.update({"font.size": fontsize})
     kperp = power_spectrum.kperp
     kpar = power_spectrum.kpar
@@ -274,8 +280,8 @@ def plot_power_spectrum(
     """
     if isinstance(smooth, bool) and smooth:
         smooth = 1.0
-    validate(power_spectrum)
     if isinstance(power_spectrum, SphericalPS):
+        validate(power_spectrum)
         if legend_kwargs is None:
             legend_kwargs = {}
         if ax is None:
@@ -296,6 +302,7 @@ def plot_power_spectrum(
             legend_kwargs=legend_kwargs,
         )
     elif isinstance(power_spectrum, CylindricalPS):
+        validate(power_spectrum)
         if label is not None or legend_kwargs is not None:
             warnings.warn(
                 "Cylindrical PS plots do not support labels and legends.", stacklevel=2
@@ -326,5 +333,5 @@ def plot_power_spectrum(
             cbar=cbar,
         )
     else:
-        raise ValueError("Input must be SphericalPS or CylindricalPS object instances.")
+        raise ValueError("Input must be SphericalPS or CylindricalPS objects.")
     return ax

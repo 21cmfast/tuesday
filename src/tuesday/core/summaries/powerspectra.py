@@ -197,7 +197,6 @@ def calculate_ps(
         kpar = np.array(kpar).squeeze()
         lc_ps_2d = ps_2d[..., kpar > 0]
         kpar = kpar[kpar > 0]
-        print("AAAA", kpar.shape, lc_ps_2d.shape)
         out["ps_2d"] = CylindricalPS(
             ps=lc_ps_2d * ps_unit,
             kperp=kperp.squeeze() / box_length.unit,

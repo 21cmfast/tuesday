@@ -61,7 +61,7 @@ def test_1d_ps_plot(ps):
         ps,
         ax=ax,
         title="Test Title",
-        label="foo",
+        legend="foo",
         logx=False,
         logy=False,
         smooth=True,
@@ -69,7 +69,7 @@ def test_1d_ps_plot(ps):
     plot_power_spectrum(
         ps,
         title="Test Title",
-        label="z=6",
+        legend="z=6",
     )
     with np.testing.assert_raises(ValueError):
         bad_ps = SphericalPS(
@@ -102,13 +102,13 @@ def test_2d_ps_plot(ps2):
         ps2,
         ax=ax,
         logx=False,
-        label=["foo"],
+        legend=["foo"],
     )
     plot_power_spectrum(
         ps2,
         smooth=True,
         title="Test Title",
-        label="foo",
+        legend="foo",
         logx=True,
     )
 
