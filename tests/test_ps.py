@@ -55,8 +55,7 @@ def test_calculate_ps_errors(test_lc):
     def prefactor(freq):
         coords = np.meshgrid(*freq, sparse=True)
         squares = [c**2 for c in coords]
-        absk = np.sqrt(sum(squares))
-        return absk
+        return np.sqrt(sum(squares))
 
     calculate_ps(
         test_lc * un.mK,
