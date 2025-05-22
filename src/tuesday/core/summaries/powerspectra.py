@@ -555,8 +555,7 @@ def bin_kpar(
     crop_kpar: tuple[int, int] | None = None,
 ):
     """
-    Bins the kpar axis of a CylindricalPS object, with options for logarithmic
-    or linear binning, interpolation, and cropping of the resulting power spectrum.
+    Bins the kpar axis of a CylindricalPS object.
 
     Parameters
     ----------
@@ -580,8 +579,8 @@ def bin_kpar(
     Returns
     -------
     transform_ps : callable
-        A function that takes a CylindricalPS object and returns a new CylindricalPS object
-        with the binned kpar axis.
+        A function that takes a CylindricalPS object and returns a new CylindricalPS 
+        object with the binned kpar axis.
 
     Raises
     ------
@@ -590,8 +589,10 @@ def bin_kpar(
 
     Notes
     -----
-    - If `interp_kpar` is True, the power spectrum and its variance (if present) are interpolated onto the new kpar bins.
-    - If `interp_kpar` is False, the power spectrum and its variance are aggregated using the mean within each bin.
+    - If `interp_kpar` is True, the power spectrum and its variance (if present) are
+      interpolated onto the new kpar bins.
+    - If `interp_kpar` is False, the power spectrum and its variance are aggregated
+      using the mean within each bin.
     - Cropping is applied after binning/interpolation.
     """
 
