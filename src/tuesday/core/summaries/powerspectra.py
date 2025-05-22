@@ -16,7 +16,7 @@ from powerbox.tools import (
 )
 from scipy.interpolate import RegularGridInterpolator
 
-from tuesday.core import CylindricalPS, SphericalPS
+from tuesday.core.psclasses import CylindricalPS, SphericalPS
 from tuesday.core.units import validate
 
 

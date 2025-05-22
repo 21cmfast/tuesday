@@ -3,7 +3,7 @@
 import astropy.units as un
 from astropy.cosmology.units import littleh
 
-from tuesday.core import CylindricalPS, SphericalPS
+from .psclasses import CylindricalPS, SphericalPS
 
 
 def validate_ps(power_spectrum: SphericalPS | CylindricalPS) -> None:

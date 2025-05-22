@@ -9,7 +9,7 @@ from matplotlib import rcParams
 from matplotlib.colors import LogNorm
 from scipy.ndimage import gaussian_filter
 
-from tuesday.core import CylindricalPS, SphericalPS
+from tuesday.core.psclasses import CylindricalPS, SphericalPS
 from tuesday.core.units import validate_ps as validate
 
 
