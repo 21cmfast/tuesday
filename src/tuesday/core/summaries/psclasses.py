@@ -1,4 +1,5 @@
 """Classes to hold the power spectrum data."""
+
 from dataclasses import dataclass
 
 import astropy.units as un

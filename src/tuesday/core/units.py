@@ -1,4 +1,5 @@
 """Validating the units."""
+
 import astropy.units as un
 from astropy.cosmology.units import littleh
 
@@ -21,11 +22,13 @@ def validate_ps(power_spectrum: SphericalPS | CylindricalPS) -> None:
     ValueError
         If the unit of the quantity does not match the expected unit.
     """
-    if isinstance(power_spectrum, SphericalPS) and power_spectrum.k.unit.physical_type != "wavenumber":
-            raise ValueError(
-                "Expected unit wavenumber, but got"
-                " {power_spectrum.k.unit.physical_type}."
-            )
+    if (
+        isinstance(power_spectrum, SphericalPS)
+        and power_spectrum.k.unit.physical_type != "wavenumber"
+    ):
+        raise ValueError(
+            "Expected unit wavenumber, but got {power_spectrum.k.unit.physical_type}."
+        )
     if isinstance(power_spectrum, CylindricalPS):
         if power_spectrum.kperp.unit.physical_type != "wavenumber":
             raise ValueError(
@@ -67,8 +70,8 @@ def validate_ps(power_spectrum: SphericalPS | CylindricalPS) -> None:
             and power_spectrum.ps.unit.physical_type != "dimensionless"
         ):
             raise ValueError(
-                f"Expected unit of PS to be temperature squared times volume, "\
-                    "or volume but got {power_spectrum.ps.unit.physical_type}."
+                "Expected unit of PS to be temperature squared times volume, "
+                "or volume but got {power_spectrum.ps.unit.physical_type}."
             )
 
 
