@@ -325,7 +325,7 @@ def calculate_ps_lc(
         A function that takes in a CylindricalPS object and returns
         a new CylindricalPS object.
     transform_ps1d : Callable, optional
-        A function that takes in a SphericalPS object and returns 
+        A function that takes in a SphericalPS object and returns
         a new SphericalPS object.
     """
     validate(lc, "temperature")
@@ -395,12 +395,16 @@ def calculate_ps_lc(
         )
         if calc_1d:
             if transform_ps1d is not None:
-                out["ps_1d"]["z = " + str(np.round(chunk_z, 2))] = transform_ps1d(ps_chunk["ps_1d"])
+                out["ps_1d"]["z = " + str(np.round(chunk_z, 2))] = transform_ps1d(
+                    ps_chunk["ps_1d"]
+                )
             else:
                 out["ps_1d"]["z = " + str(np.round(chunk_z, 2))] = ps_chunk["ps_1d"]
         if calc_2d:
             if transform_ps2d is not None:
-                out["ps_2d"]["z = " + str(np.round(chunk_z, 2))] = transform_ps2d(ps_chunk["ps_2d"])
+                out["ps_2d"]["z = " + str(np.round(chunk_z, 2))] = transform_ps2d(
+                    ps_chunk["ps_2d"]
+                )
             else:
                 out["ps_2d"]["z = " + str(np.round(chunk_z, 2))] = ps_chunk["ps_2d"]
 
@@ -486,7 +490,7 @@ def calculate_ps_coeval(
         A function that takes in a CylindricalPS object and returns
         a new CylindricalPS object.
     transform_ps1d : Callable, optional
-        A function that takes in a SphericalPS object and returns 
+        A function that takes in a SphericalPS object and returns
         a new SphericalPS object.
     """
     validate(box, "temperature")
@@ -536,29 +540,32 @@ def calculate_ps_coeval(
     )
     if calc_1d and transform_ps1d is not None:
         coeval_ps["ps_1d"] = transform_ps1d(coeval_ps["ps_1d"])
-       
+
     if calc_2d and transform_ps2d is not None:
         coeval_ps["ps_2d"] = transform_ps2d(coeval_ps["ps_2d"])
 
     return coeval_ps
 
-def bin_kpar(log_kpar: bool | None = False,
+
+def bin_kpar(
+    log_kpar: bool | None = False,
     interp_kpar: bool | None = False,
     bins_kpar: int | un.Quantity | None = None,
     crop_kperp: tuple[int, int] | None = None,
-    crop_kpar: tuple[int, int] | None = None,):
-    def transform_ps(ps:CylindricalPS):
+    crop_kpar: tuple[int, int] | None = None,
+):
+    def transform_ps(ps: CylindricalPS):
         if bins_kpar is None:
             if log_kpar:
                 bins_kpar = np.logspace(
-                np.log10(ps.kpar[0]), np.log10(ps.kpar[-1]), len(ps.kpar) // 2 + 1
+                    np.log10(ps.kpar[0]), np.log10(ps.kpar[-1]), len(ps.kpar) // 2 + 1
                 )
             else:
                 bins_kpar = np.linspace(ps.kpar[0], ps.kpar[-1], len(ps.kpar) // 2 + 1)
         elif isinstance(bins_kpar, int):
             if log_kpar:
                 bins_kpar = np.logspace(
-                np.log10(ps.kpar[0]), np.log10(ps.kpar[-1]), bins_kpar
+                    np.log10(ps.kpar[0]), np.log10(ps.kpar[-1]), bins_kpar
                 )
             else:
                 bins_kpar = np.linspace(ps.kpar[0], ps.kpar[-1], bins_kpar)
@@ -567,22 +574,22 @@ def bin_kpar(log_kpar: bool | None = False,
                 raise ValueError("bins_kpar must be an array of bin edges or centres.")
         if interp_kpar:
             interp_fnc = RegularGridInterpolator(
-                    (ps.kperp.value, ps.kpar.value),
-                    ps.ps.squeeze(),
-                    bounds_error=False,
-                    fill_value=np.nan,
-                )
+                (ps.kperp.value, ps.kpar.value),
+                ps.ps.squeeze(),
+                bounds_error=False,
+                fill_value=np.nan,
+            )
             kperp_grid, kpar_grid = np.meshgrid(
                 ps.kperp, bins_kpar, indexing="ij", sparse=True
             )
             final_ps = interp_fnc((kperp_grid, kpar_grid))
             if ps.var is not None:
                 interp_fnc = RegularGridInterpolator(
-                        (ps.kperp.value, ps.kpar.value),
-                        ps.var.squeeze(),
-                        bounds_error=False,
-                        fill_value=np.nan,
-                    )
+                    (ps.kperp.value, ps.kpar.value),
+                    ps.var.squeeze(),
+                    bounds_error=False,
+                    fill_value=np.nan,
+                )
                 kperp_grid, kpar_grid = np.meshgrid(
                     ps.kperp, bins_kpar, indexing="ij", sparse=True
                 )
@@ -591,7 +598,7 @@ def bin_kpar(log_kpar: bool | None = False,
             final_nmodes = np.zeros(len(bins_kpar))
             for i in range(len(bins_kpar)):
                 final_nmodes[i] = np.sum(idxs == i)
-            
+
         else:
             final_ps = np.zeros((len(ps.kperp), len(bins_kpar) - 1))
             final_nmodes = np.zeros(len(bins_kpar) - 1)
@@ -609,15 +616,19 @@ def bin_kpar(log_kpar: bool | None = False,
             else:
                 bins_kpar = (bins_kpar[1:] + bins_kpar[:-1]) / 2
         if crop_kperp is not None:
-            final_ps = final_ps[crop_kperp[0]:crop_kperp[1]]
+            final_ps = final_ps[crop_kperp[0] : crop_kperp[1]]
         if crop_kpar is not None:
-            final_ps = final_ps[:, crop_kpar[0]:crop_kpar[1]]
-        return CylindricalPS(final_ps, 
-                             ps.kperp if crop_kperp is None else ps.kperp[crop_kperp[0]:crop_kperp[1]], 
-                             bins_kpar if crop_kpar is None else bins_kpar[crop_kpar[0]:crop_kpar[1]],
-                             ps.redshift,
-                             final_nmodes, 
-                             final_var if ps.var is not None else None, ps.delta)
+            final_ps = final_ps[:, crop_kpar[0] : crop_kpar[1]]
+        return CylindricalPS(
+            final_ps,
+            ps.kperp if crop_kperp is None else ps.kperp[crop_kperp[0] : crop_kperp[1]],
+            bins_kpar if crop_kpar is None else bins_kpar[crop_kpar[0] : crop_kpar[1]],
+            ps.redshift,
+            final_nmodes,
+            final_var if ps.var is not None else None,
+            ps.delta,
+        )
+
     return transform_ps
 
 
