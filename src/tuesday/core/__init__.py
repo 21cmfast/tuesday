@@ -3,6 +3,7 @@
 __all__ = [
     "CylindricalPS",
     "SphericalPS",
+    "bin_kpar",
     "calculate_ps",
     "calculate_ps_coeval",
     "calculate_ps_lc",
@@ -11,7 +12,6 @@ __all__ = [
     "plot_2d_power_spectrum",
     "plot_power_spectrum",
     "validate",
-    "bin_kpar"
 ]
 from .plotting.powerspectra import (
     plot_1d_power_spectrum,
@@ -20,10 +20,10 @@ from .plotting.powerspectra import (
 )
 from .psclasses import CylindricalPS, SphericalPS
 from .summaries.powerspectra import (
+    bin_kpar,
     calculate_ps,
     calculate_ps_coeval,
     calculate_ps_lc,
-    bin_kpar,
     cylindrical_to_spherical,
 )
 from .units import validate

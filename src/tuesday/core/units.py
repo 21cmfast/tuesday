@@ -1,9 +1,7 @@
 """Validating the units."""
 
 import astropy.units as un
-from astropy.cosmology.units import littleh
 
-from .psclasses import CylindricalPS, SphericalPS
 
 def validate(qt: un.Quantity, unit: str) -> None:
     """Validate the unit of a given quantity.

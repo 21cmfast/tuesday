@@ -3,8 +3,8 @@
 from dataclasses import dataclass
 
 import astropy.units as un
-from astropy.cosmology.units import littleh
 import numpy as np
+from astropy.cosmology.units import littleh
 
 
 @dataclass(frozen=True)
@@ -34,12 +34,17 @@ class SphericalPS:
                 "k must either be the same shape as the k-"
                 "axis of the ps or larger by one if k is the bin edges."
             )
-        if self.k.unit.physical_type != un.get_physical_type("wavenumber") and self.k.unit.physical_type != un.get_physical_type("wavenumber") * littleh:
-            raise ValueError(f"Unit of k must be a wavenumber, got {self.k.unit.physical_type}.")
+        if (
+            self.k.unit.physical_type != un.get_physical_type("wavenumber")
+            and self.k.unit.physical_type
+            != un.get_physical_type("wavenumber") * littleh
+        ):
+            raise ValueError(
+                f"Unit of k must be a wavenumber, got {self.k.unit.physical_type}."
+            )
         if self.is_deltasq:
             if (
-                self.ps.unit.physical_type
-                != un.get_physical_type("temperature") ** 2
+                self.ps.unit.physical_type != un.get_physical_type("temperature") ** 2
                 and self.ps.unit.physical_type != "dimensionless"
             ):
                 raise ValueError(
@@ -56,9 +61,9 @@ class SphericalPS:
                 vol = un.get_physical_type("volume") / littleh**3
 
             else:
-                temp2xvol = un.get_physical_type("temperature") ** 2 * un.get_physical_type(
-                    "volume"
-                )
+                temp2xvol = un.get_physical_type(
+                    "temperature"
+                ) ** 2 * un.get_physical_type("volume")
                 vol = un.get_physical_type("volume")
             if (
                 self.ps.unit.physical_type != temp2xvol
@@ -114,14 +119,25 @@ class CylindricalPS:
                 "axis of the ps or larger by one if kpar is "
                 f"the bin edges. Instead got {self.kpar.shape[0]} and {self.ps.shape[1]}"
             )
-        if self.kperp.unit.physical_type != un.get_physical_type("wavenumber") and self.kperp.unit.physical_type != un.get_physical_type("wavenumber") * littleh:
-            raise ValueError(f"Unit of kperp must be a wavenumber, got {self.kperp.unit.physical_type}.")
-        if self.kpar.unit.physical_type != un.get_physical_type("wavenumber") and self.kpar.unit.physical_type != un.get_physical_type("wavenumber") * littleh:
-            raise ValueError(f"Unit of kpar must be a wavenumber, got {self.kpar.unit.physical_type}.")
+        if (
+            self.kperp.unit.physical_type != un.get_physical_type("wavenumber")
+            and self.kperp.unit.physical_type
+            != un.get_physical_type("wavenumber") * littleh
+        ):
+            raise ValueError(
+                f"Unit of kperp must be a wavenumber, got {self.kperp.unit.physical_type}."
+            )
+        if (
+            self.kpar.unit.physical_type != un.get_physical_type("wavenumber")
+            and self.kpar.unit.physical_type
+            != un.get_physical_type("wavenumber") * littleh
+        ):
+            raise ValueError(
+                f"Unit of kpar must be a wavenumber, got {self.kpar.unit.physical_type}."
+            )
         if self.is_deltasq:
             if (
-                self.ps.unit.physical_type
-                != un.get_physical_type("temperature") ** 2
+                self.ps.unit.physical_type != un.get_physical_type("temperature") ** 2
                 and self.ps.unit.physical_type != "dimensionless"
             ):
                 raise ValueError(
@@ -138,9 +154,9 @@ class CylindricalPS:
                 vol = un.get_physical_type("volume") / littleh**3
 
             else:
-                temp2xvol = un.get_physical_type("temperature") ** 2 * un.get_physical_type(
-                    "volume"
-                )
+                temp2xvol = un.get_physical_type(
+                    "temperature"
+                ) ** 2 * un.get_physical_type("volume")
                 vol = un.get_physical_type("volume")
             if (
                 self.ps.unit.physical_type != temp2xvol
@@ -151,4 +167,3 @@ class CylindricalPS:
                     "Expected unit of PS to be temperature squared times volume, "
                     f"or volume but got {self.ps.unit.physical_type}."
                 )
-
