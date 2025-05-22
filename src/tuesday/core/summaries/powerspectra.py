@@ -71,7 +71,8 @@ def get_chunk_indices(
 
 def calculate_ps(
     chunk: un.Quantity,
-    box_length: un.Quantity,*,
+    box_length: un.Quantity,
+    *,
     chunk_redshift: float | None = None,
     calc_2d: bool | None = True,
     kperp_bins: int | np.ndarray | None = None,
@@ -247,7 +248,8 @@ def calculate_ps(
 def calculate_ps_lc(
     lc: un.Quantity,
     box_length: un.Quantity,
-    lc_redshifts: np.ndarray,*,
+    lc_redshifts: np.ndarray,
+    *,
     ps_redshifts: float | np.ndarray | None = None,
     chunk_indices: list | None = None,
     chunk_size: int | None = None,
@@ -271,7 +273,7 @@ def calculate_ps_lc(
 ) -> dict:
     """
     Calculate the PS by chunking a lightcone.
-    
+
     Parameters
     ----------
     lc : un.Quantity
@@ -315,7 +317,7 @@ def calculate_ps_lc(
         at the points specified by interp_points_generator.
         Note that this significantly slows down the calculation.
     delta : bool, optional
-        Whether to convert the power P [mK^2 Mpc^{-3}] to the dimensionless 
+        Whether to convert the power P [mK^2 Mpc^{-3}] to the dimensionless
         power :math:`\\delta^2` [mK^2].
         Default is True.
     interp_points_generator : callable, optional
@@ -397,7 +399,8 @@ def calculate_ps_lc(
 
 def calculate_ps_coeval(
     box: un.Quantity,
-    box_length: un.Quantity,*,
+    box_length: un.Quantity,
+    *,
     box_redshift: float | None = None,
     calc_2d: bool | None = True,
     kperp_bins: int | None = None,
@@ -418,7 +421,7 @@ def calculate_ps_coeval(
 ) -> dict:
     """
     Calculate the PS by chunking a lightcone.
-    
+
     Parameters
     ----------
     box : un.Quantity
@@ -461,15 +464,15 @@ def calculate_ps_coeval(
         at the points specified by interp_points_generator.
         Note that this significantly slows down the calculation.
     delta : bool, optional
-        Whether to convert the power P [mK^2 Mpc^{-3}] to the dimensionless 
+        Whether to convert the power P [mK^2 Mpc^{-3}] to the dimensionless
         power :math:`\\delta^2` [mK^2].
         Default is True.
     interp_points_generator : callable, optional
         A function that generates the points at which to interpolate the PS.
         See powerbox.tools.get_power documentation for more details.
     """
-    validate(box,'temperature')
-    validate(box_length, 'length')
+    validate(box, "temperature")
+    validate(box_length, "length")
     if mu_min is not None:
         if interp is None:
             k_weights_1d_input = k_weights_1d
