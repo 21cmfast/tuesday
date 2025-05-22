@@ -60,7 +60,7 @@ def plot_1d_power_spectrum(
     wavemodes = power_spectrum.k
     is_deltasq = power_spectrum.is_deltasq
     power_spectrum = power_spectrum.ps
-    
+
     if color is None:
         color = "C0"
     if xlabel is None:
