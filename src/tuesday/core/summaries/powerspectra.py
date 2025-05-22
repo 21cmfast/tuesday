@@ -496,7 +496,7 @@ def calculate_ps_coeval(
         if interp is not None:
             interp_points_generator = regular_angular_generator()
     prefactor_fnc = power2delta if delta else None
-    
+
     return calculate_ps(
         chunk=box,
         box_length=box_length,
