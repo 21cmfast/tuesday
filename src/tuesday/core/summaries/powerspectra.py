@@ -257,10 +257,7 @@ def calculate_ps_lc(
     kperp_bins: int | None = None,
     k_weights_2d: Callable | None = ignore_zero_ki,
     k_weights_1d: Callable | None = ignore_zero_ki,
-    postprocess: bool | None = True,
-    kpar_bins: int | np.ndarray | None = None,
     log_bins: bool | None = True,
-    crop: list | np.ndarray | None = None,
     calc_1d: bool | None = True,
     k_bins: int | None = None,
     mu_min: float | None = None,
@@ -269,6 +266,8 @@ def calculate_ps_lc(
     delta: bool | None = True,
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
+    transform_ps1d: Callable | None = None,
+    transform_ps2d: Callable | None = None,
 ) -> dict:
     r"""
     Calculate the PS by chunking a lightcone.
@@ -322,6 +321,12 @@ def calculate_ps_lc(
     interp_points_generator : callable, optional
         A function that generates the points at which to interpolate the PS.
         See powerbox.tools.get_power documentation for more details.
+    transform_ps2d : Callable, optional
+        A function that takes in a CylindricalPS object and returns
+        a new CylindricalPS object.
+    transform_ps1d : Callable, optional
+        A function that takes in a SphericalPS object and returns 
+        a new SphericalPS object.
     """
     validate(lc, "temperature")
     validate(box_length, "length")
@@ -389,9 +394,16 @@ def calculate_ps_lc(
             get_variance=get_variance,
         )
         if calc_1d:
-            out["ps_1d"]["z = " + str(np.round(chunk_z, 2))] = ps_chunk["ps_1d"]
+            if transform_ps1d is not None:
+                out["ps_1d"]["z = " + str(np.round(chunk_z, 2))] = transform_ps1d(ps_chunk["ps_1d"])
+            else:
+                out["ps_1d"]["z = " + str(np.round(chunk_z, 2))] = ps_chunk["ps_1d"]
         if calc_2d:
-            out["ps_2d"]["z = " + str(np.round(chunk_z, 2))] = ps_chunk["ps_2d"]
+            if transform_ps2d is not None:
+                out["ps_2d"]["z = " + str(np.round(chunk_z, 2))] = transform_ps2d(ps_chunk["ps_2d"])
+            else:
+                out["ps_2d"]["z = " + str(np.round(chunk_z, 2))] = ps_chunk["ps_2d"]
+
     return out
 
 
@@ -404,10 +416,7 @@ def calculate_ps_coeval(
     kperp_bins: int | None = None,
     k_weights_2d: Callable | None = ignore_zero_ki,
     k_weights_1d: Callable | None = ignore_zero_ki,
-    postprocess: bool | None = True,
-    kpar_bins: int | np.ndarray | None = None,
     log_bins: bool | None = True,
-    crop: list | np.ndarray | None = None,
     calc_1d: bool | None = True,
     k_bins: int | None = None,
     mu_min: float | None = None,
@@ -416,6 +425,8 @@ def calculate_ps_coeval(
     delta: bool | None = True,
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
+    transform_ps1d: Callable | None = None,
+    transform_ps2d: Callable | None = None,
 ) -> dict:
     r"""
     Calculate the PS by chunking a lightcone.
@@ -468,6 +479,15 @@ def calculate_ps_coeval(
     interp_points_generator : callable, optional
         A function that generates the points at which to interpolate the PS.
         See powerbox.tools.get_power documentation for more details.
+    get_variance : bool, optional
+        Whether to calculate the variance of the PS.
+        Default is False.
+    transform_ps2d : Callable, optional
+        A function that takes in a CylindricalPS object and returns
+        a new CylindricalPS object.
+    transform_ps1d : Callable, optional
+        A function that takes in a SphericalPS object and returns 
+        a new SphericalPS object.
     """
     validate(box, "temperature")
     validate(box_length, "length")
@@ -497,7 +517,7 @@ def calculate_ps_coeval(
             interp_points_generator = regular_angular_generator()
     prefactor_fnc = power2delta if delta else None
 
-    return calculate_ps(
+    coeval_ps = calculate_ps(
         chunk=box,
         box_length=box_length,
         chunk_redshift=box_redshift,
@@ -514,180 +534,91 @@ def calculate_ps_coeval(
         interp_points_generator=interp_points_generator,
         get_variance=get_variance,
     )
+    if calc_1d and transform_ps1d is not None:
+        coeval_ps["ps_1d"] = transform_ps1d(coeval_ps["ps_1d"])
+       
+    if calc_2d and transform_ps2d is not None:
+        coeval_ps["ps_2d"] = transform_ps2d(coeval_ps["ps_2d"])
 
+    return coeval_ps
 
-def bin_kpar(ps, kperp, kpar, bins=None, interp=None, log=False, redshifts=None):
-    r"""
-    Bin a 2D PS along the kpar axis and crop out empty bins in both axes.
-
-    Parameters
-    ----------
-    ps : np.ndarray
-        The 2D power spectrum of shape [len(redshifts), len(kperp), len(kpar)].
-    kperp : np.ndarray
-        Values of kperp.
-    kpar : np.ndarray
-        Values of kpar.
-    bins : np.ndarray or int, optional
-        The number of bins or the bin edges to use for binning the kpar axis.
-        If None, produces 16 bins logarithmically spaced between
-        the minimum and maximum `kpar` supplied.
-    interp : str, optional
-        If 'linear', use linear interpolation to calculate the PS at the specified
-        kpar bins.
-    log : bool, optional
-        If 'False', kpar is binned linearly. If 'True', it is binned logarithmically.
-    redshifts : np.ndarray, optional
-        The redshifts at which the PS was calculated.
-    """
-    ps = ps if len(ps.shape) == 3 else ps[np.newaxis, ...]
-    if bins is None:
-        if log:
-            bins = np.logspace(
-                np.log10(kpar[0]), np.log10(kpar[-1]), len(kpar) // 2 + 1
-            )
+def bin_kpar(log_kpar: bool | None = False,
+    interp_kpar: bool | None = False,
+    bins_kpar: int | un.Quantity | None = None,
+    crop_kperp: tuple[int, int] | None = None,
+    crop_kpar: tuple[int, int] | None = None,):
+    def transform_ps(ps:CylindricalPS):
+        if bins_kpar is None:
+            if log_kpar:
+                bins_kpar = np.logspace(
+                np.log10(ps.kpar[0]), np.log10(ps.kpar[-1]), len(ps.kpar) // 2 + 1
+                )
+            else:
+                bins_kpar = np.linspace(ps.kpar[0], ps.kpar[-1], len(ps.kpar) // 2 + 1)
+        elif isinstance(bins_kpar, int):
+            if log_kpar:
+                bins_kpar = np.logspace(
+                np.log10(ps.kpar[0]), np.log10(ps.kpar[-1]), bins_kpar
+                )
+            else:
+                bins_kpar = np.linspace(ps.kpar[0], ps.kpar[-1], bins_kpar)
         else:
-            bins = np.linspace(kpar[0], kpar[-1], len(kpar) // 2 + 1)
-    elif isinstance(bins, int):
-        if log:
-            bins = np.logspace(np.log10(kpar[0]), np.log10(kpar[-1]), bins + 1)
-        else:
-            bins = np.linspace(kpar[0], kpar[-1], bins + 1)
-    elif isinstance(bins, np.ndarray | list):
-        bins = np.array(bins)
-    else:
-        raise ValueError("Bins should be np.ndarray or int")
-    if log:
-        bin_centers = np.exp((np.log(bins[1:]) + np.log(bins[:-1])) / 2)
-    else:
-        bin_centers = (bins[1:] + bins[:-1]) / 2
-    if interp == "linear":
-        new_ps = np.zeros((ps.shape[0], len(kperp), len(bins)))
-        modes = np.zeros(len(bins))
-        interp_fnc = RegularGridInterpolator(
-            (redshifts, kperp, kpar) if redshifts is not None else (kperp, kpar),
-            ps.squeeze(),
-            bounds_error=False,
-            fill_value=np.nan,
-        )
-
-        if redshifts is None:
+            if not isinstance(bins_kpar, np.ndarray):
+                raise ValueError("bins_kpar must be an array of bin edges or centres.")
+        if interp_kpar:
+            interp_fnc = RegularGridInterpolator(
+                    (ps.kperp.value, ps.kpar.value),
+                    ps.ps.squeeze(),
+                    bounds_error=False,
+                    fill_value=np.nan,
+                )
             kperp_grid, kpar_grid = np.meshgrid(
-                kperp, bin_centers, indexing="ij", sparse=True
+                ps.kperp, bins_kpar, indexing="ij", sparse=True
             )
-            new_ps = interp_fnc((kperp_grid, kpar_grid))
+            final_ps = interp_fnc((kperp_grid, kpar_grid))
+            if ps.var is not None:
+                interp_fnc = RegularGridInterpolator(
+                        (ps.kperp.value, ps.kpar.value),
+                        ps.var.squeeze(),
+                        bounds_error=False,
+                        fill_value=np.nan,
+                    )
+                kperp_grid, kpar_grid = np.meshgrid(
+                    ps.kperp, bins_kpar, indexing="ij", sparse=True
+                )
+                final_var = interp_fnc((kperp_grid, kpar_grid))
+            idxs = np.digitize(ps.kpar, bins_kpar) - 1
+            final_nmodes = np.zeros(len(bins_kpar))
+            for i in range(len(bins_kpar)):
+                final_nmodes[i] = np.sum(idxs == i)
+            
         else:
-            redshifts_grid, kperp_grid, kpar_grid = np.meshgrid(
-                redshifts, kperp, bin_centers, indexing="ij", sparse=True
-            )
-            new_ps = interp_fnc((redshifts_grid, kperp_grid, kpar_grid))
-
-        idxs = np.digitize(kpar, bins) - 1
-        for i in range(len(bins) - 1):
-            modes[i] = np.sum(idxs == i)
-    else:
-        new_ps = np.zeros((ps.shape[0], len(kperp), len(bins) - 1))
-        modes = np.zeros(len(bins) - 1)
-        idxs = np.digitize(kpar, bins) - 1
-        for i in range(len(bins) - 1):
-            m = idxs == i
-            new_ps[..., i] = np.nanmean(ps[..., m], axis=-1)
-            modes[i] = np.sum(m)
-
-    return new_ps.squeeze(), kperp, bin_centers, modes
-
-
-def postprocess_ps(
-    ps,
-    kperp,
-    kpar,
-    kpar_bins=None,
-    log_bins=True,
-    crop=None,
-    kperp_modes=None,
-    return_modes=False,
-    interp=None,
-):
-    r"""
-    Postprocess a 2D PS by cropping out empty bins and log binning the kpar axis.
-
-    Parameters
-    ----------
-    ps : np.ndarray
-        The 2D power spectrum of shape [len(kperp), len(kpar)].
-    kperp : np.ndarray
-        Values of kperp.
-    kpar : np.ndarray
-        Values of kpar.
-    kpar_bins : np.ndarray or int, optional
-        The number of bins or the bin edges to use for binning the kpar axis.
-        If None, produces 16 bins log spaced between the min and max `kpar` supplied.
-    log_bins : bool, optional
-        If True, log bin the kpar axis.
-    crop : list, optional
-        The crop range for the log-binned PS. If None, crops out all empty bins.
-    kperp_modes : np.ndarray, optional
-        The number of modes in each kperp bin.
-    return_modes : bool, optional
-        If True, return a grid with the number of modes in each bin.
-        Requires kperp_modes to be supplied.
-    """
-    kpar = kpar[0]
-    m = kpar > 1e-10
-    if ps.shape[0] < len(kperp):
-        if log_bins:
-            kperp = np.exp((np.log(kperp[1:]) + np.log(kperp[:-1])) / 2.0)
-        else:
-            kperp = (kperp[1:] + kperp[:-1]) / 2
-    kpar = kpar[m]
-    ps = ps[:, m]
-    mkperp = ~np.isnan(kperp)
-    if kperp_modes is not None:
-        kperp_modes = kperp_modes[mkperp]
-    kperp = kperp[mkperp]
-    ps = ps[mkperp, :]
-
-    # maybe rebin kpar in log
-    rebinned_ps, kperp, log_kpar, kpar_weights = bin_kpar(
-        ps, kperp, kpar, bins=kpar_bins, interp=interp, log=log_bins
-    )
-    if crop is None:
-        crop = [0, rebinned_ps.shape[-2] + 1, 0, rebinned_ps.shape[-1] + 1]
-    # Find last bin that is NaN and cut out all bins before
-    try:
-        lastnan_perp = np.where(np.isnan(np.nanmean(rebinned_ps, axis=1)))[0][-1] + 1
-        crop[0] = crop[0] + lastnan_perp
-    except IndexError:
-        pass
-    try:
-        lastnan_par = np.where(np.isnan(np.nanmean(rebinned_ps, axis=0)))[0][-1] + 1
-        crop[2] = crop[2] + lastnan_par
-    except IndexError:
-        pass
-    if kperp_modes is not None:
-        kperp_modes = kperp_modes[crop[0] : crop[1]]
-        kpar_grid, kperp_grid = np.meshgrid(
-            kpar_weights[crop[2] : crop[3]], kperp_modes
-        )
-
-        nmodes = np.sqrt(kperp_grid**2 + kpar_grid**2)
-        if return_modes:
-            return (
-                rebinned_ps[..., crop[0] : crop[1], :][..., crop[2] : crop[3]],
-                kperp[crop[0] : crop[1]],
-                log_kpar[crop[2] : crop[3]],
-                nmodes,
-            )
-        return (
-            rebinned_ps[None, ..., crop[0] : crop[1], :][..., crop[2] : crop[3]],
-            kperp[crop[0] : crop[1]],
-            log_kpar[crop[2] : crop[3]],
-        )
-    return (
-        rebinned_ps[None, ..., crop[0] : crop[1], :][..., crop[2] : crop[3]],
-        kperp[crop[0] : crop[1]],
-        log_kpar[crop[2] : crop[3]],
-    )
+            final_ps = np.zeros((len(ps.kperp), len(bins_kpar) - 1))
+            final_nmodes = np.zeros(len(bins_kpar) - 1)
+            idxs = np.digitize(ps.kpar, bins_kpar) - 1
+            if ps.var is not None:
+                final_var = np.zeros((len(ps.kperp), len(bins_kpar)))
+            for i in range(len(bins_kpar) - 1):
+                m = idxs == i
+                final_ps[..., i] = np.nanmean(ps.ps[..., m], axis=-1)
+                final_nmodes[i] = np.sum(m)
+                if ps.var is not None:
+                    final_var[..., i] = np.nanmean(ps.var[..., m], axis=-1)
+            if log_kpar:
+                bins_kpar = np.exp((np.log(bins_kpar[1:]) + np.log(bins_kpar[:-1])) / 2)
+            else:
+                bins_kpar = (bins_kpar[1:] + bins_kpar[:-1]) / 2
+        if crop_kperp is not None:
+            final_ps = final_ps[crop_kperp[0]:crop_kperp[1]]
+        if crop_kpar is not None:
+            final_ps = final_ps[:, crop_kpar[0]:crop_kpar[1]]
+        return CylindricalPS(final_ps, 
+                             ps.kperp if crop_kperp is None else ps.kperp[crop_kperp[0]:crop_kperp[1]], 
+                             bins_kpar if crop_kpar is None else bins_kpar[crop_kpar[0]:crop_kpar[1]],
+                             ps.redshift,
+                             final_nmodes, 
+                             final_var if ps.var is not None else None, ps.delta)
+    return transform_ps
 
 
 def cylindrical_to_spherical(

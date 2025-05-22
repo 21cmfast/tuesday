@@ -118,7 +118,6 @@ def test_calculate_ps_corner_cases(test_lc, test_redshifts):
             ps_redshifts=[50.0],  # outside test_redshifts
             calc_1d=True,
             get_variance=True,
-            postprocess=True,
         )
 
 
