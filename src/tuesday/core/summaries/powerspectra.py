@@ -356,7 +356,7 @@ def calculate_ps_lc(
         k_weights_1d = ignore_zero_ki
         if interp is not None:
             interp_points_generator = regular_angular_generator()
-            
+
     prefactor_fnc = power2delta if delta else None
 
     out = {}
