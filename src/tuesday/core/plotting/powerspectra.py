@@ -23,7 +23,7 @@ def plot_1d_power_spectrum(
     color: list | None = None,
     log: list[bool] | None = False,
     fontsize: float | None = 16,
-    label: list | None = None,
+    label: str | None = None,
     smooth: float | bool = False,
     legend_kwargs: dict | None = None,
 ) -> tuple[plt.Figure, plt.Axes]:
@@ -48,7 +48,7 @@ def plot_1d_power_spectrum(
         List of booleans to set the x and y axes to log scale.
     fontsize : float, optional
         Font size for the plot labels.
-    label : list, optional
+    label : str, optional
         Label for the PS.
     smooth : float, optional
         Standard deviation for Gaussian smoothing.
@@ -58,7 +58,9 @@ def plot_1d_power_spectrum(
     """
     rcParams.update({"font.size": fontsize})
     wavemodes = power_spectrum.k
+    is_deltasq = power_spectrum.is_deltasq
     power_spectrum = power_spectrum.ps
+    
     if color is None:
         color = "C0"
     if xlabel is None:
@@ -66,9 +68,9 @@ def plot_1d_power_spectrum(
 
     if ylabel is None:
         ylabel = f"[{power_spectrum.unit:latex_inline}]"
-        if power_spectrum.unit == un.mK**2:
+        if is_deltasq:
             ylabel = r"$\Delta^2_{21} \,$" + ylabel
-        elif power_spectrum.unit == un.dimensionless_unscaled:
+        elif is_deltasq and power_spectrum.unit == un.dimensionless_unscaled:
             ylabel = r"$\Delta^2_{21}$"
         else:
             ylabel = r"$P(k) \,$" + ylabel
@@ -138,6 +140,7 @@ def plot_2d_power_spectrum(
     rcParams.update({"font.size": fontsize})
     kperp = power_spectrum.kperp
     kpar = power_spectrum.kpar
+    is_deltasq = power_spectrum.is_deltasq
     power_spectrum = power_spectrum.ps
 
     if xlabel is None:
@@ -148,9 +151,9 @@ def plot_2d_power_spectrum(
 
     if clabel is None:
         clabel = f"[{power_spectrum.unit:latex_inline}]"
-        if power_spectrum.unit == un.mK**2:
+        if is_deltasq:
             clabel = r"$\Delta^2_{21} \,$" + clabel
-        elif power_spectrum.unit == un.dimensionless_unscaled:
+        elif is_deltasq and power_spectrum.unit == un.dimensionless_unscaled:
             clabel = r"$\Delta^2_{21}$"
         else:
             clabel = r"$P(k) \,$" + clabel
@@ -255,8 +258,12 @@ def plot_power_spectrum(
         Minimum value for the color scale.
     vmax : float, optional
         Maximum value for the color scale.
-    log : list[bool], optional
-        List of booleans to set the axes to log scale.
+    logx : bool, optional
+        Whether to set the x-axis to log scale.
+    logy : bool, optional
+        Whether to set the y-axis to log scale.
+    logc : bool, optional
+        Whether to set the color-axis to log scale.
     labels : list, optional
         List of labels for each line in the plot.
     smooth : bool or float, optional
@@ -271,8 +278,6 @@ def plot_power_spectrum(
     if isinstance(power_spectrum, SphericalPS):
         if legend_kwargs is None:
             legend_kwargs = {}
-        if power_spectrum.ps.ndim > 1:
-            raise ValueError("Plot one 1D PS at a time.")
         if ax is None:
             fig, ax = plt.subplots(
                 nrows=1, ncols=1, figsize=(7, 6), sharey=True, sharex=True

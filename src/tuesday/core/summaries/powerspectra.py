@@ -197,14 +197,15 @@ def calculate_ps(
         kpar = np.array(kpar).squeeze()
         lc_ps_2d = ps_2d[..., kpar > 0]
         kpar = kpar[kpar > 0]
+        print("AAAA", kpar.shape, lc_ps_2d.shape)
         out["ps_2d"] = CylindricalPS(
             ps=lc_ps_2d * ps_unit,
             kperp=kperp.squeeze() / box_length.unit,
             kpar=kpar / box_length.unit,
             redshift=chunk_redshift,
-            Nmodes=nmodes,
-            var=lc_var_2d * ps_unit**2 if get_variance else None,
-            delta=bool(prefactor_fnc is not None),
+            n_modes=nmodes,
+            variance=lc_var_2d * ps_unit**2 if get_variance else None,
+            is_deltasq=bool(prefactor_fnc is not None),
         )
 
     if calc_1d:
@@ -236,9 +237,9 @@ def calculate_ps(
             ps=lc_ps_1d * ps_unit,
             k=k.squeeze() / box_length.unit,
             redshift=chunk_redshift,
-            Nmodes=nmodes_1d.squeeze(),
-            var=lc_var_1d * ps_unit**2 if get_variance else None,
-            delta=bool(prefactor_fnc is not None),
+            n_modes=nmodes_1d.squeeze(),
+            variance=lc_var_1d * ps_unit**2 if get_variance else None,
+            is_deltasq=bool(prefactor_fnc is not None),
         )
 
     return out

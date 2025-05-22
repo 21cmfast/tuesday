@@ -27,20 +27,20 @@ def validate_ps(power_spectrum: SphericalPS | CylindricalPS) -> None:
         and power_spectrum.k.unit.physical_type != "wavenumber"
     ):
         raise ValueError(
-            "Expected unit wavenumber, but got {power_spectrum.k.unit.physical_type}."
+            f"Expected unit wavenumber, but got {power_spectrum.k.unit.physical_type}."
         )
     if isinstance(power_spectrum, CylindricalPS):
         if power_spectrum.kperp.unit.physical_type != "wavenumber":
             raise ValueError(
                 "Expected unit of kperp to be wavenumber, but got"
-                " {power_spectrum.kperp.unit.physical_type}."
+                f" {power_spectrum.kperp.unit.physical_type}."
             )
         if power_spectrum.kpar.unit.physical_type != "wavenumber":
             raise ValueError(
                 "Expected unit of kperp to be wavenumber, but got"
-                " {power_spectrum.kpar.unit.physical_type}."
+                f" {power_spectrum.kpar.unit.physical_type}."
             )
-    if power_spectrum.delta:
+    if power_spectrum.is_deltasq:
         if (
             power_spectrum.ps.unit.physical_type
             != un.get_physical_type("temperature") ** 2
@@ -48,7 +48,7 @@ def validate_ps(power_spectrum: SphericalPS | CylindricalPS) -> None:
         ):
             raise ValueError(
                 "Expected unit of delta PS to be temperature squared or"
-                " dimensionless, but got {power_spectrum.ps.unit.physical_type}."
+                f" dimensionless, but got {power_spectrum.ps.unit.physical_type}."
             )
     else:
         if "littleh" in power_spectrum.ps.unit.to_string():
@@ -71,7 +71,7 @@ def validate_ps(power_spectrum: SphericalPS | CylindricalPS) -> None:
         ):
             raise ValueError(
                 "Expected unit of PS to be temperature squared times volume, "
-                "or volume but got {power_spectrum.ps.unit.physical_type}."
+                f"or volume but got {power_spectrum.ps.unit.physical_type}."
             )
 
 
