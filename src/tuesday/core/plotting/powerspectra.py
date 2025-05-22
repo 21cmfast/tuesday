@@ -10,7 +10,6 @@ from matplotlib.colors import LogNorm
 from scipy.ndimage import gaussian_filter
 
 from tuesday.core.psclasses import CylindricalPS, SphericalPS
-from tuesday.core.units import validate_ps as validate
 
 
 def plot_1d_power_spectrum(
@@ -228,7 +227,7 @@ def plot_power_spectrum(
     logy: bool | None = False,
     logc: bool | None = False,
     cbar: bool | None = True,
-    label: str | None = None,
+    legend: str | None = None,
     smooth: float | bool = False,
     legend_kwargs: dict | None = None,
 ) -> tuple[plt.Figure, plt.Axes]:
@@ -274,18 +273,17 @@ def plot_power_spectrum(
         Whether to set the y-axis to log scale.
     logc : bool, optional
         Whether to set the color-axis to log scale.
-    labels : list, optional
-        List of labels for each line in the plot.
+    legend : str, optional
+        Legend label for the 1D PS.
     smooth : bool or float, optional
         Standard deviation for Gaussian smoothing.
         If True, uses a standard deviation of 1.
     legend_kwargs : dict, optional
-        Keyword arguments for the legend.
+        Keyword arguments for the legend on the 1D PS plot.
     """
     if isinstance(smooth, bool) and smooth:
         smooth = 1.0
     if isinstance(power_spectrum, SphericalPS):
-        validate(power_spectrum)
         if legend_kwargs is None:
             legend_kwargs = {}
         if ax is None:
@@ -301,13 +299,12 @@ def plot_power_spectrum(
             color=color,
             fontsize=fontsize,
             log=[logx, logy],
-            label=label,
+            legend=legend,
             smooth=smooth,
             legend_kwargs=legend_kwargs,
         )
     elif isinstance(power_spectrum, CylindricalPS):
-        validate(power_spectrum)
-        if label is not None or legend_kwargs is not None:
+        if legend is not None or legend_kwargs is not None:
             warnings.warn(
                 "Cylindrical PS plots do not support labels and legends.", stacklevel=2
             )

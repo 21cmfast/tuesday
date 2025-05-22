@@ -11,7 +11,7 @@ __all__ = [
     "plot_2d_power_spectrum",
     "plot_power_spectrum",
     "validate",
-    "validate_ps",
+    "bin_kpar"
 ]
 from .plotting.powerspectra import (
     plot_1d_power_spectrum,
@@ -23,6 +23,7 @@ from .summaries.powerspectra import (
     calculate_ps,
     calculate_ps_coeval,
     calculate_ps_lc,
+    bin_kpar,
     cylindrical_to_spherical,
 )
-from .units import validate, validate_ps
+from .units import validate

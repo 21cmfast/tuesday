@@ -548,85 +548,138 @@ def calculate_ps_coeval(
 
 
 def bin_kpar(
+    bins_kpar: int | un.Quantity | None = None,
     log_kpar: bool | None = False,
     interp_kpar: bool | None = False,
-    bins_kpar: int | un.Quantity | None = None,
     crop_kperp: tuple[int, int] | None = None,
     crop_kpar: tuple[int, int] | None = None,
 ):
+    """
+    Bins the kpar axis of a CylindricalPS object, with options for logarithmic
+    or linear binning, interpolation, and cropping of the resulting power spectrum.
+
+    Parameters
+    ----------
+    bins_kpar : int, astropy.units.Quantity, or None, optional
+        Number of bins (if int), array of bin edges (if array-like), 
+        or None to use default binning (half the number of original kpar bins). 
+        Default is None.
+    log_kpar : bool or None, optional
+        If True, use logarithmic binning for kpar. 
+        If False or None, use linear binning. Default is False.
+    interp_kpar : bool or None, optional
+        If True, interpolate the power spectrum onto the new kpar bins. 
+        If False or None, aggregate using bin means. Default is False.
+    crop_kperp : tuple of int or None, optional
+        Tuple specifying the (start, end) indices to crop the kperp axis after binning.
+        If None, no cropping is applied. Default is None.
+    crop_kpar : tuple of int or None, optional
+        Tuple specifying the (start, end) indices to crop the kpar axis after binning.
+        If None, no cropping is applied. Default is None.
+
+    Returns
+    -------
+    transform_ps : callable
+        A function that takes a CylindricalPS object and returns a new CylindricalPS object
+        with the binned kpar axis.
+
+    Raises
+    ------
+    ValueError
+        If `bins_kpar` is not an int or a valid array of bin edges/centres.
+
+    Notes
+    -----
+    - If `interp_kpar` is True, the power spectrum and its variance (if present) are interpolated onto the new kpar bins.
+    - If `interp_kpar` is False, the power spectrum and its variance are aggregated using the mean within each bin.
+    - Cropping is applied after binning/interpolation.
+    """
     def transform_ps(ps: CylindricalPS):
         if bins_kpar is None:
             if log_kpar:
-                bins_kpar = np.logspace(
-                    np.log10(ps.kpar[0]), np.log10(ps.kpar[-1]), len(ps.kpar) // 2 + 1
-                )
+                final_bins_kpar = np.logspace(
+                    np.log10(ps.kpar.value[0]), np.log10(ps.kpar.value[-1]), len(ps.kpar) // 2 + 1
+                ) * ps.kpar.unit
             else:
-                bins_kpar = np.linspace(ps.kpar[0], ps.kpar[-1], len(ps.kpar) // 2 + 1)
+                final_bins_kpar = np.linspace(ps.kpar[0], ps.kpar[-1], len(ps.kpar) // 2 + 1)
         elif isinstance(bins_kpar, int):
             if log_kpar:
-                bins_kpar = np.logspace(
-                    np.log10(ps.kpar[0]), np.log10(ps.kpar[-1]), bins_kpar
-                )
+                final_bins_kpar = np.logspace(
+                    np.log10(ps.kpar.value[0]), np.log10(ps.kpar.value[-1]), bins_kpar
+                ) * ps.kpar.unit
             else:
-                bins_kpar = np.linspace(ps.kpar[0], ps.kpar[-1], bins_kpar)
+                final_bins_kpar = np.linspace(ps.kpar[0], ps.kpar[-1], bins_kpar)
         else:
             if not isinstance(bins_kpar, np.ndarray):
                 raise ValueError("bins_kpar must be an array of bin edges or centres.")
         if interp_kpar:
+            mask = np.isnan(np.nanmean(ps.ps, axis=-1))
             interp_fnc = RegularGridInterpolator(
-                (ps.kperp.value, ps.kpar.value),
-                ps.ps.squeeze(),
+                (ps.kperp.value[~mask], ps.kpar.value),
+                ps.ps[~mask].squeeze(),
                 bounds_error=False,
                 fill_value=np.nan,
             )
             kperp_grid, kpar_grid = np.meshgrid(
-                ps.kperp, bins_kpar, indexing="ij", sparse=True
+                ps.kperp, final_bins_kpar, indexing="ij", sparse=True
             )
-            final_ps = interp_fnc((kperp_grid, kpar_grid))
-            if ps.var is not None:
+            final_ps = interp_fnc((kperp_grid, kpar_grid)) * ps.ps.unit
+            if ps.variance is not None:
                 interp_fnc = RegularGridInterpolator(
-                    (ps.kperp.value, ps.kpar.value),
-                    ps.var.squeeze(),
+                    (ps.kperp[~mask].value, ps.kpar.value),
+                    ps.variance[~mask].squeeze(),
                     bounds_error=False,
                     fill_value=np.nan,
                 )
                 kperp_grid, kpar_grid = np.meshgrid(
-                    ps.kperp, bins_kpar, indexing="ij", sparse=True
+                    ps.kperp, final_bins_kpar, indexing="ij", sparse=True
                 )
-                final_var = interp_fnc((kperp_grid, kpar_grid))
-            idxs = np.digitize(ps.kpar, bins_kpar) - 1
-            final_nmodes = np.zeros(len(bins_kpar))
-            for i in range(len(bins_kpar)):
+                final_var = interp_fnc((kperp_grid, kpar_grid)) * ps.variance.unit
+    
+            idxs = np.digitize(ps.kpar.value, final_bins_kpar.value) - 1
+            final_nmodes = np.zeros(len(final_bins_kpar))
+            for i in range(len(final_bins_kpar)):
                 final_nmodes[i] = np.sum(idxs == i)
 
         else:
-            final_ps = np.zeros((len(ps.kperp), len(bins_kpar) - 1))
-            final_nmodes = np.zeros(len(bins_kpar) - 1)
-            idxs = np.digitize(ps.kpar, bins_kpar) - 1
-            if ps.var is not None:
-                final_var = np.zeros((len(ps.kperp), len(bins_kpar)))
-            for i in range(len(bins_kpar) - 1):
+            final_ps = np.zeros((len(ps.kperp), len(final_bins_kpar) - 1)) 
+            final_nmodes = np.zeros(len(final_bins_kpar) - 1)
+            idxs = np.digitize(ps.kpar.value, final_bins_kpar.value) - 1
+            if ps.variance is not None:
+                final_var = np.zeros((len(ps.kperp), len(final_bins_kpar)))
+            for i in range(len(final_bins_kpar) - 1):
                 m = idxs == i
-                final_ps[..., i] = np.nanmean(ps.ps[..., m], axis=-1)
+                final_ps[..., i] = np.nanmean(ps.ps.value[..., m], axis=-1)
                 final_nmodes[i] = np.sum(m)
-                if ps.var is not None:
-                    final_var[..., i] = np.nanmean(ps.var[..., m], axis=-1)
+                if ps.variance is not None:
+                    final_var[..., i] = np.nanmean(ps.variance.value[..., m], axis=-1)
             if log_kpar:
-                bins_kpar = np.exp((np.log(bins_kpar[1:]) + np.log(bins_kpar[:-1])) / 2)
+                final_bins_kpar = np.exp((np.log(final_bins_kpar.value[1:]) + np.log(final_bins_kpar.value[:-1])) / 2) * ps.kpar.unit
             else:
-                bins_kpar = (bins_kpar[1:] + bins_kpar[:-1]) / 2
+                final_bins_kpar = (final_bins_kpar[1:] + final_bins_kpar[:-1]) / 2
+            final_ps = final_ps * ps.ps.unit
+            if ps.variance is not None:
+                final_var = final_var * ps.variance.unit
         if crop_kperp is not None:
             final_ps = final_ps[crop_kperp[0] : crop_kperp[1]]
         if crop_kpar is not None:
             final_ps = final_ps[:, crop_kpar[0] : crop_kpar[1]]
+        if ps.n_modes.ndim != 1 and np.all(ps.n_modes[:,:1] == ps.n_modes):
+            raise ValueError("Must provide only kperp n_modes in a 1D array.")
+        final_kperp_modes = ps.n_modes[crop_kperp[0] : crop_kperp[1]] if crop_kperp is not None else ps.n_modes
+        final_kpar_modes = final_nmodes[crop_kpar[0] : crop_kpar[1]] if crop_kpar is not None else final_nmodes
+        kpar_grid, kperp_grid = np.meshgrid(final_kperp_modes, final_kpar_modes,indexing="ij")
+
+        final_nmodes = np.sqrt(kperp_grid**2 + kpar_grid**2)
+
         return CylindricalPS(
-            final_ps,
-            ps.kperp if crop_kperp is None else ps.kperp[crop_kperp[0] : crop_kperp[1]],
-            bins_kpar if crop_kpar is None else bins_kpar[crop_kpar[0] : crop_kpar[1]],
-            ps.redshift,
-            final_nmodes,
-            final_var if ps.var is not None else None,
-            ps.delta,
+            ps=final_ps,
+            kperp=ps.kperp if crop_kperp is None else ps.kperp[crop_kperp[0] : crop_kperp[1]],
+            kpar=final_bins_kpar if crop_kpar is None else final_bins_kpar[crop_kpar[0] : crop_kpar[1]],
+            redshift=ps.redshift,
+            n_modes=final_nmodes,
+            variance=final_var if ps.variance is not None else None,
+            is_deltasq=ps.is_deltasq,
         )
 
     return transform_ps
