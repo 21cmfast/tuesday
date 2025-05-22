@@ -9,7 +9,7 @@ from astropy.cosmology.units import littleh
 
 @dataclass(frozen=True)
 class SphericalPS:
-    """Class to hold the 1D power spectrum data."""
+    r"""Class to hold the 1D power spectrum data."""
 
     ps: un.Quantity
     k: un.Quantity
@@ -19,9 +19,7 @@ class SphericalPS:
     is_deltasq: bool = False
 
     def __post_init__(self):
-        """
-        Validate 1D PS array shapes.
-        """
+        r"""Validate 1D PS array shapes."""
         if self.ps.ndim != 1:
             raise ValueError("The ps array must be 1D for a SphericalPS.")
         if self.n_modes is not None and self.n_modes.shape != self.ps.shape:
@@ -78,7 +76,7 @@ class SphericalPS:
 
 @dataclass(frozen=True)
 class CylindricalPS:
-    """Class to hold the 2D power spectrum data."""
+    r"""Class to hold the 2D power spectrum data."""
 
     ps: un.Quantity
     kperp: un.Quantity
@@ -89,9 +87,7 @@ class CylindricalPS:
     is_deltasq: bool = False
 
     def __post_init__(self):
-        """
-        Validate 2D PS array shapes.
-        """
+        r"""Validate 2D PS array shapes."""
         if self.ps.ndim != 2:
             raise ValueError("The ps array must be 2D for a CylindricalPS.")
         if self.n_modes is not None and (
@@ -116,8 +112,8 @@ class CylindricalPS:
         ):
             raise ValueError(
                 "kpar must either be the same shape as the kpar "
-                "axis of the ps or larger by one if kpar is "
-                f"the bin edges. Instead got {self.kpar.shape[0]} and {self.ps.shape[1]}"
+                "axis of the ps or larger by one if kpar is the "
+                f"bin edges. Instead got {self.kpar.shape[0]} and {self.ps.shape[1]}"
             )
         if (
             self.kperp.unit.physical_type != un.get_physical_type("wavenumber")
