@@ -196,6 +196,8 @@ def calculate_ps(
 
         kpar = np.array(kpar).squeeze()
         lc_ps_2d = ps_2d[..., kpar > 0]
+        if get_variance:
+            lc_var_2d = lc_var_2d[..., kpar > 0]
         kpar = kpar[kpar > 0]
         out["ps_2d"] = CylindricalPS(
             ps=lc_ps_2d * ps_unit,
