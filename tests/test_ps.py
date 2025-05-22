@@ -4,12 +4,7 @@ import astropy.units as un
 import numpy as np
 import pytest
 
-from tuesday.core import (
-    bin_kpar,
-    calculate_ps_coeval,
-    calculate_ps_lc,
-    cylindrical_to_spherical,
-)
+from tuesday.core import calculate_ps_coeval, calculate_ps_lc, cylindrical_to_spherical, bin_kpar, calculate_ps
 
 
 @pytest.fixture
@@ -29,6 +24,43 @@ def test_lc():
 def test_redshifts():
     return np.logspace(np.log10(5), np.log10(30), 300)
 
+def test_calculate_ps_errors():
+    with np.testing.assert_raises(ValueError):
+        calculate_ps(
+            test_lc, # No unit
+            200 * un.Mpc,
+            test_redshifts,
+            ps_redshifts=3.0,
+            calc_1d=True,
+        )
+    with np.testing.assert_raises(ValueError):
+        calculate_ps(
+            test_lc * un.mK, 
+            200, # No unit
+            test_redshifts,
+            ps_redshifts=3.0,
+            calc_1d=True,
+        )
+    with np.testing.assert_raises(ValueError):
+        calculate_ps(
+            test_lc * un.mK, 
+            200 * un.Mpc,
+            test_redshifts,
+            ps_redshifts=3.0,
+            calc_1d=False,
+            calc_2d=False,
+        )
+    def prefactor(freq):
+        return freq
+    calculate_ps(
+        test_lc * un.mK, 
+        200 * un.Mpc,
+        test_redshifts,
+        ps_redshifts=3.0,
+        calc_1d=False,
+        calc_2d=True,
+        prefactor_fnc=prefactor,
+    )
 
 @pytest.mark.parametrize("log_bins", [True, False])
 def test_calculate_ps_lc(log_bins, test_lc, test_redshifts):
@@ -53,6 +85,8 @@ def test_calculate_ps_lc(log_bins, test_lc, test_redshifts):
         transform_ps2d=bin_kpar(bins_kpar=10, log_kpar=True, interp_kpar=True),
     )
 
+    def transform1d(ps):
+        return ps
     calculate_ps_lc(
         test_lc * un.dimensionless_unscaled,
         200 * un.Mpc,
@@ -60,13 +94,12 @@ def test_calculate_ps_lc(log_bins, test_lc, test_redshifts):
         mu_min=0.5,
         log_bins=log_bins,
         get_variance=True,
-        transform_ps2d=bin_kpar(
-            bins_kpar=None,
-            log_kpar=False,
-            interp_kpar=False,
-            crop_kpar=(0, 3),
-            crop_kperp=(0, 8),
-        ),
+        transform_ps2d=bin_kpar(bins_kpar=None, 
+                                log_kpar=False, 
+                                interp_kpar=False, 
+                                crop_kpar=(0,3), 
+                                crop_kperp=(0,8)),
+        transform_ps1d=transform1d,
     )
 
 
@@ -80,12 +113,20 @@ def test_calculate_ps_coeval(test_coeval):
             interp=True,
             mu_min=0.5,
         )
+    def transform1d(ps):
+        return ps
     calculate_ps_coeval(
         test_coeval * un.dimensionless_unscaled,
         box_length=200 * un.Mpc,
         calc_1d=False,
         interp=True,
         mu_min=0.5,
+        transform_ps2d=bin_kpar(bins_kpar=np.array([0.1,0.5,1])/un.Mpc, 
+                                log_kpar=True, 
+                                interp_kpar=True, 
+                                crop_kpar=(0,3), 
+                                crop_kperp=(0,8)),
+        transform_ps1d=transform1d,
     )
 
     calculate_ps_coeval(
