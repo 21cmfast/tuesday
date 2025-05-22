@@ -13,6 +13,8 @@ __all__ = [
     "validate",
     "validatePS",
 ]
+from .summaries.psclasses import CylindricalPS, SphericalPS
+from .units import validate, validatePS
 from .plotting.powerspectra import (
     plot_1d_power_spectrum,
     plot_2d_power_spectrum,
@@ -24,5 +26,4 @@ from .summaries.powerspectra import (
     calculate_ps_lc,
     cylindrical_to_spherical,
 )
-from .summaries.psclasses import CylindricalPS, SphericalPS
-from .units import validate, validatePS
+
