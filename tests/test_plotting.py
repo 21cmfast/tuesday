@@ -5,12 +5,11 @@ import pytest
 from astropy.cosmology.units import littleh
 
 from tuesday.core import (
-    CylindricalPS,
     SphericalPS,
     calculate_ps_lc,
-    plot_power_spectrum,
     plot_1d_power_spectrum,
     plot_2d_power_spectrum,
+    plot_power_spectrum,
 )
 
 
@@ -73,9 +72,9 @@ def test_1d_ps_plot(ps):
         title="Test Title",
         legend="z=6",
     )
-    
+
     with np.testing.assert_raises(ValueError):
-        plot_1d_power_spectrum(np.linspace(0,10,10)) # Not a dataclass
+        plot_1d_power_spectrum(np.linspace(0, 10, 10))  # Not a dataclass
 
 
 def test_bad_1d_ps_units(ps):
@@ -113,7 +112,4 @@ def test_2d_ps_plot(ps2):
         logc=True,
     )
     with np.testing.assert_raises(ValueError):
-        plot_2d_power_spectrum(np.linspace(0,10,10)) # Not a dataclass
-
-
-
+        plot_2d_power_spectrum(np.linspace(0, 10, 10))  # Not a dataclass
