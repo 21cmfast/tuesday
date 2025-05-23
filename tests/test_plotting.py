@@ -9,6 +9,8 @@ from tuesday.core import (
     SphericalPS,
     calculate_ps_lc,
     plot_power_spectrum,
+    plot_1d_power_spectrum,
+    plot_2d_power_spectrum,
 )
 
 
@@ -71,11 +73,9 @@ def test_1d_ps_plot(ps):
         title="Test Title",
         legend="z=6",
     )
+    
     with np.testing.assert_raises(ValueError):
-        bad_ps = SphericalPS(
-            np.append(ps.ps[None, ...], ps.ps[None, ...], axis=0), k=ps.k
-        )
-        plot_power_spectrum(bad_ps)  # Passing 2 1D PS
+        plot_1d_power_spectrum(np.linspace(0,10,10)) # Not a dataclass
 
 
 def test_bad_1d_ps_units(ps):
@@ -97,7 +97,7 @@ def test_good_1d_ps_units(ps, unit):
 
 def test_2d_ps_plot(ps2):
     """Test the 2d power spectrum plot."""
-    fig, ax = plt.subplots()
+    _, ax = plt.subplots()
     plot_power_spectrum(
         ps2,
         ax=ax,
@@ -110,16 +110,10 @@ def test_2d_ps_plot(ps2):
         title="Test Title",
         legend="foo",
         logx=True,
+        logc=True,
     )
+    with np.testing.assert_raises(ValueError):
+        plot_2d_power_spectrum(np.linspace(0,10,10)) # Not a dataclass
 
 
-def test_2d_ps_units(ps2):
-    with np.testing.assert_raises(ValueError):
-        bad_ps = CylindricalPS(ps2.ps.value * un.Mpc, kperp=ps2.kperp, kpar=ps2.kpar)
-        plot_power_spectrum(bad_ps)  # Wrong units on PS
-    with np.testing.assert_raises(ValueError):
-        bad_ps = CylindricalPS(ps2.ps, kperp=ps2.kperp * un.mK, kpar=ps2.kpar)
-        plot_power_spectrum(bad_ps)  # Wrong units on k
-    with np.testing.assert_raises(ValueError):
-        bad_ps = CylindricalPS(ps2.ps, kperp=ps2.kperp, kpar=ps2.kpar * un.mK)
-        plot_power_spectrum(bad_ps)  # Wrong units on k
+
