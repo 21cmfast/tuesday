@@ -10,7 +10,6 @@ from py21cmfast.drivers.lightcone import LightCone
 from py21cmfast.io import h5
 from py21cmfast.io.caching import OutputCache, RunCache
 from py21cmfast.wrapper import outputs
-
 from tuesday.simulators.py21cmfast.lightcones import construct_lightcone_from_cache
 
 

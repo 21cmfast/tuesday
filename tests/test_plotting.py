@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from astropy.cosmology.units import littleh
-
 from tuesday.core import (
     CylindricalPS,
     SphericalPS,
