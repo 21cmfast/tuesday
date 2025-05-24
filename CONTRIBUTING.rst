@@ -83,7 +83,8 @@ How to set up your development environment
 ------------------------------------------
 
 
-::
+Set up the dev environment::
+
     $ pip install -e ".[dev]"
 
 

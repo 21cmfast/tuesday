@@ -70,7 +70,7 @@ testpaths = "tests"
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py312"
 
 [tool.ruff.lint]
 extend-select = [
@@ -118,6 +118,9 @@ ignore = [
     "A",  # conf.py can shadow builtins
     "ERA",
     "DTZ",
+]
+"docs/tutorials/*.ipynb" = [
+    "T201", # print statements
 ]
 
 [tool.ruff.lint.pydocstyle]
