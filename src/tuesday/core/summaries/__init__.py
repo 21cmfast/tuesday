@@ -1,4 +1,5 @@
 """A sub-package for calculating summaries of simulations, like power spectra."""
+
 __all__ = [
     "CylindricalPS",
     "SphericalPS",
@@ -8,7 +9,6 @@ __all__ = [
     "calculate_ps_lc",
     "cylindrical_to_spherical",
 ]
-from .psclasses import CylindricalPS, SphericalPS
 from .powerspectra import (
     bin_kpar,
     calculate_ps,
@@ -16,3 +16,4 @@ from .powerspectra import (
     calculate_ps_lc,
     cylindrical_to_spherical,
 )
+from .psclasses import CylindricalPS, SphericalPS

@@ -15,8 +15,9 @@ from powerbox.tools import (
     regular_angular_generator,
 )
 from scipy.interpolate import RegularGridInterpolator
-from .psclasses import CylindricalPS, SphericalPS
+
 from ..units import validate
+from .psclasses import CylindricalPS, SphericalPS
 
 
 def get_chunk_indices(

@@ -10,6 +10,7 @@ from scipy.ndimage import gaussian_filter
 
 from ..summaries import CylindricalPS, SphericalPS
 
+
 def plot_1d_power_spectrum(
     power_spectrum: SphericalPS,
     *,
@@ -321,6 +322,8 @@ def plot_power_spectrum(
             cbar=cbar,
         )
     else:
-        raise ValueError("Input must be SphericalPS or CylindricalPS objects,"\
-                         f"got {type(power_spectrum)} instead.")
+        raise ValueError(
+            "Input must be SphericalPS or CylindricalPS objects,"
+            f"got {type(power_spectrum)} instead."
+        )
     return ax
