@@ -7,4 +7,4 @@ scipy>=1.7.0
 sphinx>=5.2.0
 sphinx-click>=4.4.0
 toml==0.10.2
-tuesday>=0.0.0
+tuesday_eor>=0.0.0

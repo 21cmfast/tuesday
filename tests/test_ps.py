@@ -3,7 +3,6 @@
 import astropy.units as un
 import numpy as np
 import pytest
-
 from tuesday.core import (
     bin_kpar,
     calculate_ps,
