@@ -9,7 +9,7 @@ from tuesday.core import (
 )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def ps2():
     """Fixture to create a random power spectrum."""
     return CylindricalPS(
@@ -20,7 +20,7 @@ def ps2():
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def ps():
     """Fixture to create a random power spectrum."""
     return SphericalPS(
@@ -31,9 +31,9 @@ def ps():
 
 
 def test_one_ps_per_obj(ps, ps2):
-    with np.testing.assert_raises(ValueError):
+    with pytest.raises(ValueError, match="The ps array must be 1D for a SphericalPS."):
         SphericalPS(np.append(ps.ps[None, ...], ps.ps[None, ...], axis=0), k=ps.k)
-    with np.testing.assert_raises(ValueError):
+    with pytest.raises(ValueError, match="The ps array must be 2D for a CylindricalPS."):
         CylindricalPS(
             np.append(ps2.ps[None, ...], ps2.ps[None, ...], axis=0),
             kperp=ps2.kperp,
@@ -80,30 +80,43 @@ def test_ps_correct_units(unit, delta):
 
 
 def test_2d_ps_wrong_units(ps2):
-    with np.testing.assert_raises(ValueError):
+    with pytest.raises(ValueError, 
+                       match="Expected unit of PS to be temperature squared times volume, "
+                       f"or volume but got {un.Mpc.physical_type}."):
         CylindricalPS(
             ps2.ps.value * un.Mpc, kperp=ps2.kperp, kpar=ps2.kpar
         )  # Wrong units on PS
-    with np.testing.assert_raises(ValueError):
+    with pytest.raises(ValueError, 
+                       match="Unit of kperp must be a wavenumber, "
+                            f"got {un.mK.physical_type}."):
         CylindricalPS(
             ps2.ps, kperp=ps2.kperp * un.mK, kpar=ps2.kpar
         )  # Wrong units on k
-    with np.testing.assert_raises(ValueError):
+    with pytest.raises(ValueError, 
+                       match="Unit of kpar must be a wavenumber, "
+                        f"got {un.mK.physical_type}."):
         CylindricalPS(
             ps2.ps, kperp=ps2.kperp, kpar=ps2.kpar * un.mK
         )  # Wrong units on k
-    with np.testing.assert_raises(ValueError):
+    with pytest.raises(ValueError, 
+                       match="Expected unit of PS to be temperature squared times volume, "
+                    f"or volume but got {(un.mK**2).physical_type}."):
         CylindricalPS(
             ps2.ps, kperp=ps2.kperp, kpar=ps2.kpar, is_deltasq=False
         )  # correct units but inconsistent with is_deltasq
 
 
 def test_1d_ps_wrong_units(ps):
-    with np.testing.assert_raises(ValueError):
-        SphericalPS(ps.ps.value * un.Mpc, k=ps.k)  # Wrong units on PS
-    with np.testing.assert_raises(ValueError):
+    with pytest.raises(ValueError, 
+                       match="Expected unit of delta PS to be temperature squared or"
+                    f" dimensionless, but got {un.Mpc.physical_type}."):
+        SphericalPS(ps.ps.value * un.Mpc, k=ps.k, is_deltasq=True)  # Wrong units on PS
+    with pytest.raises(ValueError, 
+                       match=f"Unit of k must be a wavenumber, got {un.mK.physical_type}."):
         SphericalPS(ps.ps.value, k=ps.k * un.mK)
-    with np.testing.assert_raises(ValueError):
+    with pytest.raises(ValueError, 
+                       match="Expected unit of delta PS to be temperature squared or"
+                    f" dimensionless, but got {(un.m**3).physical_type}."):
         SphericalPS(
             ps.ps.value * un.m**3, k=ps.k, is_deltasq=True
         )  # correct units but inconsistent with is_deltasq

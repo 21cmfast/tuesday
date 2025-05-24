@@ -15,9 +15,8 @@ from powerbox.tools import (
     regular_angular_generator,
 )
 from scipy.interpolate import RegularGridInterpolator
-
-from ..units import validate
 from .psclasses import CylindricalPS, SphericalPS
+from ..units import validate
 
 
 def get_chunk_indices(
@@ -736,8 +735,12 @@ def bin_kpar(
                 final_var = final_var * ps.variance.unit
         if crop_kperp is not None:
             final_ps = final_ps[crop_kperp[0] : crop_kperp[1]]
+            if ps.variance is not None:
+                final_var = final_var[crop_kperp[0] : crop_kperp[1]]
         if crop_kpar is not None:
             final_ps = final_ps[:, crop_kpar[0] : crop_kpar[1]]
+            if ps.variance is not None:
+                final_var = final_var[:, crop_kpar[0] : crop_kpar[1]]
         if ps.n_modes.ndim != 1 and np.all(ps.n_modes[:, :1] == ps.n_modes):
             raise ValueError("Must provide only kperp n_modes in a 1D array.")
         final_kperp_modes = (

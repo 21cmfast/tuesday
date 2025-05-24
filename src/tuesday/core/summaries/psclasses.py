@@ -183,14 +183,15 @@ class CylindricalPS:
         ]:
             raise ValueError(
                 "Unit of kperp must be a wavenumber, "
-                "got {self.kperp.unit.physical_type}."
+                f"got {self.kperp.unit.physical_type}."
             )
         if self.kpar.unit.physical_type not in [
             un.get_physical_type("wavenumber"),
             un.get_physical_type("wavenumber") * littleh,
         ]:
             raise ValueError(
-                "Unit of kpar must be a wavenumber, got {self.kpar.unit.physical_type}."
+                "Unit of kpar must be a wavenumber, "
+                f"got {self.kpar.unit.physical_type}."
             )
         if self.is_deltasq:
             if self.ps.unit.physical_type not in [
