@@ -3,7 +3,7 @@ requires = ["setuptools>=64", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-write_to = "src/tuesday/_version.py"
+write_to = "src/tuesday_eor/_version.py"
 parentdir_prefix_version = "tuesday-"
 fallback_version  = "0.0.0"
 
