@@ -2,14 +2,13 @@
 
 import warnings
 
-import astropy.units as un
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import rcParams
 from matplotlib.colors import LogNorm
 from scipy.ndimage import gaussian_filter
 
-from tuesday.core.psclasses import CylindricalPS, SphericalPS
+from tuesday.core import CylindricalPS, SphericalPS
 
 
 def plot_1d_power_spectrum(
@@ -61,7 +60,7 @@ def plot_1d_power_spectrum(
             f" got {type(power_spectrum)} instead."
         )
     rcParams.update({"font.size": fontsize})
-    wavemodes = power_spectrum.k
+    wavemodes = power_spectrum.kcenters
     is_deltasq = power_spectrum.is_deltasq
     power_spectrum = power_spectrum.ps
 
@@ -72,12 +71,7 @@ def plot_1d_power_spectrum(
 
     if ylabel is None:
         ylabel = f"[{power_spectrum.unit:latex_inline}]"
-        if is_deltasq:
-            ylabel = r"$\Delta^2_{21} \,$" + ylabel
-        elif is_deltasq and power_spectrum.unit == un.dimensionless_unscaled:
-            ylabel = r"$\Delta^2_{21}$"
-        else:
-            ylabel = r"$P(k) \,$" + ylabel
+        ylabel = r"$\Delta^2_{21} \,$" + ylabel if is_deltasq else r"$P(k) \,$" + ylabel
     if smooth:
         power_spectrum = gaussian_filter(power_spectrum, sigma=smooth)
     ax.plot(wavemodes, power_spectrum, color=color, label=legend)
@@ -160,13 +154,7 @@ def plot_2d_power_spectrum(
 
     if clabel is None:
         clabel = f"[{power_spectrum.unit:latex_inline}]"
-        if is_deltasq:
-            clabel = r"$\Delta^2_{21} \,$" + clabel
-        elif is_deltasq and power_spectrum.unit == un.dimensionless_unscaled:
-            clabel = r"$\Delta^2_{21}$"
-        else:
-            clabel = r"$P(k) \,$" + clabel
-
+        clabel = r"$\Delta^2_{21} \,$" + clabel if is_deltasq else r"$P(k) \,$" + clabel
     cmap_kwargs = {}
     if vmin is None:
         if log[2]:

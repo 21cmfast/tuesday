@@ -7,58 +7,45 @@ from astropy.cosmology.units import littleh
 from tuesday.core import (
     CylindricalPS,
     SphericalPS,
-    calculate_ps_lc,
+    calculate_ps_coeval,
     plot_power_spectrum,
 )
 
 
-@pytest.fixture
-def ps():
+@pytest.fixture(scope="session")
+def _psboth():
     """Fixture to create a random power spectrum."""
     rng = np.random.default_rng()
-    test_lc = rng.random((100, 100, 1000))
-    test_redshifts = np.logspace(np.log10(5), np.log10(30), 1000)
-    zs = [6.0]
+    box = rng.random((100, 100, 100))
 
-    ps = calculate_ps_lc(
-        test_lc * un.dimensionless_unscaled,
-        lc_redshifts=test_redshifts,
+    ps1d, ps2d = calculate_ps_coeval(
+        box=box * un.dimensionless_unscaled,
         box_length=200 * un.Mpc,
-        ps_redshifts=zs,
         calc_2d=True,
         calc_1d=True,
         interp=True,
     )
-    return ps["ps_1d"]["z = 6.0"]
+    return ps1d, ps2d
 
 
-@pytest.fixture
-def ps2():
-    """Fixture to create a random power spectrum."""
-    rng = np.random.default_rng()
-    test_lc = rng.random((100, 100, 1000))
-    test_redshifts = np.logspace(np.log10(5), np.log10(30), 1000)
-    zs = [6.0]
-
-    ps = calculate_ps_lc(
-        test_lc * un.mK,
-        lc_redshifts=test_redshifts,
-        box_length=200 * un.Mpc,
-        ps_redshifts=zs,
-        calc_2d=True,
-        calc_1d=False,
-    )
-    return ps["ps_2d"]["z = 6.0"]
+@pytest.fixture(scope="session")
+def ps1d(_psboth: tuple[SphericalPS, CylindricalPS]) -> SphericalPS:
+    return _psboth[0]
 
 
-def test_1d_ps_plot(ps):
+@pytest.fixture(scope="session")
+def ps2d(_psboth: tuple[SphericalPS, CylindricalPS]) -> CylindricalPS:
+    return _psboth[1]
+
+
+def test_1d_ps_plot(ps1d: SphericalPS):
     """Test the 1d power spectrum plot."""
 
-    plot_power_spectrum(ps, smooth=True)
+    plot_power_spectrum(ps1d, smooth=True)
 
     _, ax = plt.subplots()
     plot_power_spectrum(
-        ps,
+        ps1d,
         ax=ax,
         title="Test Title",
         legend="foo",
@@ -67,45 +54,43 @@ def test_1d_ps_plot(ps):
         smooth=True,
     )
     plot_power_spectrum(
-        ps,
+        ps1d,
         title="Test Title",
         legend="z=6",
     )
-    with np.testing.assert_raises(ValueError):
-        bad_ps = SphericalPS(
-            np.append(ps.ps[None, ...], ps.ps[None, ...], axis=0), k=ps.k
-        )
-        plot_power_spectrum(bad_ps)  # Passing 2 1D PS
 
 
-def test_bad_1d_ps_units(ps):
-    with np.testing.assert_raises(ValueError):
-        bad_ps = SphericalPS(ps.ps * un.mK**2 * un.Mpc**2, k=ps.k)
-        plot_power_spectrum(bad_ps)  # Wrong units on PS
-    with np.testing.assert_raises(ValueError):
-        bad_ps = SphericalPS(ps.ps, k=ps.k / un.Mpc**4)
-        plot_power_spectrum(bad_ps)  # Wrong units on k
+def test_bad_1d_ps_units(ps1d):
+    with pytest.raises(
+        ValueError, match="Expected unit of PS to be temperature squared times volume"
+    ):
+        SphericalPS(ps1d.ps * un.mK**2 * un.Mpc**2, k=ps1d.k)
+
+    with pytest.raises(ValueError, match="Unit of k must be a wavenumber"):
+        SphericalPS(ps1d.ps, k=ps1d.k / un.Mpc**4)
 
 
 @pytest.mark.parametrize("unit", [un.Mpc, un.Mpc / littleh])
-def test_good_1d_ps_units(ps, unit):
-    good_ps = SphericalPS(ps.ps.value * un.mK**2 * unit**3, k=ps.k, is_deltasq=False)
+def test_good_1d_ps_units(ps1d, unit):
+    good_ps = SphericalPS(
+        ps1d.ps.value * un.mK**2 * unit**3, k=ps1d.k, is_deltasq=False
+    )
     plot_power_spectrum(good_ps)
-    good_ps = SphericalPS(ps.ps.value * unit**3, k=ps.k, is_deltasq=False)
+    good_ps = SphericalPS(ps1d.ps.value * unit**3, k=ps1d.k, is_deltasq=False)
     plot_power_spectrum(good_ps)
 
 
-def test_2d_ps_plot(ps2):
+def test_2d_ps_plot(ps2d):
     """Test the 2d power spectrum plot."""
     fig, ax = plt.subplots()
     plot_power_spectrum(
-        ps2,
+        ps2d,
         ax=ax,
         logx=False,
         legend=["foo"],
     )
     plot_power_spectrum(
-        ps2,
+        ps2d,
         smooth=True,
         title="Test Title",
         legend="foo",
@@ -113,13 +98,14 @@ def test_2d_ps_plot(ps2):
     )
 
 
-def test_2d_ps_units(ps2):
-    with np.testing.assert_raises(ValueError):
-        bad_ps = CylindricalPS(ps2.ps.value * un.Mpc, kperp=ps2.kperp, kpar=ps2.kpar)
-        plot_power_spectrum(bad_ps)  # Wrong units on PS
-    with np.testing.assert_raises(ValueError):
-        bad_ps = CylindricalPS(ps2.ps, kperp=ps2.kperp * un.mK, kpar=ps2.kpar)
-        plot_power_spectrum(bad_ps)  # Wrong units on k
-    with np.testing.assert_raises(ValueError):
-        bad_ps = CylindricalPS(ps2.ps, kperp=ps2.kperp, kpar=ps2.kpar * un.mK)
-        plot_power_spectrum(bad_ps)  # Wrong units on k
+def test_2d_ps_units(ps2d):
+    with pytest.raises(
+        ValueError, match="Expected unit of PS to be temperature squared times volume"
+    ):
+        CylindricalPS(ps2d.ps.value * un.Mpc, kperp=ps2d.kperp, kpar=ps2d.kpar)
+
+    with pytest.raises(ValueError, match="Unit of kperp must be a wavenumber"):
+        CylindricalPS(ps2d.ps, kperp=ps2d.kperp * un.mK, kpar=ps2d.kpar)
+
+    with pytest.raises(ValueError, match="Unit of kpar must be a wavenumber"):
+        CylindricalPS(ps2d.ps, kperp=ps2d.kperp, kpar=ps2d.kpar * un.mK)

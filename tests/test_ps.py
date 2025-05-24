@@ -32,19 +32,21 @@ def test_redshifts():
 
 
 def test_calculate_ps_errors(test_lc):
-    with np.testing.assert_raises(TypeError):
+    with pytest.raises(TypeError, match="chunk should be a Quantity"):
         calculate_ps(
             test_lc,  # No unit
             200 * un.Mpc,
             calc_1d=True,
         )
-    with np.testing.assert_raises(TypeError):
+    with pytest.raises(TypeError, match="box_lenth should be a quantity"):
         calculate_ps(
             test_lc * un.mK,
             200,  # No unit
             calc_1d=True,
         )
-    with np.testing.assert_raises(ValueError):
+    with pytest.raises(
+        ValueError, match="At leats one of calc_1d or calc_2d must be True"
+    ):
         calculate_ps(
             test_lc * un.mK,
             200 * un.Mpc,
@@ -57,13 +59,24 @@ def test_calculate_ps_errors(test_lc):
         squares = [c**2 for c in coords]
         return np.sqrt(sum(squares))
 
-    calculate_ps(
-        test_lc * un.mK,
-        200 * un.Mpc,
-        calc_1d=False,
-        calc_2d=True,
-        prefactor_fnc=prefactor,
-    )
+    with pytest.warns(UserWarning, match="The prefactor function is not the default"):
+        calculate_ps(
+            test_lc * un.mK,
+            200 * un.Mpc,
+            calc_1d=False,
+            calc_2d=True,
+            prefactor_fnc=prefactor,
+        )
+
+    with pytest.raises(
+        NotImplementedError, match="Cannot get variance while interpolating"
+    ):
+        calculate_ps(
+            test_lc * un.dimensionless_unscaled,
+            200 * un.Mpc,
+            get_variance=True,
+            interp="linear",
+        )
 
 
 @pytest.mark.parametrize("log_bins", [True, False])
@@ -163,7 +176,7 @@ def test_calculate_ps_corner_cases(test_lc, test_redshifts):
         calc_1d=True,
         interp=True,
         mu_min=0.5,
-        delta=True,
+        deltasq=True,
     )
 
     calculate_ps_lc(
@@ -173,10 +186,12 @@ def test_calculate_ps_corner_cases(test_lc, test_redshifts):
         calc_1d=True,
         interp=True,
         mu_min=0.5,
-        delta=False,
+        deltasq=False,
     )
 
-    with np.testing.assert_raises(ValueError):
+    with pytest.raises(
+        ValueError, match="ps_redshifts should be within the range of lc_redshifts"
+    ):
         calculate_ps_lc(
             test_lc * un.dimensionless_unscaled,
             200 * un.Mpc,
@@ -187,23 +202,13 @@ def test_calculate_ps_corner_cases(test_lc, test_redshifts):
         )
 
 
-def test_calculate_ps_w_var(test_lc, test_redshifts):
+def test_calculate_ps_with_variance(test_lc, test_redshifts):
     rng = np.random.default_rng()
     test_lc = rng.random((100, 100, 1000))
     test_redshifts = np.logspace(np.log10(5), np.log10(30), 1000)
     zs = [6.0]
 
-    out = calculate_ps_lc(
-        test_lc * un.dimensionless_unscaled,
-        200 * un.Mpc,
-        test_redshifts,
-        ps_redshifts=zs,
-        calc_2d=False,
-        calc_1d=True,
-        get_variance=True,
-    )
-    assert out["ps_1d"]["z = 6.0"].variance is not None
-    out = calculate_ps_lc(
+    ps1d, ps2d = calculate_ps_lc(
         test_lc * un.dimensionless_unscaled,
         200 * un.Mpc,
         test_redshifts,
@@ -212,19 +217,8 @@ def test_calculate_ps_w_var(test_lc, test_redshifts):
         calc_1d=True,
         get_variance=True,
     )
-    assert out["ps_2d"]["z = 6.0"].variance is not None
-    assert out["ps_1d"]["z = 6.0"].variance is not None
-
-    with np.testing.assert_raises(NotImplementedError):
-        calculate_ps_lc(
-            test_lc * un.dimensionless_unscaled,
-            200 * un.Mpc,
-            test_redshifts,
-            ps_redshifts=zs,
-            calc_1d=True,
-            get_variance=True,
-            interp="linear",
-        )
+    assert all(ps.variance is not None for ps in ps1d)
+    assert all(ps.variance is not None for ps in ps2d)
 
 
 def test_ps_avg():

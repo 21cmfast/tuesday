@@ -16,8 +16,8 @@ from powerbox.tools import (
 )
 from scipy.interpolate import RegularGridInterpolator
 
-from tuesday.core.psclasses import CylindricalPS, SphericalPS
-from tuesday.core.units import validate
+from ..units import validate
+from .psclasses import CylindricalPS, SphericalPS
 
 
 def get_chunk_indices(
@@ -65,7 +65,7 @@ def get_chunk_indices(
         )
     chunk_starts = np.array(chunk_starts, dtype=np.int32)
     chunk_ends = np.array(chunk_ends, dtype=np.int32)
-    return [(s, e) for s, e in zip(chunk_starts, chunk_ends, strict=False)]
+    return list(zip(chunk_starts, chunk_ends, strict=False))
 
 
 def calculate_ps(
@@ -85,7 +85,7 @@ def calculate_ps(
     prefactor_fnc: Callable | None = power2delta,
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
-) -> dict:
+) -> tuple[SphericalPS | None, CylindricalPS | None]:
     r"""Calculate power spectra from a lightcone or coeval box.
 
     Parameters
@@ -132,6 +132,18 @@ def calculate_ps(
     interp_points_generator : callable, optional
         A function that generates the points at which to interpolate the PS.
         See powerbox.tools.get_power documentation for more details.
+    get_variance : bool, optional
+        If True, compute the variance of the PS over the modes within each bin.
+        Default is False.
+
+    Returns
+    -------
+    ps1d : SphericalPS or None
+        The 1D power spectrum.
+        None if calc_1d is False.
+    ps2d : CylindricalPS or None
+        The 2D power spectrum.
+        None if calc_2d is False.
     """
     if not calc_1d and not calc_2d:
         raise ValueError("At least one of calc_1d or calc_2d must be True.")
@@ -169,6 +181,8 @@ def calculate_ps(
         )
         ps_unit = chunk.unit**2
 
+    ps2d = None
+    ps1d = None
     if calc_2d:
         results = get_power(
             chunk,
@@ -187,10 +201,11 @@ def calculate_ps(
             interpolation_method=interp,
             return_sumweights=True,
             get_variance=get_variance,
+            bins_upto_boxlen=True,
         )
         if get_variance:
-            ps_2d, kperp, var, nmodes, kpar = results
-            lc_var_2d = var
+            ps_2d, kperp, variance, nmodes, kpar = results
+            lc_var_2d = variance
         else:
             ps_2d, kperp, nmodes, kpar = results
 
@@ -199,14 +214,14 @@ def calculate_ps(
         if get_variance:
             lc_var_2d = lc_var_2d[..., kpar > 0]
         kpar = kpar[kpar > 0]
-        out["ps_2d"] = CylindricalPS(
+        ps2d = CylindricalPS(
             ps=lc_ps_2d * ps_unit,
             kperp=kperp.squeeze() / box_length.unit,
             kpar=kpar / box_length.unit,
             redshift=chunk_redshift,
             n_modes=nmodes,
             variance=lc_var_2d * ps_unit**2 if get_variance else None,
-            is_deltasq=bool(prefactor_fnc is not None),
+            is_deltasq=prefactor_fnc is not None,
         )
 
     if calc_1d:
@@ -226,6 +241,7 @@ def calculate_ps(
             interp_points_generator=interp_points_generator,
             return_sumweights=True,
             get_variance=get_variance,
+            bins_upto_boxlen=True,
         )
         if get_variance:
             ps_1d, k, var_1d, nmodes_1d = results
@@ -234,16 +250,16 @@ def calculate_ps(
             ps_1d, k, nmodes_1d = results
         lc_ps_1d = ps_1d
 
-        out["ps_1d"] = SphericalPS(
+        ps1d = SphericalPS(
             ps=lc_ps_1d * ps_unit,
             k=k.squeeze() / box_length.unit,
             redshift=chunk_redshift,
             n_modes=nmodes_1d.squeeze(),
             variance=lc_var_1d * ps_unit**2 if get_variance else None,
-            is_deltasq=bool(prefactor_fnc is not None),
+            is_deltasq=prefactor_fnc is not None,
         )
 
-    return out
+    return ps1d, ps2d
 
 
 def calculate_ps_lc(
@@ -255,22 +271,22 @@ def calculate_ps_lc(
     chunk_indices: list | None = None,
     chunk_size: int | None = None,
     chunk_skip: int | None = None,
-    calc_2d: bool | None = True,
+    calc_2d: bool = True,
     kperp_bins: int | None = None,
     k_weights_2d: Callable | None = ignore_zero_ki,
     k_weights_1d: Callable | None = ignore_zero_ki,
-    log_bins: bool | None = True,
-    calc_1d: bool | None = True,
+    log_bins: bool = True,
+    calc_1d: bool = True,
     k_bins: int | None = None,
     mu_min: float | None = None,
-    bin_ave: bool | None = True,
+    bin_ave: bool = True,
     interp: bool | None = None,
-    delta: bool | None = True,
+    deltasq: bool = True,
     interp_points_generator: Callable | None = None,
-    get_variance: bool | None = False,
+    get_variance: bool = False,
     transform_ps1d: Callable | None = None,
     transform_ps2d: Callable | None = None,
-) -> dict:
+) -> tuple[list[SphericalPS] | None, list[CylindricalPS] | None]:
     r"""
     Calculate the PS by chunking a lightcone.
 
@@ -329,6 +345,21 @@ def calculate_ps_lc(
     transform_ps1d : Callable, optional
         A function that takes in a SphericalPS object and returns
         a new SphericalPS object.
+    get_variance : bool, optional
+        Whether to calculate the variance of the PS.
+        Default is False.
+    chunk_indices : list, optional
+        A list of tuples specifying the start and end indices of the lightcone
+        chunks for which power spectra are calculated.
+
+    Returns
+    -------
+    ps1d : list of SphericalPS or None
+        The 1D power spectrum for each chunk.
+        None if calc_1d is False.
+    ps2d : list of CylindricalPS or None
+        The 2D power spectrum for each chunk.
+        None if calc_2d is False.
     """
     validate(lc, "temperature")
     validate(box_length, "length")
@@ -364,13 +395,11 @@ def calculate_ps_lc(
         if interp is not None:
             interp_points_generator = regular_angular_generator()
 
-    prefactor_fnc = power2delta if delta else None
+    prefactor_fnc = power2delta if deltasq else None
 
-    out = {}
-    if calc_1d:
-        out["ps_1d"] = {}
-    if calc_2d:
-        out["ps_2d"] = {}
+    ps2ds = []
+    ps1ds = []
+
     for chunk in chunk_indices:
         start = chunk[0]
         end = chunk[1]
@@ -378,7 +407,7 @@ def calculate_ps_lc(
         chunk = lc[..., start:end]
         if lc_redshifts is not None:
             chunk_z = lc_redshifts[(start + end) // 2]
-        ps_chunk = calculate_ps(
+        ps1d, ps2d = calculate_ps(
             chunk=chunk,
             box_length=box_length,
             chunk_redshift=chunk_z,
@@ -395,22 +424,15 @@ def calculate_ps_lc(
             interp_points_generator=interp_points_generator,
             get_variance=get_variance,
         )
-        if calc_1d:
-            if transform_ps1d is not None:
-                out["ps_1d"]["z = " + str(np.round(chunk_z, 2))] = transform_ps1d(
-                    ps_chunk["ps_1d"]
-                )
-            else:
-                out["ps_1d"]["z = " + str(np.round(chunk_z, 2))] = ps_chunk["ps_1d"]
-        if calc_2d:
-            if transform_ps2d is not None:
-                out["ps_2d"]["z = " + str(np.round(chunk_z, 2))] = transform_ps2d(
-                    ps_chunk["ps_2d"]
-                )
-            else:
-                out["ps_2d"]["z = " + str(np.round(chunk_z, 2))] = ps_chunk["ps_2d"]
+        if ps1d is not None and transform_ps1d is not None:
+            ps1d = transform_ps1d(ps1d)
+        if ps2d is not None and transform_ps2d is not None:
+            ps2d = transform_ps2d(ps2d)
 
-    return out
+        ps1ds.append(ps1d)
+        ps2ds.append(ps2d)
+
+    return ps1ds if calc_1d else None, ps2ds if calc_2d else None
 
 
 def calculate_ps_coeval(
@@ -428,12 +450,12 @@ def calculate_ps_coeval(
     mu_min: float | None = None,
     bin_ave: bool | None = True,
     interp: bool | None = None,
-    delta: bool | None = True,
+    deltasq: bool | None = True,
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
     transform_ps1d: Callable | None = None,
     transform_ps2d: Callable | None = None,
-) -> dict:
+) -> tuple[SphericalPS | None, CylindricalPS | None]:
     r"""
     Calculate the PS by chunking a lightcone.
 
@@ -494,6 +516,32 @@ def calculate_ps_coeval(
     transform_ps1d : Callable, optional
         A function that takes in a SphericalPS object and returns
         a new SphericalPS object.
+    get_variance : bool, optional
+        Whether to calculate the variance of the PS.
+        Default is False.
+    interp : bool, optional
+        If True, use linear interpolation to calculate the PS
+        at the points specified by interp_points_generator.
+        Note that this significantly slows down the calculation.
+    deltasq : bool, optional
+        Whether to convert the power P [mK^2 Mpc^{-3}] to the dimensionless
+        power :math:`\\delta^2` [mK^2].
+        Default is True.
+    transform_ps1d : Callable, optional
+        A function that takes in a SphericalPS object and returns
+        a new SphericalPS object.
+    transform_ps2d : Callable, optional
+        A function that takes in a CylindricalPS object and returns
+        a new CylindricalPS object.
+
+    Returns
+    -------
+    ps1d : SphericalPS or None
+        The 1D power spectrum.
+        None if calc_1d is False.
+    ps2d : CylindricalPS or None
+        The 2D power spectrum.
+        None if calc_2d is False.
     """
     validate(box, "temperature")
     validate(box_length, "length")
@@ -521,9 +569,9 @@ def calculate_ps_coeval(
         k_weights_1d = ignore_zero_ki
         if interp is not None:
             interp_points_generator = regular_angular_generator()
-    prefactor_fnc = power2delta if delta else None
+    prefactor_fnc = power2delta if deltasq else None
 
-    coeval_ps = calculate_ps(
+    ps1d, ps2d = calculate_ps(
         chunk=box,
         box_length=box_length,
         chunk_redshift=box_redshift,
@@ -541,12 +589,12 @@ def calculate_ps_coeval(
         get_variance=get_variance,
     )
     if calc_1d and transform_ps1d is not None:
-        coeval_ps["ps_1d"] = transform_ps1d(coeval_ps["ps_1d"])
+        ps1d = transform_ps1d(ps1d)
 
     if calc_2d and transform_ps2d is not None:
-        coeval_ps["ps_2d"] = transform_ps2d(coeval_ps["ps_2d"])
+        ps2d = transform_ps2d(ps2d)
 
-    return coeval_ps
+    return ps1d, ps2d
 
 
 def bin_kpar(

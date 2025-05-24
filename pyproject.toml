@@ -119,6 +119,9 @@ ignore = [
     "ERA",
     "DTZ",
 ]
+"docs/tutorials/*.ipynb" = [
+    "T201", # print statements
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = 'numpy'
