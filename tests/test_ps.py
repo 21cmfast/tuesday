@@ -38,14 +38,14 @@ def test_calculate_ps_errors(test_lc):
             200 * un.Mpc,
             calc_1d=True,
         )
-    with pytest.raises(TypeError, match="box_lenth should be a quantity"):
+    with pytest.raises(TypeError, match="box_length should be a Quantity"):
         calculate_ps(
             test_lc * un.mK,
             200,  # No unit
             calc_1d=True,
         )
     with pytest.raises(
-        ValueError, match="At leats one of calc_1d or calc_2d must be True"
+        ValueError, match="At least one of calc_1d or calc_2d must be True"
     ):
         calculate_ps(
             test_lc * un.mK,

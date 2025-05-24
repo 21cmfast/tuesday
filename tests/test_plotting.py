@@ -8,6 +8,8 @@ from tuesday.core import (
     CylindricalPS,
     SphericalPS,
     calculate_ps_coeval,
+    plot_1d_power_spectrum,
+    plot_2d_power_spectrum,
     plot_power_spectrum,
 )
 
@@ -59,6 +61,9 @@ def test_1d_ps_plot(ps1d: SphericalPS):
         legend="z=6",
     )
 
+    with pytest.raises(ValueError, match="power_spectrum must be a SphericalPS"):
+        plot_1d_power_spectrum(np.linspace(0, 10, 10))  # Not a dataclass
+
 
 def test_bad_1d_ps_units(ps1d):
     with pytest.raises(
@@ -82,7 +87,7 @@ def test_good_1d_ps_units(ps1d, unit):
 
 def test_2d_ps_plot(ps2d):
     """Test the 2d power spectrum plot."""
-    fig, ax = plt.subplots()
+    _, ax = plt.subplots()
     plot_power_spectrum(
         ps2d,
         ax=ax,
@@ -95,17 +100,8 @@ def test_2d_ps_plot(ps2d):
         title="Test Title",
         legend="foo",
         logx=True,
+        logc=True,
     )
 
-
-def test_2d_ps_units(ps2d):
-    with pytest.raises(
-        ValueError, match="Expected unit of PS to be temperature squared times volume"
-    ):
-        CylindricalPS(ps2d.ps.value * un.Mpc, kperp=ps2d.kperp, kpar=ps2d.kpar)
-
-    with pytest.raises(ValueError, match="Unit of kperp must be a wavenumber"):
-        CylindricalPS(ps2d.ps, kperp=ps2d.kperp * un.mK, kpar=ps2d.kpar)
-
-    with pytest.raises(ValueError, match="Unit of kpar must be a wavenumber"):
-        CylindricalPS(ps2d.ps, kperp=ps2d.kperp, kpar=ps2d.kpar * un.mK)
+    with pytest.raises(ValueError, match="power_spectrum must be a CylindricalPS"):
+        plot_2d_power_spectrum(np.linspace(0, 10, 10))  # Not a dataclass

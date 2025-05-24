@@ -8,7 +8,7 @@ from matplotlib import rcParams
 from matplotlib.colors import LogNorm
 from scipy.ndimage import gaussian_filter
 
-from tuesday.core import CylindricalPS, SphericalPS
+from .. import CylindricalPS, SphericalPS
 
 
 def plot_1d_power_spectrum(
