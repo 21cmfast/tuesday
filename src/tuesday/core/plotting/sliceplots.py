@@ -28,7 +28,7 @@ colormaps.register(cmap=eor_colour)
 
 
 def plot_slice(
-    slice: un.Quantity,
+    img_slice: un.Quantity,
     xaxis: un.Quantity,
     yaxis: un.Quantity,
     *,
@@ -44,7 +44,7 @@ def plot_slice(
     cmap: str = "viridis",
 ) -> plt.Axes:
     """Plot a 2D slice of the data."""
-    validate(slice, "temperature")
+    validate(img_slice, "temperature")
     validate(yaxis, "length")
     rcParams.update({"font.size": fontsize})
     if xaxis.unit.physical_type != "dimensionless":
@@ -54,21 +54,22 @@ def plot_slice(
     cmap_kwargs = {}
     if vmin is None:
         if log[2]:
-            cmap_kwargs["vmin"] = np.nanpercentile(np.log10(slice.value), 5)
+            cmap_kwargs["vmin"] = np.nanpercentile(np.log10(img_slice.value), 5)
         else:
-            cmap_kwargs["vmin"] = np.nanpercentile(slice.value, 5)
+            cmap_kwargs["vmin"] = np.nanpercentile(img_slice.value, 5)
     else:
         cmap_kwargs["vmin"] = vmin
     if vmax is None:
         if log[2]:
-            cmap_kwargs["vmax"] = np.nanpercentile(np.log10(slice.value), 95)
+            cmap_kwargs["vmax"] = np.nanpercentile(np.log10(img_slice.value), 95)
         else:
-            cmap_kwargs["vmax"] = np.nanpercentile(slice.value, 95)
+            cmap_kwargs["vmax"] = np.nanpercentile(img_slice.value, 95)
     else:
         cmap_kwargs["vmax"] = vmax
     if log[2]:
         cmap_kwargs = {}
         cmap_kwargs["norm"] = LogNorm(vmin=vmin, vmax=vmax)
+<<<<<<< HEAD
     im = ax.pcolormesh(
         xaxis.value,
         yaxis.value,
@@ -77,6 +78,9 @@ def plot_slice(
         shading="auto",
         **cmap_kwargs,
     )
+=======
+    im = ax.pcolormesh(xaxis.value,yaxis.value,img_slice.value.T, cmap=cmap, shading='auto', **cmap_kwargs)
+>>>>>>> d842281 (fix: format)
 
     if log[0]:
         ax.set_xscale("log")
@@ -87,8 +91,13 @@ def plot_slice(
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+<<<<<<< HEAD
 
     cbar = plt.colorbar(im, ax=ax, label=clabel)
+=======
+    
+    plt.colorbar(im, ax=ax, label=clabel)
+>>>>>>> d842281 (fix: format)
 
     return ax
 
@@ -104,6 +113,7 @@ def lc2slice_x(
         box: un.Quantity, redshift: np.ndarray | un.Quantity
     ) -> un.Quantity:
         """Get the slice index for a given redshift range."""
+<<<<<<< HEAD
         if zmin is None:
             idx_min = 0
         else:
@@ -115,6 +125,13 @@ def lc2slice_x(
 
         return box[idx, :, idx_min:idx_max]
 
+=======
+        idx_min = 0 if zmin is None else np.argmin(np.abs(redshift - zmin))
+        idx_max = box.shape[-1] if zmax is None \
+            else np.argmin(np.abs(redshift - zmax)) + 1
+        
+        return box[idx,:,idx_min:idx_max]
+>>>>>>> d842281 (fix: format)
     return slice_index
 
 
@@ -129,6 +146,7 @@ def lc2slice_y(
         box: un.Quantity, redshift: np.ndarray | un.Quantity
     ) -> un.Quantity:
         """Get the slice index for a given redshift range."""
+<<<<<<< HEAD
         if zmin is None:
             idx_min = 0
         else:
@@ -140,6 +158,13 @@ def lc2slice_y(
 
         return box[:, idx, idx_min:idx_max]
 
+=======
+        idx_min = 0 if zmin is None else np.argmin(np.abs(redshift - zmin))
+        idx_max = box.shape[-1] if zmax is None \
+            else np.argmin(np.abs(redshift - zmax)) + 1
+        
+        return box[:,idx,idx_min:idx_max]
+>>>>>>> d842281 (fix: format)
     return slice_index
 
 
