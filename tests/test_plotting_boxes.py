@@ -13,6 +13,7 @@ from tuesday.core import (
     plot_slice,
     plot_lightcone_slice,
     plot_coeval_slice,
+    plot_pdf,
 )
 
 
@@ -74,3 +75,14 @@ def test_lightcone_slice(test_lc, test_redshifts):
     
     ax = plot_lightcone_slice(test_lc, box_len, test_redshifts, 
                               transform2slice=lc2slice_y(idx=5))
+
+def test_pdf(test_coeval):
+    """Test the plot_slice function."""
+
+    ax = plot_pdf(test_coeval, 
+                    title="tiny box",
+                    hist_kwargs={"bins": 50, "density": True, "histtype": "step"})
+    ax = plot_pdf(test_coeval, ax = ax, 
+                  hist_kwargs={"bins": 50, "density": True, 
+                               "histtype": "step", "color": "red"})
+ 

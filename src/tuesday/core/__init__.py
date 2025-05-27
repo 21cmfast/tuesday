@@ -19,6 +19,7 @@ __all__ = [
     "plot_slice",
     "plot_lightcone_slice",
     "plot_coeval_slice",
+    "plot_pdf",
     "validate",
 ]
 from .plotting.powerspectra import (
@@ -35,6 +36,7 @@ from .plotting.sliceplots import (
     plot_slice,
     plot_lightcone_slice,
     plot_coeval_slice,
+    plot_pdf,
 )
 from .summaries.powerspectra import (
     bin_kpar,

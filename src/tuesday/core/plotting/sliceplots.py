@@ -316,3 +316,71 @@ def plot_coeval_slice(
                       clabel=clabel,
                       cmap=cmap,
                       ax=ax)
+
+def plot_pdf(box: un.Quantity,
+             *,
+            fontsize: float | None = 16,
+            title: str | None = None,
+            xlabel: str | None = None,
+            ylabel: str | None = None,
+            logx: bool = False,
+            ax: plt.Axes | None = None,
+            smooth: bool | float = False,
+            hist_kwargs) -> plt.Axes:
+    """Plot a pxiel distribution function (PDF) of the box.
+    
+    Parameters
+    ----------
+    box : un.Quantity
+        The box data to plot.
+    fontsize : float, optional
+        The font size for the plot.
+    title : str, optional
+        The title of the plot.
+    xlabel : str, optional
+        The label for the x-axis.
+    ylabel : str, optional
+        The label for the y-axis.
+    logx : bool, optional
+        Whether to use a logarithmic scale for the x-axis.
+    ax : plt.Axes, optional
+        The axes to plot on. If None, a new figure and axes will be created.
+    smooth : bool | float, optional
+        Whether to apply Gaussian smoothing to the box data.
+        If True, a default sigma of 1.0 will be used.
+        If a float, it will be used as the sigma for the Gaussian filter.
+
+    Returns
+    -------
+    plt.Axes
+        The axes with the PDF plot.
+
+    
+    """
+    rcParams.update({"font.size": fontsize})
+
+    if smooth:
+        if isinstance(smooth, bool):
+            smooth = 1.0
+        box = gaussian_filter(box.value, sigma=smooth) * box.unit
+    if ax is None:
+        _, ax = plt.subplots(figsize=(7, 6))
+    ax.hist(
+        box.value.flatten(),
+        **hist_kwargs,
+    )
+    if xlabel is None:
+        if box.unit.physical_type == un.get_physical_type("temperature"):
+            xlabel = f"Brightness Temperature " + f" [{box.unit:latex_inline}]"
+        elif box.unit.is_equivalent(un.dimensionless_unscaled):
+            xlabel = "Density Contrast"
+        else:
+            xlabel = f"{box.unit.physical_type} " + f" [{box.unit:latex_inline}]"
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("Counts" if ylabel is None else ylabel)
+    if title is not None:
+        ax.set_title(title)
+    if logx:
+        ax.set_xscale("log")
+    return ax

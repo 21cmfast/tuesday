@@ -13,20 +13,20 @@ from tuesday.core import (
 )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def test_coeval():
     """Fixture to create a random power spectrum."""
     rng = np.random.default_rng()
     return rng.random((100, 100, 100))
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def test_lc():
     rng = np.random.default_rng()
     return rng.random((100, 100, 300))
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def test_redshifts():
     return np.logspace(np.log10(5), np.log10(30), 300)
 
