@@ -1,14 +1,15 @@
 """Module for LC and coeval sliceplots."""
+
+from collections.abc import Callable
+
 import matplotlib.pyplot as plt
 import numpy as np
-from astropy.cosmology.units import littleh
 from astropy import units as un
+from matplotlib import colormaps, colors, rcParams
 from matplotlib.colors import LogNorm
 from scipy.ndimage import gaussian_filter
+
 from ..units import validate
-from typing import Callable
-from matplotlib import rcParams
-from matplotlib import colors, colormaps
 
 try:
     eor_colour = colors.LinearSegmentedColormap.from_list(
@@ -72,21 +73,29 @@ def plot_slice(
     if log[2]:
         cmap_kwargs = {}
         cmap_kwargs["norm"] = LogNorm(vmin=vmin, vmax=vmax)
-    im = ax.pcolormesh(xaxis.value,yaxis.value,img_slice.value.T, cmap=cmap, shading='auto', **cmap_kwargs)
+    im = ax.pcolormesh(
+        xaxis.value,
+        yaxis.value,
+        img_slice.value.T,
+        cmap=cmap,
+        shading="auto",
+        **cmap_kwargs,
+    )
 
     if log[0]:
-        ax.set_xscale('log')
+        ax.set_xscale("log")
     if log[1]:
-        ax.set_yscale('log')
+        ax.set_yscale("log")
     if title is not None:
         ax.set_title(title)
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    
+
     plt.colorbar(im, ax=ax, label=clabel)
 
     return ax
+
 
 def lc2slice_x(
     zmin: float | None = None,
@@ -94,14 +103,20 @@ def lc2slice_x(
     idx: int | None = 0,
 ) -> un.Quantity:
     """Get the slice index for a given redshift range."""
-    def slice_index(box: un.Quantity, redshift: np.ndarray | un.Quantity) -> un.Quantity:
+
+    def slice_index(
+        box: un.Quantity, redshift: np.ndarray | un.Quantity
+    ) -> un.Quantity:
         """Get the slice index for a given redshift range."""
         idx_min = 0 if zmin is None else np.argmin(np.abs(redshift - zmin))
-        idx_max = box.shape[-1] if zmax is None \
-            else np.argmin(np.abs(redshift - zmax)) + 1
-        
-        return box[idx,:,idx_min:idx_max]
+        idx_max = (
+            box.shape[-1] if zmax is None else np.argmin(np.abs(redshift - zmax)) + 1
+        )
+
+        return box[idx, :, idx_min:idx_max]
+
     return slice_index
+
 
 def lc2slice_y(
     zmin: float | None = None,
@@ -109,41 +124,56 @@ def lc2slice_y(
     idx: int | None = 0,
 ) -> un.Quantity:
     """Get the slice index for a given redshift range."""
-    def slice_index(box: un.Quantity, redshift: np.ndarray | un.Quantity) -> un.Quantity:
+
+    def slice_index(
+        box: un.Quantity, redshift: np.ndarray | un.Quantity
+    ) -> un.Quantity:
         """Get the slice index for a given redshift range."""
         idx_min = 0 if zmin is None else np.argmin(np.abs(redshift - zmin))
-        idx_max = box.shape[-1] if zmax is None \
-            else np.argmin(np.abs(redshift - zmax)) + 1
-        
-        return box[:,idx,idx_min:idx_max]
+        idx_max = (
+            box.shape[-1] if zmax is None else np.argmin(np.abs(redshift - zmax)) + 1
+        )
+
+        return box[:, idx, idx_min:idx_max]
+
     return slice_index
+
 
 def coeval2slice_x(
     idx: int | None = 0,
 ) -> un.Quantity:
     """Slice the box along the x-axis."""
+
     def slice_index(box: un.Quantity) -> un.Quantity:
         """Slice the box along the x-axis."""
-        return box[idx,:,:]
+        return box[idx, :, :]
+
     return slice_index
+
 
 def coeval2slice_y(
     idx: int | None = 0,
 ) -> un.Quantity:
     """Slice the box along the y-axis."""
+
     def slice_index(box: un.Quantity) -> un.Quantity:
         """Slice the box along the y-axis."""
-        return box[:,idx,:]
+        return box[:, idx, :]
+
     return slice_index
+
 
 def coeval2slice_z(
     idx: int | None = 0,
 ) -> un.Quantity:
     """Slice the box along the z-axis."""
+
     def slice_index(box: un.Quantity) -> un.Quantity:
         """Slice the box along the z-axis."""
-        return box[:,:,idx]
+        return box[:, :, idx]
+
     return slice_index
+
 
 def plot_lightcone_slice(
     lightcone: un.Quantity,
@@ -168,7 +198,7 @@ def plot_lightcone_slice(
     transform2slice: Callable | None = None,
 ) -> plt.Axes:
     """Plot a slice from a lightcone of shape (HII_DIM, HII_DIM, n_z).
-    
+
     Parameters
     ----------
     lightcone : un.Quantity
@@ -204,17 +234,17 @@ def plot_lightcone_slice(
     ax : plt.Axes, optional
         The axes to plot on. If None, a new figure and axes will be created.
     smooth : bool | float, optional
-        Whether to apply Gaussian smoothing to the lightcone data. 
+        Whether to apply Gaussian smoothing to the lightcone data.
         If True, a default sigma of 1.0 will be used.
         If a float, it will be used as the sigma for the Gaussian filter.
-    
-    
+
+
     """
     validate(lightcone, "temperature")
     validate(box_length, "length")
     rcParams.update({"font.size": fontsize})
     if ax is None:
-        _, ax = plt.subplots(figsize=(20,4))
+        _, ax = plt.subplots(figsize=(20, 4))
     if transform2slice is not None:
         lightcone = transform2slice(lightcone, redshift)
     else:
@@ -229,30 +259,37 @@ def plot_lightcone_slice(
 
     if clabel is None:
         if lightcone.unit.physical_type == un.get_physical_type("temperature"):
-            clabel = f"Brightness Temperature " + f" [{lightcone.unit:latex_inline}]"
+            clabel = "Brightness Temperature " + f" [{lightcone.unit:latex_inline}]"
         elif lightcone.unit.is_equivalent(un.dimensionless_unscaled):
             clabel = "Density Contrast"
         else:
-            clabel = f"{lightcone.unit.physical_type} " + f" [{lightcone.unit:latex_inline}]"
+            clabel = (
+                f"{lightcone.unit.physical_type} " + f" [{lightcone.unit:latex_inline}]"
+            )
     if vmin is None and vmax is None:
         if logc:
             vmin = np.nanpercentile(np.log10(lightcone.value), 5)
-            vmax = -1.*vmin/0.86 + vmin
+            vmax = -1.0 * vmin / 0.86 + vmin
         else:
             vmin = np.nanpercentile(lightcone.value, 5)
-            vmax = -1.*vmin/0.86 + vmin
-    return plot_slice(lightcone.T, 
-                      redshift, 
-                      yaxis,
-                      vmin=vmin,
-                      vmax=vmax,
-                      log = [logx,logy,logc],
-                      title=title, 
-                      xlabel="Redshift" if xlabel is None else xlabel, 
-                      ylabel= f"Distance [{box_length.unit:latex_inline}]" if ylabel is None else ylabel,
-                      clabel=clabel, 
-                      cmap=cmap,
-                      ax=ax)
+            vmax = -1.0 * vmin / 0.86 + vmin
+    return plot_slice(
+        lightcone.T,
+        redshift,
+        yaxis,
+        vmin=vmin,
+        vmax=vmax,
+        log=[logx, logy, logc],
+        title=title,
+        xlabel="Redshift" if xlabel is None else xlabel,
+        ylabel=f"Distance [{box_length.unit:latex_inline}]"
+        if ylabel is None
+        else ylabel,
+        clabel=clabel,
+        cmap=cmap,
+        ax=ax,
+    )
+
 
 def plot_coeval_slice(
     coeval: un.Quantity,
@@ -293,36 +330,45 @@ def plot_coeval_slice(
 
     if clabel is None:
         if coeval.unit.physical_type == un.get_physical_type("temperature"):
-            clabel = f"Brightness Temperature " + f" [{coeval.unit:latex_inline}]"
+            clabel = "Brightness Temperature " + f" [{coeval.unit:latex_inline}]"
         elif coeval.unit.is_equivalent(un.dimensionless_unscaled):
             clabel = "Density Contrast"
         else:
-            clabel = f"{coeval.unit.physical_type} "+ f" [{coeval.unit:latex_inline}]"
-    return plot_slice(coeval,
-                      xaxis,
-                      yaxis,
-                      vmin=vmin,
-                      vmax=vmax,
-                      log=[logx, logy, logc],
-                      title=title,
-                      xlabel=f"Distance [{box_length.unit:latex_inline}]" if xlabel is None else xlabel,
-                      ylabel=f"Distance [{box_length.unit:latex_inline}]" if ylabel is None else ylabel,
-                      clabel=clabel,
-                      cmap=cmap,
-                      ax=ax)
+            clabel = f"{coeval.unit.physical_type} " + f" [{coeval.unit:latex_inline}]"
+    return plot_slice(
+        coeval,
+        xaxis,
+        yaxis,
+        vmin=vmin,
+        vmax=vmax,
+        log=[logx, logy, logc],
+        title=title,
+        xlabel=f"Distance [{box_length.unit:latex_inline}]"
+        if xlabel is None
+        else xlabel,
+        ylabel=f"Distance [{box_length.unit:latex_inline}]"
+        if ylabel is None
+        else ylabel,
+        clabel=clabel,
+        cmap=cmap,
+        ax=ax,
+    )
 
-def plot_pdf(box: un.Quantity,
-             *,
-            fontsize: float | None = 16,
-            title: str | None = None,
-            xlabel: str | None = None,
-            ylabel: str | None = None,
-            logx: bool = False,
-            ax: plt.Axes | None = None,
-            smooth: bool | float = False,
-            hist_kwargs) -> plt.Axes:
+
+def plot_pdf(
+    box: un.Quantity,
+    *,
+    fontsize: float | None = 16,
+    title: str | None = None,
+    xlabel: str | None = None,
+    ylabel: str | None = None,
+    logx: bool = False,
+    ax: plt.Axes | None = None,
+    smooth: bool | float = False,
+    hist_kwargs,
+) -> plt.Axes:
     """Plot a pxiel distribution function (PDF) of the box.
-    
+
     Parameters
     ----------
     box : un.Quantity
@@ -349,7 +395,7 @@ def plot_pdf(box: un.Quantity,
     plt.Axes
         The axes with the PDF plot.
 
-    
+
     """
     rcParams.update({"font.size": fontsize})
 
@@ -365,7 +411,7 @@ def plot_pdf(box: un.Quantity,
     )
     if xlabel is None:
         if box.unit.physical_type == un.get_physical_type("temperature"):
-            xlabel = f"Brightness Temperature " + f" [{box.unit:latex_inline}]"
+            xlabel = "Brightness Temperature " + f" [{box.unit:latex_inline}]"
         elif box.unit.is_equivalent(un.dimensionless_unscaled):
             xlabel = "Density Contrast"
         else:
