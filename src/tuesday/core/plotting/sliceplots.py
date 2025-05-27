@@ -11,20 +11,24 @@ from scipy.ndimage import gaussian_filter
 
 from ..units import validate
 
-eor_colour = colors.LinearSegmentedColormap.from_list(
-    "EoR",
-    [
-        (0, "white"),
-        (0.21, "yellow"),
-        (0.42, "orange"),
-        (0.63, "red"),
-        (0.86, "black"),
-        (0.9, "blue"),
-        (1, "cyan"),
-    ],
-)
+try:
+    eor_colour = colors.LinearSegmentedColormap.from_list(
+        "EoR",
+        [
+            (0, "white"),
+            (0.21, "yellow"),
+            (0.42, "orange"),
+            (0.63, "red"),
+            (0.86, "black"),
+            (0.9, "blue"),
+            (1, "cyan"),
+        ],
+    )
 
-colormaps.register(cmap=eor_colour)
+    colormaps.register(cmap=eor_colour)
+except ValueError:
+    # If the colormap already exists, we can ignore this error.
+    pass
 
 
 def plot_slice(
