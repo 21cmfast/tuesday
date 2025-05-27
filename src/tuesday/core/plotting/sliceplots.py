@@ -13,7 +13,7 @@ from ..units import validate
 
 try:
     eor_colour = colors.LinearSegmentedColormap.from_list(
-        "EoR",
+        "eor",
         [
             (0, "white"),
             (0.21, "yellow"),
@@ -185,7 +185,7 @@ def plot_lightcone_slice(
     xlabel: str | None = None,
     ylabel: str | None = None,
     clabel: str | None = None,
-    cmap: str = "EoR",
+    cmap: str = "eor",
     logx: bool = False,
     logy: bool = False,
     logc: bool = False,
