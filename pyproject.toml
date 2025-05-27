@@ -8,7 +8,7 @@ parentdir_prefix_version = "tuesday-"
 fallback_version  = "0.0.0"
 
 [project]
-name = "tuesday"
+name = "tuesday-eor"
 description = "Tools for post-processing and computing summaries of 21cmFAST simulations"
 readme = "README.rst"
 authors = [
@@ -31,6 +31,7 @@ classifiers = [
 ]
 
 dependencies = [
+    "21cmfast",
     "astropy>=7.0.1",
     "attrs>=25.3.0",
     "numpy>=2",
@@ -49,14 +50,14 @@ tests = [
     "sphinx",
 ]
 dev = [
-    "tuesday[tests,21cmfast]"
+    "tuesday-eor[tests,21cmfast]"
 ]
 
 
 [project.urls]
-Repository = "https://github.com/21cmfast/py21cmfast-tools"
-Issues = "https://github.com/21cmfast/py21cmfast-tools/issues"
-Changelog = "https://github.com/21cmfast/py21cmfast-tools/releases"
+Repository = "https://github.com/21cmfast/tuesday"
+Issues = "https://github.com/21cmfast/tuesday/issues"
+Changelog = "https://github.com/21cmfast/tuesday/releases"
 
 [tool.pytest.ini_options]
 addopts = "--durations=25 --cov tuesday --cov-config=.coveragerc --cov-report xml:./coverage.xml "
@@ -134,9 +135,16 @@ property-decorators = [
 max-complexity = 21
 
 [tool.uv.sources]
-21cmfast = { git = "https://github.com/21cmfast/21cmfast", rev = "v4-prep" }
+21cmfast = { git = "https://github.com/21cmFAST/21cmFAST" }
 
 [dependency-groups]
 21cmfast = [
     "21cmfast",
+]
+dev = [
+    "coverage>=7.8.2",
+    "pre-commit>=4.2.0",
+    "pytest>=8.3.5",
+    "pytest-cov>=6.1.1",
+    "sphinx>=8.2.3",
 ]
