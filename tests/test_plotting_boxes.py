@@ -13,6 +13,7 @@ from tuesday.core import (
     plot_coeval_slice,
     plot_lightcone_slice,
     plot_pdf,
+    plot_slice,
 )
 
 
@@ -58,7 +59,10 @@ def test_coeval_slice(test_coeval):
     )
 
     ax = plot_coeval_slice(
-        test_coeval, 300 * un.cm, transform2slice=coeval2slice_x(idx=5)
+        test_coeval.value*un.mK**2, 300 * un.cm, transform2slice=coeval2slice_x(idx=5), smooth=True
+    )
+    ax = plot_coeval_slice(
+        test_coeval.value*un.dimensionless_unscaled, 300 * un.cm, smooth=True
     )
 
 
@@ -66,7 +70,7 @@ def test_lightcone_slice(test_lc, test_redshifts):
     """Test the plot_lightcone_slice function."""
     box_len = 300 * un.cm
     ax = plot_lightcone_slice(
-        test_lc,
+        test_lc.value*un.dimensionless_unscaled,
         box_len,
         test_redshifts,
         title="tiny lightcone",
@@ -77,7 +81,7 @@ def test_lightcone_slice(test_lc, test_redshifts):
     assert ax.get_title() == "tiny lightcone"
 
     ax = plot_lightcone_slice(
-        test_lc,
+        test_lc.value*un.mK**2,
         box_len,
         test_redshifts,
         vmin=-0.5,
@@ -89,7 +93,10 @@ def test_lightcone_slice(test_lc, test_redshifts):
     )
 
     ax = plot_lightcone_slice(
-        test_lc, box_len, test_redshifts, transform2slice=lc2slice_y(idx=5)
+        test_lc, box_len, test_redshifts, transform2slice=lc2slice_y(idx=5), smooth=True,
+    )
+    ax = plot_lightcone_slice(
+        test_lc, box_len, test_redshifts, smooth=True,
     )
 
 
@@ -100,9 +107,43 @@ def test_pdf(test_coeval):
         test_coeval,
         title="tiny box",
         hist_kwargs={"bins": 50, "density": True, "histtype": "step"},
+        smooth=True,
     )
     ax = plot_pdf(
-        test_coeval,
+        test_coeval.value*un.mK**2,
+        ax=ax, logx=True,
+        hist_kwargs={"bins": 50, "density": True, "histtype": "step", "color": "red"},
+    )
+    ax = plot_pdf(
+        test_coeval.value*un.dimensionless_unscaled,
         ax=ax,
         hist_kwargs={"bins": 50, "density": True, "histtype": "step", "color": "red"},
+    )
+
+def test_plot_slice(test_coeval):
+    """Test the plot_slice function."""
+    box_len = 300 * un.cm
+    ax = plot_slice(
+        1.+abs(test_coeval[:,:,1].value) * un.dimensionless_unscaled, 
+        np.linspace(0,box_len.value,test_coeval.shape[0]) * un.cm,
+        np.linspace(0,box_len.value,test_coeval.shape[1]) * un.Mpc,
+        title="tiny box",
+        log = [True, True, True]
+    )
+
+    assert ax.get_title() == "tiny box"
+
+    ax = plot_slice(
+        test_coeval[:,:,1],
+        np.linspace(0,box_len.value,test_coeval.shape[0]) * un.cm,
+        np.linspace(0,box_len.value,test_coeval.shape[1]) * un.Mpc,
+        vmin=-0.5,
+        vmax=0.5,
+        log=[True, True, False],
+    )
+
+    ax = plot_slice(
+        test_coeval[:,:,1], 
+        np.linspace(0,box_len.value,test_coeval.shape[0]) * un.cm,
+        np.linspace(0,box_len.value,test_coeval.shape[1]) * un.Mpc,
     )

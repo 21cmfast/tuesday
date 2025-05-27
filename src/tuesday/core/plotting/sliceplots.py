@@ -48,7 +48,6 @@ def plot_slice(
     cmap: str = "viridis",
 ) -> plt.Axes:
     """Plot a 2D slice of the data."""
-    validate(img_slice, "temperature")
     validate(yaxis, "length")
     rcParams.update({"font.size": fontsize})
     if xaxis.unit.physical_type != "dimensionless":
@@ -240,7 +239,6 @@ def plot_lightcone_slice(
 
 
     """
-    validate(lightcone, "temperature")
     validate(box_length, "length")
     rcParams.update({"font.size": fontsize})
     if ax is None:
@@ -269,10 +267,9 @@ def plot_lightcone_slice(
     if vmin is None and vmax is None:
         if logc:
             vmin = np.nanpercentile(np.log10(lightcone.value), 5)
-            vmax = -1.0 * vmin / 0.86 + vmin
         else:
             vmin = np.nanpercentile(lightcone.value, 5)
-            vmax = -1.0 * vmin / 0.86 + vmin
+        vmax = -1.0 * vmin / 0.86 + vmin
     return plot_slice(
         lightcone.T,
         redshift,
@@ -312,7 +309,6 @@ def plot_coeval_slice(
     transform2slice: Callable | None = None,
 ) -> plt.Axes:
     """Plot a slice from a coeval of shape (HII_DIM, HII_DIM, HII_DIM)."""
-    validate(coeval, "temperature")
     validate(box_length, "length")
     rcParams.update({"font.size": fontsize})
     if ax is None:
