@@ -31,7 +31,7 @@ except ValueError:
     pass
 
 
-def plot_slice(
+def _plot_slice(
     img_slice: un.Quantity,
     xaxis: un.Quantity,
     yaxis: un.Quantity,
@@ -174,7 +174,7 @@ def coeval2slice_z(
     return slice_index
 
 
-def plot_lightcone_slice(
+def plot_redshift_slice(
     lightcone: un.Quantity,
     box_length: un.Quantity,
     redshift: np.ndarray | un.Quantity,
@@ -196,12 +196,12 @@ def plot_lightcone_slice(
     smooth: bool | float = False,
     transform2slice: Callable | None = None,
 ) -> plt.Axes:
-    """Plot a slice from a lightcone of shape (HII_DIM, HII_DIM, n_z).
+    """Plot a slice from a lightcone of shape (N_x, N_y, N_redshifts).
 
     Parameters
     ----------
     lightcone : un.Quantity
-        The lightcone data to plot.
+        The lightcone data to plot with shape (N_x, N_y, N_redshifts).
     box_length : un.Quantity
         The length of the box.
     redshift : np.ndarray | un.Quantity
@@ -269,8 +269,9 @@ def plot_lightcone_slice(
             vmin = np.nanpercentile(np.log10(lightcone.value), 5)
         else:
             vmin = np.nanpercentile(lightcone.value, 5)
-        vmax = -1.0 * vmin / 0.86 + vmin
-    return plot_slice(
+        if cmap.lower() == "eor":
+            vmax = -1.0 * vmin / 0.86 + vmin
+    return _plot_slice(
         lightcone.T,
         redshift,
         yaxis,
@@ -331,7 +332,7 @@ def plot_coeval_slice(
             clabel = "Density Contrast"
         else:
             clabel = f"{coeval.unit.physical_type} " + f" [{coeval.unit:latex_inline}]"
-    return plot_slice(
+    return _plot_slice(
         coeval,
         xaxis,
         yaxis,

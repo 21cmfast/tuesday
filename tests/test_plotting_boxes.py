@@ -11,10 +11,10 @@ from tuesday.core import (
     lc2slice_x,
     lc2slice_y,
     plot_coeval_slice,
-    plot_lightcone_slice,
+    plot_redshift_slice,
     plot_pdf,
-    plot_slice,
 )
+from tuesday.core.plotting.sliceplots import _plot_slice
 
 
 @pytest.fixture(scope="session")
@@ -72,7 +72,7 @@ def test_coeval_slice(test_coeval):
 def test_lightcone_slice(test_lc, test_redshifts):
     """Test the plot_lightcone_slice function."""
     box_len = 300 * un.cm
-    ax = plot_lightcone_slice(
+    ax = plot_redshift_slice(
         test_lc.value * un.dimensionless_unscaled,
         box_len,
         test_redshifts,
@@ -83,7 +83,7 @@ def test_lightcone_slice(test_lc, test_redshifts):
     assert ax.get_xlabel() == "Redshift"
     assert ax.get_title() == "tiny lightcone"
 
-    ax = plot_lightcone_slice(
+    ax = plot_redshift_slice(
         test_lc.value * un.mK**2,
         box_len,
         test_redshifts,
@@ -95,14 +95,14 @@ def test_lightcone_slice(test_lc, test_redshifts):
         transform2slice=lc2slice_x(idx=5),
     )
 
-    ax = plot_lightcone_slice(
+    ax = plot_redshift_slice(
         test_lc,
         box_len,
         test_redshifts,
         transform2slice=lc2slice_y(idx=5),
         smooth=True,
     )
-    ax = plot_lightcone_slice(
+    ax = plot_redshift_slice(
         test_lc,
         box_len,
         test_redshifts,
@@ -135,7 +135,7 @@ def test_pdf(test_coeval):
 def test_plot_slice(test_coeval):
     """Test the plot_slice function."""
     box_len = 300 * un.cm
-    ax = plot_slice(
+    ax = _plot_slice(
         1.0 + abs(test_coeval[:, :, 1].value) * un.dimensionless_unscaled,
         np.linspace(0, box_len.value, test_coeval.shape[0]) * un.cm,
         np.linspace(0, box_len.value, test_coeval.shape[1]) * un.Mpc,
@@ -145,7 +145,7 @@ def test_plot_slice(test_coeval):
 
     assert ax.get_title() == "tiny box"
 
-    ax = plot_slice(
+    ax = _plot_slice(
         test_coeval[:, :, 1],
         np.linspace(0, box_len.value, test_coeval.shape[0]) * un.cm,
         np.linspace(0, box_len.value, test_coeval.shape[1]) * un.Mpc,
@@ -154,7 +154,7 @@ def test_plot_slice(test_coeval):
         log=[True, True, False],
     )
 
-    ax = plot_slice(
+    ax = _plot_slice(
         test_coeval[:, :, 1],
         np.linspace(0, box_len.value, test_coeval.shape[0]) * un.cm,
         np.linspace(0, box_len.value, test_coeval.shape[1]) * un.Mpc,
