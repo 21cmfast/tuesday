@@ -11,8 +11,8 @@ from tuesday.core import (
     lc2slice_x,
     lc2slice_y,
     plot_coeval_slice,
-    plot_redshift_slice,
     plot_pdf,
+    plot_redshift_slice,
 )
 from tuesday.core.plotting.sliceplots import _plot_slice
 
