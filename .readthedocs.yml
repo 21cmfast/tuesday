@@ -5,13 +5,9 @@ build:
   tools:
     python: "3.12"
 
-python:
-   install:
-      - requirements: docs/requirements.txt
-      - method: pip
-        path: .
-        extra_requirements:
-           - docs
+conda:
+  environment: docs/environment.yaml
+  
 sphinx:
    configuration: docs/conf.py
 
