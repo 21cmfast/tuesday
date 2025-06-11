@@ -5,6 +5,30 @@ from datetime import datetime, timezone
 
 from tuesday import __version__
 
+from unittest.mock import MagicMock
+
+sys.path.insert(0, str(Path(__file__).absolute().parent.parent / "src"))
+
+
+class Mock(MagicMock):
+    """Make a Mock so that a package doesn't have to actually exist."""
+
+    @classmethod
+    def __getattr__(cls, name):
+        """Get stuff."""
+        return MagicMock()
+
+
+MOCK_MODULES = [
+    "py21cmfast.c_21cmfast",
+    "click",
+    "tqdm",
+    "pyyaml",
+    "h5py",
+    "cached_property",
+]
+sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
@@ -22,6 +46,7 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_design",
 ]
+
 if os.getenv("SPELLCHECK"):
     extensions += ("sphinxcontrib.spelling",)
     spelling_show_suggestions = True
