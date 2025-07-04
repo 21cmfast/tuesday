@@ -20,7 +20,18 @@ __all__ = [
     "plot_power_spectrum",
     "plot_redshift_slice",
     "validate",
+    "sample_lc_noise",
+    "thermal_noise",
+    "grid_baselines",
+    "blackmanharris",
 ]
+from .instrument_models.noise import (
+    sample_lc_noise,
+    thermal_noise,
+    grid_baselines,
+    blackmanharris,
+)
+
 from .plotting.powerspectra import (
     plot_1d_power_spectrum,
     plot_2d_power_spectrum,
