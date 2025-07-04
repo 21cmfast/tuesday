@@ -45,10 +45,12 @@ def test_lc_noise_sampling():
         bandwidth=50 * un.kHz,
         n_days=int(np.ceil(1000 / hours_tracking.value)),
     )
-    sigma_rms = thermal_noise(obs, freqs[0], boxlength, lc_shape, a_eff=[517.7] * un.m**2)
+    sigma_rms = thermal_noise(
+        obs, freqs[0], boxlength, lc_shape, a_eff=[517.7] * un.m**2
+    )
     sigma_rms = thermal_noise(obs, freqs, boxlength, lc_shape)
     sigma = sigma_rms / np.sqrt(uv_coverage * obs.n_days)
     sigma[uv_coverage == 0.0] = 0.0
 
-    sample_lc_noise(sigma[...,0], seed=4, nsamples=10)
+    sample_lc_noise(sigma[..., 0], seed=4, nsamples=10)
     sample_lc_noise(sigma, nsamples=10)
