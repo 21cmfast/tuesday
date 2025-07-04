@@ -4,6 +4,7 @@ __all__ = [
     "CylindricalPS",
     "SphericalPS",
     "bin_kpar",
+    "blackmanharris",
     "calculate_ps",
     "calculate_ps_coeval",
     "calculate_ps_lc",
@@ -11,6 +12,7 @@ __all__ = [
     "coeval2slice_y",
     "coeval2slice_z",
     "cylindrical_to_spherical",
+    "grid_baselines",
     "lc2slice_x",
     "lc2slice_y",
     "plot_1d_power_spectrum",
@@ -19,19 +21,16 @@ __all__ = [
     "plot_pdf",
     "plot_power_spectrum",
     "plot_redshift_slice",
-    "validate",
     "sample_lc_noise",
     "thermal_noise",
-    "grid_baselines",
-    "blackmanharris",
+    "validate",
 ]
 from .instrument_models.noise import (
+    blackmanharris,
+    grid_baselines,
     sample_lc_noise,
     thermal_noise,
-    grid_baselines,
-    blackmanharris,
 )
-
 from .plotting.powerspectra import (
     plot_1d_power_spectrum,
     plot_2d_power_spectrum,
