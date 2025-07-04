@@ -176,7 +176,6 @@ def sample_lc_noise(
         seed = np.random.Generator().integers(0, 2**31 - 1)
         warnings.warn("Setting random seed to", seed, stacklevel=2)
     rng = np.random.default_rng(seed)
-    
 
     lc_noise = np.zeros((nsamples, *rms_noise.shape))
     if window_fnc is None:
