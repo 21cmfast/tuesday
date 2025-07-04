@@ -98,8 +98,11 @@ def thermal_noise(
         $\Omega_{\rm beam} = 0.004 \cdot (\nu/150 MHz)^{-2} \cdot rad^2$,
         which comes from assuming that the effective area is approximately 1000 m$^2$.
     """
-    if not hasattr(freqs, "__len__"):
-        freqs = np.array([freqs])
+    try:
+        len(freqs)
+    except TypeError:
+        freqs = np.array([freqs.value]) * freqs.unit
+
     sig_uv = np.zeros(len(freqs))
     for i, nu in enumerate(freqs):
         obs = observation.clone(
@@ -173,8 +176,8 @@ def sample_lc_noise(
     if len(rms_noise.shape) == 2:
         rms_noise = rms_noise[..., None]
     if seed is None:
-        seed = np.random.Generator().integers(0, 2**31 - 1)
-        warnings.warn("Setting random seed to", seed, stacklevel=2)
+        seed = np.random.default_rng().integers(0, 2**31 - 1)
+        warnings.warn(f"Setting random seed to {seed}", stacklevel=2)
     rng = np.random.default_rng(seed)
 
     lc_noise = np.zeros((nsamples, *rms_noise.shape))
