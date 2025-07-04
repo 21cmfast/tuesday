@@ -1,4 +1,4 @@
-exclude: '^docs/conf.py|^tests/data/|^docs/workflow.yaml'
+exclude: '^docs/conf.py|^tests/data/|^docs/workflow.yaml|^docs/tutorials/'
 
 ci:
   autoupdate_schedule: monthly

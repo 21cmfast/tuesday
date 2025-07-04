@@ -6,7 +6,7 @@ from collections.abc import Callable
 import astropy.units as un
 import numpy as np
 from astropy.constants import c
-from astropy.cosmology import Planck18 as cosmo
+from astropy.cosmology import Planck18
 from astropy.cosmology.units import littleh
 from py21cmsense import Observation
 from py21cmsense.conversions import dk_du, f2z
@@ -42,7 +42,7 @@ def grid_baselines(uvws, freq, boxlength: un.Quantity, lc_shape, weights):
         np.fft.fftshift(np.fft.fftfreq(lc_shape[0], d=dx))
         * 2
         * np.pi
-        / cosmo.h
+        / Planck18.h
         * littleh
         / un.Mpc
     )  # h/Mpc
@@ -70,10 +70,10 @@ def thermal_noise(
     freqs: np.ndarray,
     boxlen: float,
     lc_shape: tuple,
-    A_eff: un.Quantity = None,
+    a_eff: un.Quantity | None = None,
 ):
     r"""
-    Calculate thermal noise RMS per integration
+    Calculate thermal noise RMS per integration.
 
     Eqn 3 from Prelogovic+22 2107.00018 without the last sqrt term
     That eqn comes from converting Eqn 9 in Ghara+16 1511.07448
@@ -90,7 +90,7 @@ def thermal_noise(
         Length of the box in which the lightcone is defined.
     lc_shape : tuple
         Shape of the lightcone (Nx, Ny, Nz).
-    A_eff : astropy.units.Quantity, optional
+    a_eff : astropy.units.Quantity, optional
         Effective area of the antenna with shape (Nfreqs,).
         If provided, we use
         $\Omega_{\rm beam} = \lambda^2/A_{\rm eff}$.
@@ -107,16 +107,16 @@ def thermal_noise(
                 beam=observation.observatory.beam.clone(frequency=nu)
             )
         )
-        Tsys = obs.Tsys.to(un.mK)
-        if A_eff is None:
+        tsys = obs.Tsys.to(un.mK)
+        if a_eff is None:
             f0 = 150.0 * un.MHz
             # =\lambda^2/A_{eff}, this approx assumes A_{eff} ~ 1000 m^2
             omega_beam = 0.004 * (nu.to(un.MHz) / f0) ** (-2.0) * un.rad**2
         else:
             wavelength = (c / nu.to("Hz")).to(un.m)
-            omega_beam = (wavelength**2 / A_eff[i].to(un.m**2)) * un.rad**2
+            omega_beam = (wavelength**2 / a_eff[i].to(un.m**2)) * un.rad**2
 
-        d = cosmo.comoving_distance(f2z(nu)).to(un.Mpc)  # Mpc
+        d = Planck18.comoving_distance(f2z(nu)).to(un.Mpc)  # Mpc
         theta_box = (boxlen.to(un.Mpc) / d) * un.rad
         omega_pix = theta_box**2 / np.prod(lc_shape[:2])
 
@@ -124,34 +124,33 @@ def thermal_noise(
             un.dimensionless_unscaled
         )
         # I need this 1e6 to get the same numbers as tools...
-        sig_uv[i] = Tsys.value * omega_beam / omega_pix / sqrt / 1e6
-    return sig_uv * Tsys.unit
+        sig_uv[i] = tsys.value * omega_beam / omega_pix / sqrt / 1e6
+    return sig_uv * tsys.unit
 
 
-def blackmanharris(N: int):
+def blackmanharris(n: int):
     r"""Blackman-Harris window function for a 2D grid.
 
     Parameters
     ----------
-    N : int
+    n : int
         Size of the window function, assumed to be square.
 
     Returns
     -------
     wf : np.ndarray
-        2D Blackman-Harris window function with shape (N, N)
+        2D Blackman-Harris window function with shape (n, n)
 
     """
-    wf = np.abs(windows.blackmanharris(N))
-    wf = np.sqrt(np.outer(wf, wf))
-    return wf
+    wf = np.abs(windows.blackmanharris(n))
+    return np.sqrt(np.outer(wf, wf))
 
 
 def sample_lc_noise(
     rms_noise: un.Quantity,
-    seed: int = None,
+    seed: int | None = None,
     nsamples: int = 1,
-    window_fnc: Callable = None,
+    window_fnc: Callable | None = None,
 ):
     """Sample noise for a lightcone slice given the corresponding rms noise in uv space.
 
@@ -174,17 +173,18 @@ def sample_lc_noise(
     if len(rms_noise.shape) == 2:
         rms_noise = rms_noise[..., None]
     if seed is None:
-        seed = np.random.randint(0, 1e8)
-        warnings.warn("Setting random seed to", seed)
-    np.random.seed(seed)
+        seed = np.random.Generator().integers(0, 2**31 - 1)
+        warnings.warn("Setting random seed to", seed, stacklevel=2)
+    rng = np.random.default_rng(seed)
+    
 
-    lc_noise = np.zeros((nsamples,) + rms_noise.shape)
+    lc_noise = np.zeros((nsamples, *rms_noise.shape))
     if window_fnc is None:
         window_fnc = blackmanharris(rms_noise.shape[0])
     for i in range(rms_noise.shape[-1]):
         noise = (
-            np.random.normal(size=lc_noise.shape[:-1])
-            + 1j * np.random.normal(size=lc_noise.shape[:-1])
+            rng.normal(size=lc_noise.shape[:-1])
+            + 1j * rng.normal(size=lc_noise.shape[:-1])
         ) * rms_noise[..., i].value[None, ...]
 
         noise *= window_fnc[None, ...]
