@@ -45,6 +45,8 @@ def grid_baselines_uv(
     avg_mirrored_bls : bool, optional
         If True, average the mirrored baselines by two since they do
         not carry any additional information to the positive baselines.
+        You may not want to divide by two if your plan is to only use
+        half of the uv plane in a later step to estimate sensitivity.
 
     Returns
     -------
@@ -63,7 +65,7 @@ def grid_baselines_uv(
     )
 
     du = ugrid_edges[1] - ugrid_edges[0]
-    ugrid_edges = np.append(ugrid_edges - du / 2, ugrid_edges[-1] + du)
+    ugrid_edges = np.append(ugrid_edges - du / 2.0, ugrid_edges[-1] + du / 2.0)
 
     ugrid_edges /= dk_du(f2z(freq))
 
