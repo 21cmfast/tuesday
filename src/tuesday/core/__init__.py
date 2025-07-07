@@ -12,7 +12,7 @@ __all__ = [
     "coeval2slice_y",
     "coeval2slice_z",
     "cylindrical_to_spherical",
-    "grid_baselines",
+    "grid_baselines_uv",
     "lc2slice_x",
     "lc2slice_y",
     "plot_1d_power_spectrum",
@@ -21,15 +21,18 @@ __all__ = [
     "plot_pdf",
     "plot_power_spectrum",
     "plot_redshift_slice",
+    "sample_from_rms_noise",
     "sample_lc_noise",
-    "thermal_noise",
+    "taper2d",
+    "thermal_noise_per_voxel",
     "validate",
 ]
 from .instrument_models.noise import (
-    blackmanharris,
-    grid_baselines,
+    grid_baselines_uv,
+    sample_from_rms_noise,
     sample_lc_noise,
-    thermal_noise,
+    taper2d,
+    thermal_noise_per_voxel,
 )
 from .plotting.powerspectra import (
     plot_1d_power_spectrum,
