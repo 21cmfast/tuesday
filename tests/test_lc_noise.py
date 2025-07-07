@@ -112,7 +112,9 @@ def test_thermal_noise_per_voxel(observation):
 def test_sample_from_rms_noise():
     """Test the sample_from_rms_noise function."""
     sample_from_rms_noise(
-        np.random.default_rng(0).normal(5.0, 1.0, (10, 10, 2)), seed=4, nsamples=10
+        np.random.default_rng(0).normal(5.0, 1.0, (10, 10, 2)) * un.mK,
+        seed=4,
+        nsamples=10,
     )
 
 
