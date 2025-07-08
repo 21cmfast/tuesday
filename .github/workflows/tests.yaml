@@ -41,6 +41,18 @@ jobs:
       - name: Install the Package
         run: pip install ".[dev]" --pre
 
+      - name: Install Poetry
+        run: |
+          pipx install poetry
+          poetry --version
+
+      - name: Install ska-ost-array
+        run: |
+          git clone https://gitlab.com/ska-telescope/ost/ska-ost-array-config.git
+          cd ska-ost-array-config
+          poetry install
+          cd ..
+
       - name: Run Tests
         run: |
           coverage run -m pytest
