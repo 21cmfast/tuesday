@@ -113,11 +113,6 @@ def thermal_noise_per_voxel(
         and Nz to be to line-of-sight (frequency) dimension.
     antenna_effective_area : astropy.units.Quantity, optional
         Effective area of the antenna with shape (Nfreqs,).
-        If provided, we use
-        $\Omega_{\rm beam} = \lambda^2/A_{\rm eff}$.
-        If not provided, we use
-        $\Omega_{\rm beam} = 0.004 \cdot (\nu/150 MHz)^{-2} \cdot rad^2$,
-        which comes from assuming that the effective area is approximately 1000 m$^2$.
     beam_area : astropy.units.Quantity, optional
         Beam area of the antenna with shape (Nfreqs,).
     """
