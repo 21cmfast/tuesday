@@ -430,59 +430,38 @@ def plot_coeval_slice(
     if v_x is not None and v_y is not None:
         if quiver_kwargs is None:
             quiver_kwargs = {
-                "X": xaxis.value[::quiver_decimate_factor],
-                "Y": yaxis.value[::quiver_decimate_factor],
-                "U": v_x.value[::quiver_decimate_factor, ::quiver_decimate_factor],
-                "V": v_y.value[::quiver_decimate_factor, ::quiver_decimate_factor],
                 "color": "k",
                 "width": 0.006,
                 "headwidth": 4,
             }
-        else:
-            if "X" not in quiver_kwargs:
-                quiver_kwargs["X"] = xaxis.value[::quiver_decimate_factor]
-            if "Y" not in quiver_kwargs:
-                quiver_kwargs["Y"] = yaxis.value[::quiver_decimate_factor]
-            if "U" not in quiver_kwargs:
-                quiver_kwargs["U"] = v_x.value[
-                    ::quiver_decimate_factor, ::quiver_decimate_factor
-                ]
-            if "V" not in quiver_kwargs:
-                quiver_kwargs["V"] = v_y.value[
-                    ::quiver_decimate_factor, ::quiver_decimate_factor
-                ]
+
         if quiver_label:
             quiver_label = "Velocity " + f"[{v_x.unit:latex_inline}]"
         if quiver_label_kwargs is None:
-            label_x = 0.9
-            label_y = 0.9
-            label_len = 1.0
             quiver_label_kwargs = {
                 "labelpos": "E",
                 "coordinates": "figure",
             }
-        else:
-            if "X" not in quiver_label_kwargs:
-                label_x = 0.9
-            else:
-                label_x = quiver_label_kwargs["X"]
-            if "Y" not in quiver_label_kwargs:
-                label_y = 0.9
-            else:
-                label_y = quiver_label_kwargs["Y"]
-            if "U" not in quiver_label_kwargs:
-                label_len = 1.0
-            else:
-                label_len = quiver_label_kwargs["U"]
-        x = quiver_kwargs.pop("X")
-        y = quiver_kwargs.pop("Y")
-        u = quiver_kwargs.pop("U")
-        v = quiver_kwargs.pop("V")
 
-        axq = ax.quiver(x, y, u, v, **quiver_kwargs)
+        axq = ax.quiver(
+            quiver_kwargs.pop("X", xaxis.value[::quiver_decimate_factor]),
+            quiver_kwargs.pop("Y", yaxis.value[::quiver_decimate_factor]),
+            quiver_kwargs.pop(
+                "U", v_x.value[::quiver_decimate_factor, ::quiver_decimate_factor]
+            ),
+            quiver_kwargs.pop(
+                "V", v_y.value[::quiver_decimate_factor, ::quiver_decimate_factor]
+            ),
+            **quiver_kwargs,
+        )
         if isinstance(quiver_label, str):
             ax.quiverkey(
-                axq, label_x, label_y, label_len, quiver_label, **quiver_label_kwargs
+                axq,
+                quiver_label_kwargs.pop("X", 0.9),
+                quiver_label_kwargs.pop("Y", 0.9),
+                quiver_label_kwargs.pop("U", 1.0),
+                quiver_label,
+                **quiver_label_kwargs,
             )
     return ax
 
