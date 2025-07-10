@@ -60,6 +60,35 @@ def test_1d_ps_plot(ps1d: SphericalPS):
         title="Test Title",
         legend="z=6",
     )
+    plot_power_spectrum(
+        [ps1d, ps1d],
+        ax=ax,
+        title="Test Title",
+        legend="foo",
+        logx=False,
+        logy=False,
+        smooth=True,
+    )
+    plot_power_spectrum(
+        [ps1d, ps1d],
+        ax=ax,
+        title="Test Title",
+        legend="foo",
+        logx=False,
+        logy=False,
+        smooth=True,
+        at_k=0,
+    )
+    plot_power_spectrum(
+        [ps1d, ps1d],
+        ax=ax,
+        title="Test Title",
+        legend="foo",
+        logx=False,
+        logy=False,
+        smooth=True,
+        at_k=0.2,
+    )
 
     with pytest.raises(ValueError, match="power_spectrum must be a SphericalPS"):
         plot_1d_power_spectrum(np.linspace(0, 10, 10))  # Not a dataclass

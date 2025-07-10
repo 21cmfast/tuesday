@@ -67,6 +67,9 @@ def test_coeval_slice(test_coeval):
         300 * un.cm,
         transform2slice=coeval2slice_x(idx=5),
         smooth=True,
+        v_x=test_coeval[15, ...] * un.m / un.s,
+        v_y=test_coeval[15, ...] * un.m / un.s,
+        quiver_key=True,
     )
     ax = plot_coeval_slice(
         test_coeval.value * un.dimensionless_unscaled, 300 * un.cm, smooth=True
