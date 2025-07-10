@@ -113,7 +113,10 @@ class SphericalPS:
             return self.k
         if np.all(np.diff(self.k) == np.diff(self.k)[0]):
             return (self.k[:-1] + self.k[1:]) / 2.0
-        return np.exp((np.log(self.k[1:]) + np.log(self.k[:-1])) / 2)
+        return (
+            np.exp((np.log(self.k.value[1:]) + np.log(self.k.value[:-1])) / 2)
+            * self.k.unit
+        )
 
 
 @dataclass(frozen=True)
