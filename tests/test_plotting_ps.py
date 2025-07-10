@@ -8,7 +8,8 @@ from tuesday.core import (
     CylindricalPS,
     SphericalPS,
     calculate_ps_coeval,
-    plot_1d_power_spectrum,
+    plot_1d_power_spectrum_k,
+    plot_1d_power_spectrum_z,
     plot_2d_power_spectrum,
     plot_power_spectrum,
 )
@@ -69,6 +70,7 @@ def test_1d_ps_plot(ps1d: SphericalPS):
         logy=False,
         smooth=True,
     )
+
     plot_power_spectrum(
         [ps1d, ps1d],
         ax=ax,
@@ -77,21 +79,11 @@ def test_1d_ps_plot(ps1d: SphericalPS):
         logx=False,
         logy=False,
         smooth=True,
-        at_k=0,
-    )
-    plot_power_spectrum(
-        [ps1d, ps1d],
-        ax=ax,
-        title="Test Title",
-        legend="foo",
-        logx=False,
-        logy=False,
-        smooth=True,
-        at_k=0.2,
+        at_k=1.,
     )
 
     with pytest.raises(ValueError, match="power_spectrum must be a SphericalPS"):
-        plot_1d_power_spectrum(np.linspace(0, 10, 10))  # Not a dataclass
+        plot_1d_power_spectrum_k(np.linspace(0, 10, 10))  # Not a dataclass
 
 
 def test_bad_1d_ps_units(ps1d):

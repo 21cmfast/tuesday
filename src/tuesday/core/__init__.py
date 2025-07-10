@@ -15,10 +15,11 @@ __all__ = [
     "grid_baselines_uv",
     "lc2slice_x",
     "lc2slice_y",
-    "plot_1d_power_spectrum",
+    "plot_1d_power_spectrum_k",
+    "plot_1d_power_spectrum_z",
     "plot_2d_power_spectrum",
     "plot_coeval_slice",
-    "plot_pdf",
+    "plot_pdf", 
     "plot_power_spectrum",
     "plot_redshift_slice",
     "sample_from_rms_noise",
@@ -35,7 +36,8 @@ from .instrument_models.noise import (
     thermal_noise_per_voxel,
 )
 from .plotting.powerspectra import (
-    plot_1d_power_spectrum,
+    plot_1d_power_spectrum_k,
+    plot_1d_power_spectrum_z,
     plot_2d_power_spectrum,
     plot_power_spectrum,
 )

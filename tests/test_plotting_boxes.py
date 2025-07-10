@@ -59,7 +59,7 @@ def test_coeval_slice(test_coeval):
         v_x=test_coeval[15, ...] * un.m / un.s,
         v_y=test_coeval[15, ...] * un.m / un.s,
         quiver_decimate_factor=3,
-        quiver_key="Velocity [m/s]",
+        quiver_label="Velocity [m/s]",
     )
 
     ax = plot_coeval_slice(
@@ -69,7 +69,7 @@ def test_coeval_slice(test_coeval):
         smooth=True,
         v_x=test_coeval[15, ...] * un.m / un.s,
         v_y=test_coeval[15, ...] * un.m / un.s,
-        quiver_key=True,
+        quiver_label=True,
     )
     ax = plot_coeval_slice(
         test_coeval.value * un.dimensionless_unscaled, 300 * un.cm, smooth=True

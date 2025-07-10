@@ -11,14 +11,13 @@ from scipy.ndimage import gaussian_filter
 from ..summaries import CylindricalPS, SphericalPS
 
 
-def plot_1d_power_spectrum(
-    power_spectrum: SphericalPS | list[SphericalPS],
+def plot_1d_power_spectrum_k(
+    power_spectrum: SphericalPS,
     *,
     ax: plt.Axes | None = None,
     title: str | None = None,
     xlabel: str | None = None,
     ylabel: str | None = None,
-    at_k: float | int | None = None,
     color: list | None = None,
     log: list[bool] | None = False,
     fontsize: float | None = 16,
@@ -31,8 +30,8 @@ def plot_1d_power_spectrum(
 
     Parameters
     ----------
-    power_spectrum : SphericalPS | list[SphericalPS]
-        Instance or list of instances of the SphericalPS class.
+    power_spectrum : SphericalPS
+        Instance of the SphericalPS class.
     ax : plt.Axes, optional
         Axes object to plot on. If None, a new axes is created.
     title : str, optional
@@ -41,11 +40,6 @@ def plot_1d_power_spectrum(
         Label for the x-axis.
     ylabel : str, optional
         Label for the y-axis.
-    at_k : float | int, optional
-        If provided, plots the 1D power spectrum at a specific k value.
-        If int, it is interpreted as the index of the k value.
-        If float, it is interpreted as the k value itself
-        in the same unit as the k in the SphericalPS instance wavemodes.
     color : str, optional
         Color of the PS line in the plot.
     log : list[bool], optional
@@ -60,16 +54,94 @@ def plot_1d_power_spectrum(
     legend_kwargs : dict, optional
         Keyword arguments for the legend.
     """
-    if isinstance(power_spectrum, SphericalPS):
-        power_spectrum = [power_spectrum]
-    else:
-        for i in range(len(power_spectrum)):
-            if not isinstance(power_spectrum[i], SphericalPS):
-                raise ValueError(
-                    "power_spectrum must be a SphericalPS object or a list of "
-                    "SphericalPS objects,"
-                    f" got {type(power_spectrum[i])} instead."
-                )
+    if not isinstance(power_spectrum, SphericalPS):
+        raise ValueError(
+            "power_spectrum must be a SphericalPS object,"
+            f" got {type(power_spectrum)} instead."
+        )
+    rcParams.update({"font.size": fontsize})
+    wavemodes = power_spectrum.kcenters
+    is_deltasq = power_spectrum.is_deltasq
+    power_spectrum = power_spectrum.ps
+
+    if color is None:
+        color = "C0"
+    if xlabel is None:
+        xlabel = f"k [{wavemodes.unit:latex_inline}]"
+
+    if ylabel is None:
+        ylabel = f"[{power_spectrum.unit:latex_inline}]"
+        ylabel = r"$\Delta^2_{21} \,$" + ylabel if is_deltasq else r"$P(k) \,$" + ylabel
+    if smooth:
+        power_spectrum = gaussian_filter(power_spectrum, sigma=smooth)
+    ax.plot(wavemodes, power_spectrum, color=color, label=legend)
+    if title is not None:
+        ax.set_title(title, fontsize=fontsize)
+    ax.set_xlabel(xlabel, fontsize=fontsize)
+    ax.set_ylabel(ylabel, fontsize=fontsize)
+    if log[0]:
+        ax.set_xscale("log")
+    if log[1]:
+        ax.set_yscale("log")
+    if legend is not None:
+        ax.legend(**legend_kwargs)
+    return ax
+
+def plot_1d_power_spectrum_z(
+    power_spectrum: list[SphericalPS],
+    *,
+    ax: plt.Axes | None = None,
+    title: str | None = None,
+    xlabel: str | None = None,
+    ylabel: str | None = None,
+    at_k: float | None = None,
+    color: list | None = None,
+    log: list[bool] | None = False,
+    fontsize: float | None = 16,
+    legend: str | None = None,
+    smooth: float | bool = False,
+    legend_kwargs: dict | None = None,
+) -> tuple[plt.Figure, plt.Axes]:
+    """
+    Plot a 1D power spectrum.
+
+    Parameters
+    ----------
+    power_spectrum : list[SphericalPS]
+        List of instances of the SphericalPS class.
+    ax : plt.Axes, optional
+        Axes object to plot on. If None, a new axes is created.
+    title : str, optional
+        Title of the plot.
+    xlabel : str, optional
+        Label for the x-axis.
+    ylabel : str, optional
+        Label for the y-axis.
+    at_k : float | int, optional
+        If provided, plots the 1D power spectrum at a specific k value.
+        The k value is assumed to be in the same unit 
+        as the k in the SphericalPS instance wavemodes.
+    color : str, optional
+        Color of the PS line in the plot.
+    log : list[bool], optional
+        List of booleans to set the x and y axes to log scale.
+    fontsize : float, optional
+        Font size for the plot labels.
+    legend : str, optional
+        Legend label for the PS.
+    smooth : float, optional
+        Standard deviation for Gaussian smoothing.
+        If True, uses a standard deviation of 1.
+    legend_kwargs : dict, optional
+        Keyword arguments for the legend.
+    """
+    for i in range(len(power_spectrum)):
+        if not isinstance(power_spectrum[i], SphericalPS):
+            raise ValueError(
+                "power_spectrum must be a SphericalPS object or a list of "
+                "SphericalPS objects,"
+                f" got {type(power_spectrum[i])} instead."
+            )
 
     rcParams.update({"font.size": fontsize})
 
@@ -78,25 +150,19 @@ def plot_1d_power_spectrum(
     if color is None:
         color = "C0"
     if xlabel is None:
-        if len(power_spectrum) == 1:
-            xaxis = power_spectrum[0].kcenters
-            xlabel = f"k [{xaxis.unit:latex_inline}]"
+        xlabel = "Redshift"
+        xaxis = [ps.redshift for ps in power_spectrum]
+        if at_k is None:
+            warnings.warn(
+                "Multiple power spectra provided, but no at_k specified. "
+                "Plotting at the lowest available k value. ",
+                stacklevel=2,
+            )
+            at_k = np.where(~np.isnan(power_spectrum[0].kcenters))[0][0]
         else:
-            xlabel = "Redshift"
-            xaxis = [ps.redshift for ps in power_spectrum]
-            if at_k is None:
-                warnings.warn(
-                    "Multiple power spectra provided, but no at_k specified. "
-                    "Plotting at the lowest available k value. ",
-                    stacklevel=2,
-                )
-                at_k = np.where(~np.isnan(power_spectrum[0].kcenters))[0][0]
-            elif isinstance(at_k, float):
-                kbins = np.abs(power_spectrum[0].kcenters.value - at_k)
-                kbins[np.isnan(kbins)] = np.inf  # Avoid NaNs
-                at_k = np.argmin(kbins)
-            else:
-                pass
+            kbins = np.abs(power_spectrum[0].kcenters.value - at_k)
+            kbins[np.isnan(kbins)] = np.inf  # Avoid NaNs
+            at_k = np.argmin(kbins)
 
     if ylabel is None:
         ylabel = f"[{power_spectrum[0].ps.unit:latex_inline}]"
@@ -123,6 +189,7 @@ def plot_1d_power_spectrum(
     if legend is not None:
         ax.legend(**legend_kwargs)
     return ax
+
 
 
 def plot_2d_power_spectrum(
@@ -306,23 +373,39 @@ def plot_power_spectrum(
     """
     if isinstance(smooth, bool) and smooth:
         smooth = 1.0
-    if isinstance(power_spectrum, SphericalPS) or (
-        hasattr(power_spectrum, "__len__")
-        and np.all([isinstance(ps, SphericalPS) for ps in power_spectrum])
-    ):
+    if isinstance(power_spectrum, SphericalPS):
         if legend_kwargs is None:
             legend_kwargs = {}
         if ax is None:
             fig, ax = plt.subplots(
                 nrows=1, ncols=1, figsize=(7, 6), sharey=True, sharex=True
             )
-        ax = plot_1d_power_spectrum(
+        ax = plot_1d_power_spectrum_k(
             power_spectrum,
             ax=ax,
             title=title,
             xlabel=xlabel,
             ylabel=ylabel,
+            color=color,
+            fontsize=fontsize,
+            log=[logx, logy],
+            legend=legend,
+            smooth=smooth,
+            legend_kwargs=legend_kwargs,
+        )
+    elif (
+        hasattr(power_spectrum, "__len__")
+        and np.all([isinstance(ps, SphericalPS) for ps in power_spectrum])
+    ):
+        if legend_kwargs is None:
+            legend_kwargs = {}
+        ax = plot_1d_power_spectrum_z(
+            power_spectrum,
+            ax=ax,
             at_k=at_k,
+            title=title,
+            xlabel=xlabel,
+            ylabel=ylabel,
             color=color,
             fontsize=fontsize,
             log=[logx, logy],
