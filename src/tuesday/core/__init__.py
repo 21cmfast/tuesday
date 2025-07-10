@@ -19,7 +19,7 @@ __all__ = [
     "plot_1d_power_spectrum_z",
     "plot_2d_power_spectrum",
     "plot_coeval_slice",
-    "plot_pdf", 
+    "plot_pdf",
     "plot_power_spectrum",
     "plot_redshift_slice",
     "sample_from_rms_noise",

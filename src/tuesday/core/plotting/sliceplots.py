@@ -356,21 +356,21 @@ def plot_coeval_slice(
         A function to transform the coeval data into a slice.
         If None, the default slicing function will be used.
     v_x : un.Quantity, optional
-        The x-component of the velocity field to 
+        The x-component of the velocity field to
         plot as a vector field on top of the slice plot.
         This is a 2D array with shape (Nx, Ny).
     v_y : un.Quantity, optional
-        The y-component of the velocity field to 
+        The y-component of the velocity field to
         plot as a vector field on top of the slice plot.
         This is a 2D array with shape (Nx, Ny).
     quiver_label : str | bool, optional
-        The label for the quiver plot that appears on the 
+        The label for the quiver plot that appears on the
         top right corner right outside of the plot area.
-        If True, a default label will be put, 
+        If True, a default label will be put,
         assuming the velocity is being plotted.
         If False, no label will be added.
     quiver_kwargs : dict, optional
-        Additional keyword arguments for the quiver plot, 
+        Additional keyword arguments for the quiver plot,
         such as arrow color, width, etc.
         See `matplotlib.pyplot.quiver` for more details.
     quiver_label_kwargs : dict, optional

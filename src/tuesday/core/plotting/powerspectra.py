@@ -87,6 +87,7 @@ def plot_1d_power_spectrum_k(
         ax.legend(**legend_kwargs)
     return ax
 
+
 def plot_1d_power_spectrum_z(
     power_spectrum: list[SphericalPS],
     *,
@@ -119,7 +120,7 @@ def plot_1d_power_spectrum_z(
         Label for the y-axis.
     at_k : float | int, optional
         If provided, plots the 1D power spectrum at a specific k value.
-        The k value is assumed to be in the same unit 
+        The k value is assumed to be in the same unit
         as the k in the SphericalPS instance wavemodes.
     color : str, optional
         Color of the PS line in the plot.
@@ -189,7 +190,6 @@ def plot_1d_power_spectrum_z(
     if legend is not None:
         ax.legend(**legend_kwargs)
     return ax
-
 
 
 def plot_2d_power_spectrum(
@@ -393,9 +393,8 @@ def plot_power_spectrum(
             smooth=smooth,
             legend_kwargs=legend_kwargs,
         )
-    elif (
-        hasattr(power_spectrum, "__len__")
-        and np.all([isinstance(ps, SphericalPS) for ps in power_spectrum])
+    elif hasattr(power_spectrum, "__len__") and np.all(
+        [isinstance(ps, SphericalPS) for ps in power_spectrum]
     ):
         if legend_kwargs is None:
             legend_kwargs = {}

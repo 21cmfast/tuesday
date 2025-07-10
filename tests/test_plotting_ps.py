@@ -9,7 +9,6 @@ from tuesday.core import (
     SphericalPS,
     calculate_ps_coeval,
     plot_1d_power_spectrum_k,
-    plot_1d_power_spectrum_z,
     plot_2d_power_spectrum,
     plot_power_spectrum,
 )
@@ -79,7 +78,7 @@ def test_1d_ps_plot(ps1d: SphericalPS):
         logx=False,
         logy=False,
         smooth=True,
-        at_k=1.,
+        at_k=1.0,
     )
 
     with pytest.raises(ValueError, match="power_spectrum must be a SphericalPS"):
