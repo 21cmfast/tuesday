@@ -60,11 +60,14 @@ def test_coeval_slice(test_coeval):
         v_y=test_coeval[15, ...] * un.m / un.s,
         quiver_decimate_factor=3,
         quiver_label="Velocity [m/s]",
+        quiver_label_kwargs={"color": "blue"},
+        quiver_kwargs={"color": "blue", "scale": 0.1},
     )
 
     ax = plot_coeval_slice(
         test_coeval.value * un.mK**2,
         300 * un.cm,
+        ax=ax,
         transform2slice=coeval2slice_x(idx=5),
         smooth=True,
         v_x=test_coeval[15, ...] * un.m / un.s,
