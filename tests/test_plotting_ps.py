@@ -68,7 +68,7 @@ def test_1d_ps_plot(ps1d: SphericalPS):
         legend="foo",
         logx=False,
         logy=False,
-        smooth=True,
+        smooth=False,
     )
 
     plot_power_spectrum(
