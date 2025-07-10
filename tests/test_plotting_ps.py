@@ -9,6 +9,7 @@ from tuesday.core import (
     SphericalPS,
     calculate_ps_coeval,
     plot_1d_power_spectrum_k,
+    plot_1d_power_spectrum_z,
     plot_2d_power_spectrum,
     plot_power_spectrum,
 )
@@ -75,11 +76,21 @@ def test_1d_ps_plot(ps1d: SphericalPS):
         ax=ax,
         title="Test Title",
         legend="foo",
-        logx=False,
-        logy=False,
+        logx=True,
+        logy=True,
         smooth=True,
         at_k=1.0,
     )
+
+    with pytest.raises(
+        ValueError,
+        match="power_spectrum must be a SphericalPS object or a list of "
+        "SphericalPS objects,"
+        " got <class 'numpy.ndarray'> instead.",
+    ):
+        plot_1d_power_spectrum_z(
+            [ps1d, np.ones((10, 10))],
+        )
 
     with pytest.raises(ValueError, match="power_spectrum must be a SphericalPS"):
         plot_1d_power_spectrum_k(np.linspace(0, 10, 10))  # Not a dataclass
