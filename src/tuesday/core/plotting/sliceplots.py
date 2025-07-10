@@ -308,6 +308,12 @@ def plot_coeval_slice(
     ax: plt.Axes | None = None,
     smooth: bool | float = False,
     transform2slice: Callable | None = None,
+    v_x: un.Quantity | None = None,
+    v_y: un.Quantity | None = None,
+    quiver_key: str | bool = False,
+    quiver_kwargs: dict | None = None,
+    quiver_key_kwargs: dict | None = None,
+    quiver_decimate_factor: int = 1,
 ) -> plt.Axes:
     """Plot a slice from a coeval of shape (HII_DIM, HII_DIM, HII_DIM)."""
     validate(box_length, "length")
@@ -332,7 +338,7 @@ def plot_coeval_slice(
             clabel = "Density Contrast"
         else:
             clabel = f"{coeval.unit.physical_type} " + f" [{coeval.unit:latex_inline}]"
-    return _plot_slice(
+    ax = _plot_slice(
         coeval,
         xaxis,
         yaxis,
@@ -350,6 +356,37 @@ def plot_coeval_slice(
         cmap=cmap,
         ax=ax,
     )
+    if v_x is not None and v_y is not None:
+        if quiver_kwargs is None:
+            quiver_kwargs = {
+                "X": xaxis.value[::quiver_decimate_factor],
+                "Y": yaxis.value[::quiver_decimate_factor],
+                "U": v_x.value[::quiver_decimate_factor, ::quiver_decimate_factor],
+                "V": v_y.value[::quiver_decimate_factor, ::quiver_decimate_factor],
+                "color": "k",
+                "width": 0.006,
+                "headwidth": 4,
+            }
+        if quiver_key:
+            quiver_key = "Velocity " + f"[{v_x.unit:latex_inline}]"
+        if quiver_key_kwargs is None:
+            quiver_key_kwargs = {
+                "X": 0.9,
+                "Y": 0.9,
+                "U": 1.0,
+                "label": quiver_key,
+                "labelpos": "E",
+                "coordinates": "figure",
+            }
+        x = quiver_kwargs.pop("X")
+        y = quiver_kwargs.pop("Y")
+        u = quiver_kwargs.pop("U")
+        v = quiver_kwargs.pop("V")
+
+        axq = ax.quiver(x, y, u, v, **quiver_kwargs)
+        if isinstance(quiver_key, str):
+            ax.quiverkey(axq, **quiver_key_kwargs)
+    return ax
 
 
 def plot_pdf(
