@@ -454,14 +454,26 @@ def plot_coeval_slice(
         if quiver_label:
             quiver_label = "Velocity " + f"[{v_x.unit:latex_inline}]"
         if quiver_label_kwargs is None:
+            label_x = 0.9
+            label_y = 0.9
+            label_len = 1.0
             quiver_label_kwargs = {
-                "X": 0.9,
-                "Y": 0.9,
-                "U": 1.0,
-                "label": quiver_label,
                 "labelpos": "E",
                 "coordinates": "figure",
             }
+        else:
+            if "X" not in quiver_label_kwargs:
+                label_x = 0.9
+            else:
+                label_x = quiver_label_kwargs["X"]
+            if "Y" not in quiver_label_kwargs:
+                label_y = 0.9
+            else:
+                label_y = quiver_label_kwargs["Y"]
+            if "U" not in quiver_label_kwargs:
+                label_len = 1.0
+            else:
+                label_len = quiver_label_kwargs["U"]
         x = quiver_kwargs.pop("X")
         y = quiver_kwargs.pop("Y")
         u = quiver_kwargs.pop("U")
@@ -469,7 +481,9 @@ def plot_coeval_slice(
 
         axq = ax.quiver(x, y, u, v, **quiver_kwargs)
         if isinstance(quiver_label, str):
-            ax.quiverkey(axq, **quiver_label_kwargs)
+            ax.quiverkey(
+                axq, label_x, label_y, label_len, quiver_label, **quiver_label_kwargs
+            )
     return ax
 
 
