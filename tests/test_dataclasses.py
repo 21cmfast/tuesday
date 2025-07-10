@@ -74,7 +74,7 @@ def test_ps_correct_units(unit, delta):
         is_deltasq=delta,
     ).kcenters
 
-    assert np.allclose(kcenters.value, (kedges[:-1] + kedges[1:]) / 2.0)
+    assert np.allclose(kcenters.value, (kedges.value[:-1] + kedges.value[1:]) / 2.0)
 
     kedges = np.logspace(0, 1, 11) / un.m
     kcenters = SphericalPS(

@@ -438,6 +438,19 @@ def plot_coeval_slice(
                 "width": 0.006,
                 "headwidth": 4,
             }
+        else:
+            if "X" not in quiver_kwargs:
+                quiver_kwargs["X"] = xaxis.value[::quiver_decimate_factor]
+            if "Y" not in quiver_kwargs:
+                quiver_kwargs["Y"] = yaxis.value[::quiver_decimate_factor]
+            if "U" not in quiver_kwargs:
+                quiver_kwargs["U"] = v_x.value[
+                    ::quiver_decimate_factor, ::quiver_decimate_factor
+                ]
+            if "V" not in quiver_kwargs:
+                quiver_kwargs["V"] = v_y.value[
+                    ::quiver_decimate_factor, ::quiver_decimate_factor
+                ]
         if quiver_label:
             quiver_label = "Velocity " + f"[{v_x.unit:latex_inline}]"
         if quiver_label_kwargs is None:
