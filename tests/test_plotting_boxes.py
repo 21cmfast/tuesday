@@ -56,6 +56,10 @@ def test_coeval_slice(test_coeval):
         logx=True,
         logy=True,
         transform2slice=coeval2slice_y(idx=5),
+        v_x=test_coeval[15, ...] * un.m / un.s,
+        v_y=test_coeval[15, ...] * un.m / un.s,
+        quiver_decimate_factor=3,
+        quiver_key="Velocity [m/s]",
     )
 
     ax = plot_coeval_slice(

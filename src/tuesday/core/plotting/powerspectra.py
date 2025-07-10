@@ -106,11 +106,11 @@ def plot_1d_power_spectrum(
         if smooth:
             ps = gaussian_filter(power_spectrum[i].ps, sigma=smooth)
         else:
-            ps = power_spectrum[i].ps
+            ps = power_spectrum[i].ps.value
         if len(power_spectrum) == 1:
-            psvals = ps.value
+            psvals = ps
         else:
-            psvals.append(ps.value[at_k])
+            psvals.append(ps[at_k])
     ax.plot(xaxis, psvals, color=color, label=legend)
     if title is not None:
         ax.set_title(title, fontsize=fontsize)
