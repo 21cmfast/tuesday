@@ -70,6 +70,7 @@ def test_1d_ps_plot(ps1d: SphericalPS):
         logx=False,
         logy=False,
         smooth=False,
+        at_k=1.0,
     )
 
     plot_power_spectrum(
@@ -92,6 +93,7 @@ def test_1d_ps_plot(ps1d: SphericalPS):
     ):
         plot_1d_power_spectrum_z(
             [ps1d, np.ones((10, 10))],
+            1.0,
         )
 
     with pytest.raises(ValueError, match="power_spectrum must be a SphericalPS"):
