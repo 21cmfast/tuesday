@@ -308,8 +308,85 @@ def plot_coeval_slice(
     ax: plt.Axes | None = None,
     smooth: bool | float = False,
     transform2slice: Callable | None = None,
+    v_x: un.Quantity | None = None,
+    v_y: un.Quantity | None = None,
+    quiver_label: str | bool = False,
+    quiver_kwargs: dict | None = None,
+    quiver_label_kwargs: dict | None = None,
+    quiver_decimate_factor: int = 1,
 ) -> plt.Axes:
-    """Plot a slice from a coeval of shape (HII_DIM, HII_DIM, HII_DIM)."""
+    """Plot a slice from a coeval of shape (Nx, Ny, N redshifts).
+
+    Parameters
+    ----------
+    coeval : un.Quantity
+        The coeval data cube with shape (Nx, Ny, N redshifts).
+    box_length : un.Quantity
+        The length of the box.
+    title : str, optional
+        The title of the plot.
+    xlabel : str, optional
+        The label for the x-axis.
+    ylabel : str, optional
+        The label for the y-axis.
+    clabel : str, optional
+        The label for the colorbar.
+    cmap : str, optional
+        The colormap to use for the plot.
+    logx : bool, optional
+        Whether to use a logarithmic scale for the x-axis.
+    logy : bool, optional
+        Whether to use a logarithmic scale for the y-axis.
+    logc : bool, optional
+        Whether to use a logarithmic scale for the colorbar.
+    idx : int, optional
+        The index of the slice to plot along the z-axis.
+        Default is 0.
+    vmin : float, optional
+        The minimum value for the color scale.
+    vmax : float, optional
+        The maximum value for the color scale.
+    ax : plt.Axes, optional
+        The axes to plot on. If None, a new figure and axes will be created.
+    smooth : bool | float, optional
+        Whether to apply Gaussian smoothing to the coeval data.
+        If True, a default sigma of 1.0 will be used.
+        If a float, it will be used as the sigma for the Gaussian filter.
+    transform2slice : Callable, optional
+        A function to transform the coeval data into a slice.
+        If None, the default slicing function will be used.
+    v_x : un.Quantity, optional
+        The x-component of the velocity field to
+        plot as a vector field on top of the slice plot.
+        This is a 2D array with shape (Nx, Ny).
+    v_y : un.Quantity, optional
+        The y-component of the velocity field to
+        plot as a vector field on top of the slice plot.
+        This is a 2D array with shape (Nx, Ny).
+    quiver_label : str | bool, optional
+        The label for the quiver plot that appears on the
+        top right corner right outside of the plot area.
+        If True, a default label will be put,
+        assuming the velocity is being plotted.
+        If False, no label will be added.
+    quiver_kwargs : dict, optional
+        Additional keyword arguments for the quiver plot,
+        such as arrow color, width, etc.
+        See `matplotlib.pyplot.quiver` for more details.
+    quiver_label_kwargs : dict, optional
+        Additional keyword arguments for the quiver label,
+        such as color, angle, etc.
+        See `matplotlib.pyplot.quiverkey` for more details.
+    quiver_decimate_factor : int, optional
+        The factor by which to decimate the vector field for plotting.
+        This is useful for reducing the number of arrows in the quiver plot
+        to avoid cluttering the plot. Default is 1 (no decimation).
+
+    Returns
+    -------
+    plt.Axes
+        The axes with the coeval slice plot.
+    """
     validate(box_length, "length")
     rcParams.update({"font.size": fontsize})
     if ax is None:
@@ -332,7 +409,7 @@ def plot_coeval_slice(
             clabel = "Density Contrast"
         else:
             clabel = f"{coeval.unit.physical_type} " + f" [{coeval.unit:latex_inline}]"
-    return _plot_slice(
+    ax = _plot_slice(
         coeval,
         xaxis,
         yaxis,
@@ -350,6 +427,43 @@ def plot_coeval_slice(
         cmap=cmap,
         ax=ax,
     )
+    if v_x is not None and v_y is not None:
+        if quiver_kwargs is None:
+            quiver_kwargs = {
+                "color": "k",
+                "width": 0.006,
+                "headwidth": 4,
+            }
+
+        if quiver_label:
+            quiver_label = "Velocity " + f"[{v_x.unit:latex_inline}]"
+        if quiver_label_kwargs is None:
+            quiver_label_kwargs = {
+                "labelpos": "E",
+                "coordinates": "figure",
+            }
+
+        axq = ax.quiver(
+            quiver_kwargs.pop("X", xaxis.value[::quiver_decimate_factor]),
+            quiver_kwargs.pop("Y", yaxis.value[::quiver_decimate_factor]),
+            quiver_kwargs.pop(
+                "U", v_x.value[::quiver_decimate_factor, ::quiver_decimate_factor]
+            ),
+            quiver_kwargs.pop(
+                "V", v_y.value[::quiver_decimate_factor, ::quiver_decimate_factor]
+            ),
+            **quiver_kwargs,
+        )
+        if isinstance(quiver_label, str):
+            ax.quiverkey(
+                axq,
+                quiver_label_kwargs.pop("X", 0.9),
+                quiver_label_kwargs.pop("Y", 0.9),
+                quiver_label_kwargs.pop("U", 1.0),
+                quiver_label,
+                **quiver_label_kwargs,
+            )
+    return ax
 
 
 def plot_pdf(

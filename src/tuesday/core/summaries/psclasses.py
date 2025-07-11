@@ -109,7 +109,14 @@ class SphericalPS:
     @property
     def kcenters(self) -> un.Quantity:
         """Return the centers of the k bins."""
-        return self.k if len(self.k) == self.nk else (self.k[:-1] + self.k[1:]) / 2.0
+        if len(self.k) == self.nk:
+            return self.k
+        if np.allclose(np.diff(self.k), np.diff(self.k)[0]):
+            return (self.k[:-1] + self.k[1:]) / 2.0
+        return (
+            np.exp((np.log(self.k.value[1:]) + np.log(self.k.value[:-1])) / 2)
+            * self.k.unit
+        )
 
 
 @dataclass(frozen=True)

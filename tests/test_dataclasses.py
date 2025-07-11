@@ -65,19 +65,28 @@ def test_ps_correct_units(unit, delta):
         kpar=np.linspace(0, 10, 10) / unit,
         is_deltasq=delta,
     )
-    SphericalPS(
+    kedges = np.linspace(0, 1, 11) / un.m
+    kcenters = SphericalPS(
         np.linspace(0, 10, 10) * un.dimensionless_unscaled
         if delta
         else np.linspace(0, 10, 10) * un.dimensionless_unscaled * unit**3,
-        k=np.linspace(0, 10, 10) / un.m,
+        k=kedges,
         is_deltasq=delta,
-    )
-    SphericalPS(
+    ).kcenters
+
+    assert np.allclose(kcenters.value, (kedges.value[:-1] + kedges.value[1:]) / 2.0)
+
+    kedges = np.logspace(0, 1, 11) / un.m
+    kcenters = SphericalPS(
         np.linspace(0, 10, 10) * un.mK**2
         if delta
         else np.linspace(0, 10, 10) * un.K**2 * unit**3,
-        k=np.linspace(0, 10, 10) / unit,
+        k=kedges,
         is_deltasq=delta,
+    ).kcenters
+    assert np.allclose(
+        kcenters.value,
+        np.exp((np.log(kedges.value[1:]) + np.log(kedges.value[:-1])) / 2),
     )
 
 
