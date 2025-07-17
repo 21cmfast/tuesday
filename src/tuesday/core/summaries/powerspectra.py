@@ -185,7 +185,7 @@ def calculate_ps(
     ps1d = None
     if calc_2d:
         results = get_power(
-            chunk,
+            chunk.value,
             (
                 box_length.value,
                 box_length.value,

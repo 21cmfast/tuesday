@@ -82,7 +82,7 @@ def test_calculate_ps_errors(test_lc):
 @pytest.mark.parametrize("log_bins", [True, False])
 def test_calculate_ps_lc(log_bins, test_lc, test_redshifts):
     calculate_ps_lc(
-        test_lc * un.dimensionless_unscaled,
+        test_lc * un.mK,
         200 * un.Mpc,
         test_redshifts,
         ps_redshifts=[6.0],
@@ -126,7 +126,7 @@ def test_calculate_ps_lc(log_bins, test_lc, test_redshifts):
 def test_calculate_ps_coeval(test_coeval):
     with np.testing.assert_raises(TypeError):
         calculate_ps_coeval(
-            test_coeval * un.dimensionless_unscaled,
+            test_coeval * un.mK,
             box_length=200 * un.Mpc,
             ps_redshifts=6.8,
             calc_1d=False,
