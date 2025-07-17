@@ -16,7 +16,7 @@ authors = [
     { name = "James Davies", email = "james.davies@sns.it" },
     { name = "Steven Murray", email = "murray.steveng@gmail.com" },
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = {text="MIT"}
 classifiers = [
     "Development Status :: 4 - Beta",
