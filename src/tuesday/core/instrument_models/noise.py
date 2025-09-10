@@ -255,13 +255,12 @@ def sample_from_rms_noise(
     noise = np.fft.ifftshift(noise, axes=(1, 2))
     if lightcone is not None:
         if lightcone.shape != noise.shape[1:]:
-            raise ValueError(
-                "Lightcone shape must be the same as rms_noise shape "
-            )
+            raise ValueError("Lightcone shape must be the same as rms_noise shape ")
         noise += np.fft.fftshift(np.fft.fft2(lightcone.value), axes=(1, 2))[None, ...]
     noise = np.fft.ifft2(noise, axes=(1, 2))
 
     return noise.real * rms_noise.unit
+
 
 def thermal_noise_uv(
     observation: Observation,
@@ -272,7 +271,7 @@ def thermal_noise_uv(
     beam_area: un.Quantity | None = None,
 ):
     """Thermal noise RMS per voxel in uv space.
-    
+
     Parameters
     ----------
     observation : py21cmsense.Observation
@@ -293,7 +292,7 @@ def thermal_noise_uv(
     Returns
     -------
     sigma : astropy.units.Quantity
-        Thermal noise RMS per voxel in uv space 
+        Thermal noise RMS per voxel in uv space
         with shape (Nx, Ny, Nfreqs).
 
     """
@@ -329,6 +328,7 @@ def thermal_noise_uv(
     sigma[uv_coverage == 0.0] = 0.0
     return sigma
 
+
 def sample_lc_noise(
     lightcone: un.Quantity,
     observation: Observation,
@@ -340,10 +340,7 @@ def sample_lc_noise(
     nsamples: int = 1,
     window_fnc: str = "blackmanharris",
 ):
-    """Sample thermal noise given a lightcone of 21-cm signal.
-    
-    
-    """
+    """Sample thermal noise given a lightcone of 21-cm signal."""
     sigma = thermal_noise_uv(
         observation,
         freqs,
