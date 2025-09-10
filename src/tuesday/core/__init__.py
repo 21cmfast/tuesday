@@ -26,6 +26,7 @@ __all__ = [
     "sample_lc_noise",
     "taper2d",
     "thermal_noise_per_voxel",
+    "thermal_noise_uv",
     "validate",
 ]
 from .instrument_models.noise import (
@@ -34,6 +35,7 @@ from .instrument_models.noise import (
     sample_lc_noise,
     taper2d,
     thermal_noise_per_voxel,
+    thermal_noise_uv,
 )
 from .plotting.powerspectra import (
     plot_1d_power_spectrum_k,

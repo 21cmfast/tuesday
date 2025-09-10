@@ -208,6 +208,7 @@ def taper2d(n: int, taper: str = "blackmanharris"):
 
 def sample_from_rms_noise(
     rms_noise: un.Quantity,
+    lightcone: un.Quantity | None = None,
     seed: int | None = None,
     nsamples: int = 1,
     window_fnc: str = "blackmanharris",
@@ -218,6 +219,11 @@ def sample_from_rms_noise(
     ----------
     rms_noise : astropy.units.Quantity
         RMS noise in uv space, shape (Nx, Ny, Nfreqs).
+    lightcone : astropy.units.Quantity, optional
+        Lightcone on which the noise is to be added.
+        If provided, its shape must be the same as rms_noise.
+        If not provided, a noise realisation (without cosmological signal)
+        is sampled.
     nsamples : int, optional
         Number of noise realisations to sample, by default 1.
     window_fnc : str, optional
@@ -246,23 +252,51 @@ def sample_from_rms_noise(
 
     noise *= window_fnc[None, ..., None]
     noise = (noise + np.conj(noise)) / 2.0
-    noise = np.fft.ifft2(np.fft.ifftshift(noise, axes=(1, 2)), axes=(1, 2))
+    noise = np.fft.ifftshift(noise, axes=(1, 2))
+    if lightcone is not None:
+        if lightcone.shape != noise.shape[1:]:
+            raise ValueError(
+                "Lightcone shape must be the same as rms_noise shape "
+            )
+        noise += np.fft.fftshift(np.fft.fft2(lightcone.value), axes=(1, 2))[None, ...]
+    noise = np.fft.ifft2(noise, axes=(1, 2))
 
     return noise.real * rms_noise.unit
 
-
-def sample_lc_noise(
+def thermal_noise_uv(
     observation: Observation,
     freqs: un.Quantity,
     boxlength: un.Quantity,
     lc_shape: tuple[int, int, int],
     antenna_effective_area: un.Quantity | None = None,
     beam_area: un.Quantity | None = None,
-    seed: int | None = None,
-    nsamples: int = 1,
-    window_fnc: str = "blackmanharris",
 ):
-    """Test the grid_baselines function."""
+    """Thermal noise RMS per voxel in uv space.
+    
+    Parameters
+    ----------
+    observation : py21cmsense.Observation
+        Instance of `Observation`.
+    freqs : astropy.units.Quantity
+        Frequencies at which the noise is calculated.
+    boxlength : astropy.units.Quantity
+        Length of the box in which the noise is calculated.
+    lc_shape : tuple
+        Shape of the lightcone (Nx, Ny, Nz).
+        We assume that Nx = Ny to be sky-plane dimensions,
+        and Nz to be to line-of-sight (frequency) dimension.
+    antenna_effective_area : astropy.units.Quantity, optional
+        Effective area of the antenna with shape (Nfreqs,).
+    beam_area : astropy.units.Quantity, optional
+        Beam area of the antenna with shape (Nfreqs,).
+
+    Returns
+    -------
+    sigma : astropy.units.Quantity
+        Thermal noise RMS per voxel in uv space 
+        with shape (Nx, Ny, Nfreqs).
+
+    """
     observatory = observation.observatory
     time_offsets = observatory.time_offsets_from_obs_int_time(
         observation.integration_time, observation.time_per_day
@@ -293,7 +327,32 @@ def sample_lc_noise(
     )
     sigma = sigma_rms / np.sqrt(uv_coverage * observation.n_days)
     sigma[uv_coverage == 0.0] = 0.0
+    return sigma
+
+def sample_lc_noise(
+    lightcone: un.Quantity,
+    observation: Observation,
+    freqs: un.Quantity,
+    boxlength: un.Quantity,
+    antenna_effective_area: un.Quantity | None = None,
+    beam_area: un.Quantity | None = None,
+    seed: int | None = None,
+    nsamples: int = 1,
+    window_fnc: str = "blackmanharris",
+):
+    """Sample thermal noise given a lightcone of 21-cm signal.
+    
+    
+    """
+    sigma = thermal_noise_uv(
+        observation,
+        freqs,
+        boxlength,
+        lightcone.shape,
+        antenna_effective_area=antenna_effective_area,
+        beam_area=beam_area,
+    )
 
     return sample_from_rms_noise(
-        sigma, seed=seed, nsamples=nsamples, window_fnc=window_fnc
+        sigma, lightcone=lightcone, seed=seed, nsamples=nsamples, window_fnc=window_fnc
     )
