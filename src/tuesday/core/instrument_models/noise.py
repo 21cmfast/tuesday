@@ -266,7 +266,6 @@ def thermal_noise_uv(
     observation: Observation,
     freqs: un.Quantity,
     boxlength: un.Quantity,
-    *,
     lc_shape: tuple[int, int, int],
     antenna_effective_area: un.Quantity | None = None,
     beam_area: un.Quantity | None = None,
