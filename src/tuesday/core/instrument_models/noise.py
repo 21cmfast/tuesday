@@ -212,6 +212,7 @@ def sample_from_rms_noise(
     seed: int | None = None,
     nsamples: int = 1,
     window_fnc: str = "blackmanharris",
+    return_in_uv: bool = False,
 ):
     """Sample noise for a lightcone slice given the corresponding rms noise in uv space.
 
@@ -224,16 +225,22 @@ def sample_from_rms_noise(
         If provided, its shape must be the same as rms_noise.
         If not provided, a noise realisation (without cosmological signal)
         is sampled.
+    seed : int, optional
+        Random seed for reproducibility, by default None.
     nsamples : int, optional
         Number of noise realisations to sample, by default 1.
     window_fnc : str, optional
         Name of window function to be applied to the noise sampled in uv space,
         by default windows.blackmanharris.
+    return_in_uv : bool, optional
+        If True, return the noise sampled in uv space instead of real space,
+        by default False.
 
     Returns
     -------
     lc_noise : un.Quantity
-        Noise sampled in real space, shape (nsamples, Nx, Ny, Nfreqs
+        Noise sampled in real or uv space, shape 
+        (nsamples, Nx or Nu, Ny or Nv, Nfreqs)
 
     """
     if len(rms_noise.shape) == 2:
@@ -257,9 +264,12 @@ def sample_from_rms_noise(
         if lightcone.shape != noise.shape[1:]:
             raise ValueError("Lightcone shape must be the same as rms_noise shape ")
         noise += np.fft.fftshift(np.fft.fft2(lightcone.value), axes=(1, 2))[None, ...]
-    noise = np.fft.ifft2(noise, axes=(1, 2))
+    if not return_in_uv:
+        noise = np.fft.ifft2(noise, axes=(1, 2)).real * rms_noise.unit
+    else:
+        noise = noise * rms_noise.unit
 
-    return noise.real * rms_noise.unit
+    return noise
 
 
 def thermal_noise_uv(
@@ -395,10 +405,15 @@ def sample_lc_noise(
         beam_area=beam_area,
     )
 
-    sigma_noise = sample_from_rms_noise(
-        sigma, lightcone=lightcone, seed=seed, nsamples=nsamples, window_fnc=window_fnc
+    sigma_noise_ft = sample_from_rms_noise(
+        sigma, 
+        lightcone=lightcone, 
+        seed=seed, 
+        nsamples=nsamples, 
+        window_fnc=window_fnc,
+        return_in_uv=True,
     )
-    lc_ft = np.fft.fft2(lightcone.value)
-    lc_ft[sigma_noise == 0] = 0.
-    noisy_lc_ft = lc_ft + sigma_noise
-    return np.fft.ifft2(noisy_lc_ft, axes=(1, 2)).real * lightcone.unit
+    lc_ft = np.fft.fft2(lightcone.value) * lightcone.unit
+    lc_ft[sigma == 0] = 0.
+    noisy_lc_ft = lc_ft + sigma_noise_ft
+    return np.fft.ifft2(noisy_lc_ft, axes=(1, 2)).real.to(lightcone.unit)
