@@ -208,7 +208,6 @@ def taper2d(n: int, taper: str = "blackmanharris"):
 
 def sample_from_rms_noise(
     rms_noise: un.Quantity,
-    lightcone: un.Quantity | None = None,
     seed: int | None = None,
     nsamples: int = 1,
     window_fnc: str = "blackmanharris",
@@ -220,11 +219,6 @@ def sample_from_rms_noise(
     ----------
     rms_noise : astropy.units.Quantity
         RMS noise in uv space, shape (Nx, Ny, Nfreqs).
-    lightcone : astropy.units.Quantity, optional
-        Lightcone on which the noise is to be added.
-        If provided, its shape must be the same as rms_noise.
-        If not provided, a noise realisation (without cosmological signal)
-        is sampled.
     seed : int, optional
         Random seed for reproducibility, by default None.
     nsamples : int, optional
@@ -238,7 +232,7 @@ def sample_from_rms_noise(
 
     Returns
     -------
-    lc_noise : un.Quantity
+    noise : un.Quantity
         Noise sampled in real or uv space, shape 
         (nsamples, Nx or Nu, Ny or Nv, Nfreqs)
 
@@ -260,10 +254,13 @@ def sample_from_rms_noise(
     noise *= window_fnc[None, ..., None]
     noise = (noise + np.conj(noise)) / 2.0
     noise = np.fft.ifftshift(noise, axes=(1, 2))
+<<<<<<< HEAD
     if lightcone is not None:
         if lightcone.shape != noise.shape[1:]:
             raise ValueError("Lightcone shape must be the same as rms_noise shape ")
         noise += np.fft.fftshift(np.fft.fft2(lightcone.value), axes=(1, 2))[None, ...]
+=======
+>>>>>>> c8d0a14 (feat: Issue #48 feature 2)
     if not return_in_uv:
         noise = np.fft.ifft2(noise, axes=(1, 2)).real * rms_noise.unit
     else:
@@ -407,7 +404,6 @@ def sample_lc_noise(
 
     sigma_noise_ft = sample_from_rms_noise(
         sigma, 
-        lightcone=lightcone, 
         seed=seed, 
         nsamples=nsamples, 
         window_fnc=window_fnc,
