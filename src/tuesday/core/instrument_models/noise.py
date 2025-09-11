@@ -233,7 +233,7 @@ def sample_from_rms_noise(
     Returns
     -------
     noise : un.Quantity
-        Noise sampled in real or uv space, shape 
+        Noise sampled in real or uv space, shape
         (nsamples, Nx or Nu, Ny or Nv, Nfreqs)
 
     """
@@ -342,7 +342,7 @@ def sample_lc_noise(
     nsamples: int = 1,
     window_fnc: str = "blackmanharris",
 ):
-    """Sample thermal noise and add it in Fourier space 
+    """Sample thermal noise and add it in Fourier space
     to a given lightcone of 21-cm signal.
 
     Parameters
@@ -370,12 +370,12 @@ def sample_lc_noise(
     window_fnc : str, optional
         Name of window function to be applied to the noise sampled in uv space,
         by default windows.blackmanharris.
-    
+
     Returns
     -------
     lightcone samples with noise
-    
-    
+
+
     """
     if freqs is None:
         if lightcone_redshifts is None:
@@ -396,13 +396,13 @@ def sample_lc_noise(
     )
 
     sigma_noise_ft = sample_from_rms_noise(
-        sigma, 
-        seed=seed, 
-        nsamples=nsamples, 
+        sigma,
+        seed=seed,
+        nsamples=nsamples,
         window_fnc=window_fnc,
         return_in_uv=True,
     )
     lc_ft = np.fft.fft2(lightcone.value) * lightcone.unit
-    lc_ft[sigma == 0] = 0.
+    lc_ft[sigma == 0] = 0.0
     noisy_lc_ft = lc_ft + sigma_noise_ft
     return np.fft.ifft2(noisy_lc_ft, axes=(1, 2)).real.to(lightcone.unit)
