@@ -1,5 +1,6 @@
 """Tests for lightcone noise generation."""
 
+from networkx import sigma
 import astropy.units as un
 import numpy as np
 import pytest
@@ -60,7 +61,7 @@ def test_grid_baselines(observation):
 def test_thermal_noise_per_voxel(observation):
     """Test the thermal_noise_per_voxel function."""
     boxlength = 300.0 * un.Mpc
-    lc_shape = (20, 20, 1945)
+    lc_shape = (20, 20, 2)
     thermal_noise_per_voxel(
         observation,
         150 * un.MHz,
@@ -68,7 +69,7 @@ def test_thermal_noise_per_voxel(observation):
         lc_shape,
         antenna_effective_area=[517.7] * un.m**2,
     )
-    thermal_noise_per_voxel(
+   sigma = thermal_noise_per_voxel(
         observation, np.array([150.0, 120.0]) * un.MHz, boxlength, lc_shape
     )
     with pytest.raises(
@@ -108,14 +109,12 @@ def test_thermal_noise_per_voxel(observation):
             beam_area=[517.7, 200.0] * un.rad**2,
         )
 
-
-def test_sample_from_rms_noise():
-    """Test the sample_from_rms_noise function."""
-    sample_from_rms_noise(
-        np.random.default_rng(0).normal(5.0, 1.0, (10, 10, 2)) * un.mK,
+    foo = sample_from_rms_noise(
+        sigma,
         seed=4,
         nsamples=10,
     )
+    assert foo.shape == (10,) + lc_shape
 
 
 def test_sample_lc_noise(observation):
