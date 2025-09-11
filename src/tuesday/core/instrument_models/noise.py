@@ -332,7 +332,8 @@ def thermal_noise_uv(
 def sample_lc_noise(
     lightcone: un.Quantity,
     observation: Observation,
-    freqs: un.Quantity,
+    freqs: un.Quantity | None = None,
+    lightcone_redshifts: np.ndarray | None = None,
     boxlength: un.Quantity,
     antenna_effective_area: un.Quantity | None = None,
     beam_area: un.Quantity | None = None,
@@ -340,7 +341,50 @@ def sample_lc_noise(
     nsamples: int = 1,
     window_fnc: str = "blackmanharris",
 ):
-    """Sample thermal noise given a lightcone of 21-cm signal."""
+    """Sample thermal noise and add it in Fourier space 
+    to a given lightcone of 21-cm signal.
+
+    Parameters
+    ----------
+    lightcone : astropy.units.Quantity
+        Lightcone to which the noise is to be added.
+    observation : py21cmsense.Observation
+        Instance of `Observation`.
+    freqs : astropy.units.Quantity, optional
+        Frequencies at which the noise is calculated.
+        If not provided, they are calculated from the lightcone redshifts.
+    lightcone_redshifts : np.ndarray, optional
+        Redshifts corresponding to the lightcone frequency axis.
+        If not provided, the frequencies must be provided.
+    boxlength : astropy.units.Quantity
+        Length of the lightcone box side.
+    antenna_effective_area : astropy.units.Quantity, optional
+        Effective area of the antenna with shape (Nfreqs,).
+    beam_area : astropy.units.Quantity, optional
+        Beam area of the antenna with shape (Nfreqs,).
+    nsamples : int, optional
+        Number of noise realisations to sample, by default 1.
+    seed : int, optional
+        Random seed for reproducibility, by default None.
+    window_fnc : str, optional
+        Name of window function to be applied to the noise sampled in uv space,
+        by default windows.blackmanharris.
+    
+    Returns
+    -------
+    lightcone samples with noise
+    
+    
+    """
+    if freqs is None:
+        if lightcone_redshifts is None:
+            raise ValueError("You must provide either freqs or lightcone_redshifts.")
+        freqs = (1420.0 / (1 + lightcone_redshifts)) * un.MHz
+    if len(freqs) != lightcone.shape[2]:
+        raise ValueError(
+            "The length of freqs must be the same as the "
+            "length of the lightcone frequency axis."
+        )
     sigma = thermal_noise_uv(
         observation,
         freqs,
@@ -350,6 +394,10 @@ def sample_lc_noise(
         beam_area=beam_area,
     )
 
-    return sample_from_rms_noise(
+    sigma_noise = sample_from_rms_noise(
         sigma, lightcone=lightcone, seed=seed, nsamples=nsamples, window_fnc=window_fnc
     )
+    lc_ft = np.fft.fft2(lightcone.value)
+    lc_ft[sigma_noise == 0] = 0.
+    noisy_lc_ft = lc_ft + sigma_noise
+    return np.fft.ifft2(noisy_lc_ft, axes=(1, 2)).real * lightcone.unit

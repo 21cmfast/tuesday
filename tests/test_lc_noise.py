@@ -120,9 +120,10 @@ def test_sample_from_rms_noise():
 
 def test_sample_lc_noise(observation):
     """Test the sample_lc_noise function."""
+    lc = np.random.default_rng(0).normal(5.0, 1.0, (20, 20, 15)) * un.mK
     sample_lc_noise(
-        observation,
-        np.array([150.0, 120.0]) * un.MHz,
-        300.0 * un.Mpc,
-        (20, 20, 15),
+        lightcone=lc,
+        observation=observation,
+        freqs=np.array([150.0, 120.0]) * un.MHz,
+        boxlength=300.0 * un.Mpc,
     )
