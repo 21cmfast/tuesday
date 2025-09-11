@@ -11,6 +11,7 @@ from tuesday.core import (
     sample_from_rms_noise,
     sample_lc_noise,
     thermal_noise_per_voxel,
+    thermal_noise_uv,
 )
 
 
@@ -47,30 +48,30 @@ def test_grid_baselines(observation):
     proj_bls = observatory.projected_baselines(
         baselines=baselines, time_offset=time_offsets
     )
-    lc_shape = np.array([20, 20, 1945])
+    boxnside = 20
     boxlength = 30.0 * un.Mpc
-    uv_coverage = np.zeros((lc_shape[0], lc_shape[0], len(freqs)))
+    uv_coverage = np.zeros((boxnside, boxnside, len(freqs)))
 
     for i, freq in enumerate(freqs):
         # uv coverage integrated over one field
         uv_coverage[..., i] += grid_baselines_uv(
-            proj_bls[::2] * freq / freqs[0], freq, boxlength, lc_shape, weights[::2]
+            proj_bls[::2] * freq / freqs[0], freq, boxlength, boxnside, weights[::2]
         )
 
 
 def test_thermal_noise_per_voxel(observation):
     """Test the thermal_noise_per_voxel function."""
     boxlength = 300.0 * un.Mpc
-    lc_shape = (20, 20, 2)
+    boxnside = 20
     thermal_noise_per_voxel(
         observation,
         150 * un.MHz,
         boxlength,
-        lc_shape,
+        boxnside,
         antenna_effective_area=[517.7] * un.m**2,
     )
-    sigma = thermal_noise_per_voxel(
-        observation, np.array([150.0, 120.0]) * un.MHz, boxlength, lc_shape
+    thermal_noise_per_voxel(
+        observation, np.array([150.0, 120.0]) * un.MHz, boxlength, boxnside
     )
     with pytest.raises(
         ValueError,
@@ -82,7 +83,7 @@ def test_thermal_noise_per_voxel(observation):
             observation,
             np.array([150.0, 120.0]) * un.MHz,
             boxlength,
-            lc_shape,
+            boxnside,
             antenna_effective_area=517.7 * un.m**2,
             beam_area=1.0 * un.arcmin**2,
         )
@@ -95,7 +96,7 @@ def test_thermal_noise_per_voxel(observation):
             observation,
             np.array([150.0, 120.0, 100.0]) * un.MHz,
             boxlength,
-            lc_shape,
+            boxnside,
             antenna_effective_area=[517.7, 200.0] * un.m**2,
         )
     with pytest.raises(
@@ -105,24 +106,28 @@ def test_thermal_noise_per_voxel(observation):
             observation,
             np.array([150.0, 120.0, 100.0]) * un.MHz,
             boxlength,
-            lc_shape,
+            boxnside,
             beam_area=[517.7, 200.0] * un.rad**2,
         )
-
-    foo = sample_from_rms_noise(
+    sigma = thermal_noise_uv(observation,
+        np.array([150.0, 120.0, 100.0]) * un.MHz,
+        boxlength,
+        boxnside)
+    
+    samples = sample_from_rms_noise(
         sigma,
         seed=4,
         nsamples=10,
     )
-    assert foo.shape == (10,) + lc_shape
+    assert samples.shape == (10,) + sigma.shape
 
 
 def test_sample_lc_noise(observation):
     """Test the sample_lc_noise function."""
-    lc = np.random.default_rng(0).normal(5.0, 1.0, (20, 20, 15)) * un.mK
+    lc = np.random.default_rng(0).normal(5.0, 1.0, (20, 20, 2)) * un.mK
     sample_lc_noise(
         lightcone=lc,
         observation=observation,
         freqs=np.array([150.0, 120.0]) * un.MHz,
-        boxlength=300.0 * un.Mpc,
+        boxlen=300.0 * un.Mpc,
     )

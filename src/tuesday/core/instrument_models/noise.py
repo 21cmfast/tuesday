@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 def grid_baselines_uv(
     uvws: np.ndarray,
     freq: un.Quantity,
-    boxlength: un.Quantity,
-    lc_shape: tuple[int, int, int],
+    boxlen: un.Quantity,
+    boxnside: int,
     weights: np.ndarray,
     include_mirrored_bls: bool = True,
     avg_mirrored_bls: bool = True,
@@ -31,12 +31,10 @@ def grid_baselines_uv(
         Baselines in uv space with shape (N bls, N time offsets, 3).
     freq : un.Quantity
         Frequency at which the baselines are projected.
-    boxlength : un.Quantity
+    boxlen : un.Quantity
         Transverse length of the simulation box.
-    lc_shape : tuple
-        Shape of the lightcone (Nx, Ny, Nz).
-        We assume that Nx = Ny to be sky-plane dimensions,
-        and Nz to be to line-of-sight (frequency) dimension.
+    boxnside : int
+        Number of bins Nx = Ny of a lightcone or coeval box.
     weights : np.ndarray
         Weights for each baseline group with shape (N bls).
     include_mirrored_bls : bool, optional
@@ -55,13 +53,13 @@ def grid_baselines_uv(
         of observation with shape (Nu=Nx, Nv=Nx).
 
     """
-    if "littleh" in boxlength.unit.to_string():
-        boxlength = boxlength.to(un.Mpc / littleh)
+    if "littleh" in boxlen.unit.to_string():
+        boxlen = boxlen.to(un.Mpc / littleh)
     else:
-        boxlength = boxlength.to(un.Mpc) * Planck18.h / littleh
-    dx = float(boxlength.value) / float(lc_shape[0])
+        boxlen = boxlen.to(un.Mpc) * Planck18.h / littleh
+    dx = float(boxlen.value) / float(boxnside)
     ugrid_edges = (
-        np.fft.fftshift(np.fft.fftfreq(lc_shape[0], d=dx)) * 2 * np.pi * boxlength.unit
+        np.fft.fftshift(np.fft.fftfreq(boxnside, d=dx)) * 2 * np.pi * boxlen.unit
     )
 
     du = ugrid_edges[1] - ugrid_edges[0]
@@ -87,7 +85,7 @@ def thermal_noise_per_voxel(
     observation: Observation,
     freqs: np.ndarray,
     boxlen: float,
-    lc_shape: tuple[int, int, int],
+    boxnside: int,
     antenna_effective_area: un.Quantity | None = None,
     beam_area: un.Quantity | None = None,
 ):
@@ -107,10 +105,8 @@ def thermal_noise_per_voxel(
         Frequencies at which the noise is calculated.
     boxlen : astropy.units.Quantity
         Transverse length of the simulation box.
-    lc_shape : tuple
-        Shape of the lightcone (Nx, Ny, Nz).
-        We assume that Nx = Ny to be sky-plane dimensions,
-        and Nz to be to line-of-sight (frequency) dimension.
+    boxnside : int
+        Number of bins Nx = Ny of a lightcone or coeval box.
     antenna_effective_area : astropy.units.Quantity, optional
         Effective area of the antenna with shape (Nfreqs,).
     beam_area : astropy.units.Quantity, optional
@@ -168,7 +164,7 @@ def thermal_noise_per_voxel(
 
         d = Planck18.comoving_distance(f2z(nu)).to(un.Mpc)  # Mpc
         theta_box = (boxlen.to(un.Mpc) / d) * un.rad
-        omega_pix = theta_box**2 / np.prod(lc_shape[:2])
+        omega_pix = theta_box**2 / boxnside**2
 
         sqrt = np.sqrt(2.0 * observation.bandwidth.to("Hz") * obs.integration_time).to(
             un.dimensionless_unscaled
@@ -265,8 +261,8 @@ def sample_from_rms_noise(
 def thermal_noise_uv(
     observation: Observation,
     freqs: un.Quantity,
-    boxlength: un.Quantity,
-    lc_shape: tuple[int, int, int],
+    boxlen: un.Quantity,
+    boxnside: int,
     antenna_effective_area: un.Quantity | None = None,
     beam_area: un.Quantity | None = None,
 ):
@@ -278,12 +274,10 @@ def thermal_noise_uv(
         Instance of `Observation`.
     freqs : astropy.units.Quantity
         Frequencies at which the noise is calculated.
-    boxlength : astropy.units.Quantity
+    boxlen : astropy.units.Quantity
         Length of the box in which the noise is calculated.
-    lc_shape : tuple
-        Shape of the lightcone (Nx, Ny, Nz).
-        We assume that Nx = Ny to be sky-plane dimensions,
-        and Nz to be to line-of-sight (frequency) dimension.
+    boxnside : int
+        Number of bins Nx = Ny of a lightcone or coeval box.
     antenna_effective_area : astropy.units.Quantity, optional
         Effective area of the antenna with shape (Nfreqs,).
     beam_area : astropy.units.Quantity, optional
@@ -309,18 +303,18 @@ def thermal_noise_uv(
         baselines=baselines, time_offset=time_offsets
     )
 
-    uv_coverage = np.zeros((lc_shape[0], lc_shape[0], len(freqs)))
+    uv_coverage = np.zeros((boxnside, boxnside, len(freqs)))
 
     for i, freq in enumerate(freqs):
         uv_coverage[..., i] += grid_baselines_uv(
-            proj_bls[::2] * freq / freqs[0], freq, boxlength, lc_shape, weights[::2]
+            proj_bls[::2] * freq / freqs[0], freq, boxlen, boxnside, weights[::2]
         )
 
     sigma_rms = thermal_noise_per_voxel(
         observation,
         freqs,
-        boxlength,
-        lc_shape,
+        boxlen,
+        boxnside,
         antenna_effective_area=antenna_effective_area,
         beam_area=beam_area,
     )
@@ -332,7 +326,7 @@ def thermal_noise_uv(
 def sample_lc_noise(
     lightcone: un.Quantity,
     observation: Observation,
-    boxlength: un.Quantity,
+    boxlen: un.Quantity,
     *,
     freqs: un.Quantity | None = None,
     lightcone_redshifts: np.ndarray | None = None,
@@ -357,7 +351,7 @@ def sample_lc_noise(
     lightcone_redshifts : np.ndarray, optional
         Redshifts corresponding to the lightcone frequency axis.
         If not provided, the frequencies must be provided.
-    boxlength : astropy.units.Quantity
+    boxlen : astropy.units.Quantity
         Length of the lightcone box side.
     antenna_effective_area : astropy.units.Quantity, optional
         Effective area of the antenna with shape (Nfreqs,).
@@ -389,8 +383,8 @@ def sample_lc_noise(
     sigma = thermal_noise_uv(
         observation,
         freqs,
-        boxlength,
-        lightcone.shape,
+        boxlen,
+        lightcone.shape[0],
         antenna_effective_area=antenna_effective_area,
         beam_area=beam_area,
     )
