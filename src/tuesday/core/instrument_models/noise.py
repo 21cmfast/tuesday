@@ -254,13 +254,6 @@ def sample_from_rms_noise(
     noise *= window_fnc[None, ..., None]
     noise = (noise + np.conj(noise)) / 2.0
     noise = np.fft.ifftshift(noise, axes=(1, 2))
-<<<<<<< HEAD
-    if lightcone is not None:
-        if lightcone.shape != noise.shape[1:]:
-            raise ValueError("Lightcone shape must be the same as rms_noise shape ")
-        noise += np.fft.fftshift(np.fft.fft2(lightcone.value), axes=(1, 2))[None, ...]
-=======
->>>>>>> c8d0a14 (feat: Issue #48 feature 2)
     if not return_in_uv:
         noise = np.fft.ifft2(noise, axes=(1, 2)).real * rms_noise.unit
     else:
