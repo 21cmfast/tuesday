@@ -1,6 +1,5 @@
 """Tests for lightcone noise generation."""
 
-from networkx import sigma
 import astropy.units as un
 import numpy as np
 import pytest
@@ -109,11 +108,10 @@ def test_thermal_noise_per_voxel(observation):
             boxnside,
             beam_area=[517.7, 200.0] * un.rad**2,
         )
-    sigma = thermal_noise_uv(observation,
-        np.array([150.0, 120.0, 100.0]) * un.MHz,
-        boxlength,
-        boxnside)
-    
+    sigma = thermal_noise_uv(
+        observation, np.array([150.0, 120.0, 100.0]) * un.MHz, boxlength, boxnside
+    )
+
     samples = sample_from_rms_noise(
         sigma,
         seed=4,
