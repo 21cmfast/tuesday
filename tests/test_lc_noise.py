@@ -69,7 +69,7 @@ def test_thermal_noise_per_voxel(observation):
         lc_shape,
         antenna_effective_area=[517.7] * un.m**2,
     )
-   sigma = thermal_noise_per_voxel(
+    sigma = thermal_noise_per_voxel(
         observation, np.array([150.0, 120.0]) * un.MHz, boxlength, lc_shape
     )
     with pytest.raises(
