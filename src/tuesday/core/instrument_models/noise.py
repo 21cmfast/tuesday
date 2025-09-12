@@ -524,7 +524,7 @@ def sample_lc_noise(
         for i in range(nchunks):
             chunk_start = np.sum(wedge_chunk_size[:i]) if i > 0 else 0
             chunk_end = np.max([chunk_start + wedge_chunk_skip[i], lightcone.shape[2]])
-            chunk_z = lightcone_redshifts[(chunk_start+chunk_end)//2]
+            chunk_z = lightcone_redshifts[(chunk_start + chunk_end) // 2]
             lightcone_chunk = noisy_lc_real[..., chunk_start:chunk_end]
             lightcone_chunk *= windows.blackmanharris(lightcone_chunk.shape[-1])[
                 None, None, :
