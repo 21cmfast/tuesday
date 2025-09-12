@@ -265,6 +265,7 @@ def thermal_noise_uv(
     boxnside: int,
     antenna_effective_area: un.Quantity | None = None,
     beam_area: un.Quantity | None = None,
+    min_nbls_per_uv_cell: int = 1,
 ):
     """Thermal noise RMS per voxel in uv space.
 
@@ -282,6 +283,11 @@ def thermal_noise_uv(
         Effective area of the antenna with shape (Nfreqs,).
     beam_area : astropy.units.Quantity, optional
         Beam area of the antenna with shape (Nfreqs,).
+    min_nbls_per_uv_cell : int, optional
+        Minimum number of baselines per uv cell to consider
+        the cell to be measured, by default 1.
+        sigma is set to zero for uv cells with less than
+        this number of baselines.
 
     Returns
     -------
@@ -319,7 +325,7 @@ def thermal_noise_uv(
         beam_area=beam_area,
     )
     sigma = sigma_rms / np.sqrt(uv_coverage * observation.n_days)
-    sigma[uv_coverage == 0.0] = 0.0
+    sigma[uv_coverage < min_nbls_per_uv_cell] = 0.0
     return sigma
 
 
@@ -335,6 +341,7 @@ def sample_lc_noise(
     seed: int | None = None,
     nsamples: int = 1,
     window_fnc: str = "blackmanharris",
+    min_nbls_per_uv_cell: int = 1,
 ):
     """Sample thermal noise and add it in Fourier space
     to a given lightcone of 21-cm signal.
@@ -364,6 +371,11 @@ def sample_lc_noise(
     window_fnc : str, optional
         Name of window function to be applied to the noise sampled in uv space,
         by default windows.blackmanharris.
+    min_nbls_per_uv_cell : int, optional
+        Minimum number of baselines per uv cell to consider
+        the cell to be measured, by default 1.
+        Thermal noise in uv space is set to zero for 
+        uv cells with less than this number of baselines.
 
     Returns
     -------
@@ -387,6 +399,7 @@ def sample_lc_noise(
         lightcone.shape[0],
         antenna_effective_area=antenna_effective_area,
         beam_area=beam_area,
+        min_nbls_per_uv_cell=min_nbls_per_uv_cell
     )
 
     sigma_noise_ft = sample_from_rms_noise(
