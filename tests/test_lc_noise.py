@@ -126,12 +126,12 @@ def test_thermal_noise_per_voxel(observation):
 
 def test_sample_lc_noise(observation):
     """Test the sample_lc_noise function."""
-    lc = np.random.default_rng(0).normal(5.0, 1.0, (20, 20, 2)) * un.mK
+    lc = np.random.default_rng(0).normal(5.0, 1.0, (20, 20, 53)) * un.mK
     sample_lc_noise(
         lightcone=lc,
         observation=observation,
-        freqs=np.array([150.0, 120.0]) * un.MHz,
-        box_len=300.0 * un.Mpc,
+        lightcone_redshifts=np.linspace(6, 15, 53),
+        box_length=300.0 * un.Mpc,
         remove_wedge=True,
         nsamples=10,
         min_nbls_per_uv_cell=15,

@@ -370,10 +370,11 @@ def horizon_limit(buffer=0.0 * un.ns, cosmo=Planck18):
 
 def sample_lc_noise(
     lightcone: un.Quantity,
-    observation: Observation,
     box_length: un.Quantity,
     lightcone_redshifts: np.ndarray,
     *,
+    observation: Observation | None = None,
+    thermal_noise_uv_sigma: un.Quantity | None = None,
     freqs: un.Quantity | None = None,
     antenna_effective_area: un.Quantity | None = None,
     beam_area: un.Quantity | None = None,
@@ -393,12 +394,15 @@ def sample_lc_noise(
     ----------
     lightcone : astropy.units.Quantity
         Lightcone slice with shape (Nx, Ny, Nz).
-    observation : py21cmsense.Observation
-        Instance of `Observation`.
     box_length : astropy.units.Quantity
         Length of the lightcone box side.
     lightcone_redshifts : np.ndarray
         Redshifts corresponding to the last axis of the lightcone.
+    observation : py21cmsense.Observation, optional
+        Instance of `Observation`. Needed if thermal_noise_uv_sigma is not provided.
+    thermal_noise_uv_sigma : astropy.units.Quantity, optional
+        Precomputed thermal noise RMS in uv space with shape (Nx, Ny, Nz).
+        Can be computed with `thermal_noise_uv`.
     freqs : astropy.units.Quantity, optional
         Frequencies at which the thermal noise is calculated.
         Must have the same length as the lightcone frequency axis.
@@ -457,19 +461,19 @@ def sample_lc_noise(
             "The length of freqs must be the same as the "
             "length of the lightcone frequency axis."
         )
-
-    sigma = thermal_noise_uv(
-        observation,
-        freqs,
-        box_length,
-        lightcone.shape[0],
-        antenna_effective_area=antenna_effective_area,
-        beam_area=beam_area,
-        min_nbls_per_uv_cell=min_nbls_per_uv_cell,
-    )
+    if thermal_noise_uv_sigma is None:
+        thermal_noise_uv_sigma = thermal_noise_uv(
+            observation,
+            freqs,
+            box_length,
+            lightcone.shape[0],
+            antenna_effective_area=antenna_effective_area,
+            beam_area=beam_area,
+            min_nbls_per_uv_cell=min_nbls_per_uv_cell,
+        )
 
     noise_realisation_uv = sample_from_rms_noise(
-        sigma,
+        thermal_noise_uv_sigma,
         seed=seed,
         nsamples=nsamples,
         window_fnc=window_fnc,
@@ -479,9 +483,9 @@ def sample_lc_noise(
     lightcone -= lightcone.mean(axis=(0, 1), keepdims=True)
 
     lc_ft = np.fft.fft2(lightcone.value, axes=(0, 1)) * lightcone.unit
-    lc_ft[sigma == 0] = 0.0
+    lc_ft[thermal_noise_uv_sigma == 0] = 0.0
     noisy_lc_ft = lc_ft + noise_realisation_uv
-    noisy_lc_ft[..., sigma == 0] = 0.0
+    noisy_lc_ft[..., thermal_noise_uv_sigma == 0] = 0.0
 
     noisy_lc_real = np.fft.ifft2(noisy_lc_ft, axes=(1, 2)).real.to(lightcone.unit)
     if remove_wedge:
@@ -523,37 +527,38 @@ def sample_lc_noise(
         final_lc_redshifts = np.zeros(nchunks)
         for i in range(nchunks):
             chunk_start = np.sum(wedge_chunk_size[:i]) if i > 0 else 0
-            chunk_end = np.max([chunk_start + wedge_chunk_skip[i], lightcone.shape[2]])
-            chunk_z = lightcone_redshifts[(chunk_start + chunk_end) // 2]
+            chunk_end = np.min([chunk_start + wedge_chunk_skip[i], lightcone.shape[2]])
+            chunk_z = lightcone_redshifts[(chunk_start+chunk_end)//2]
             lightcone_chunk = noisy_lc_real[..., chunk_start:chunk_end]
             lightcone_chunk *= windows.blackmanharris(lightcone_chunk.shape[-1])[
                 None, None, :
             ]
-            chunk_cdist = cosmo.comoving_distance(chunk_z).to(un.Mpc)
+            chunk_cdist = cosmo.comoving_distance(lightcone_redshifts[chunk_end-1]).to(un.Mpc) - cosmo.comoving_distance(lightcone_redshifts[chunk_start]).to(un.Mpc)
             kpar = (
                 np.fft.fftshift(
                     np.fft.fftfreq(
                         lightcone_chunk.shape[-1],
-                        d=(chunk_cdist / wedge_chunk_size[i]).to(un.Mpc).value,
+                        d=(chunk_cdist / lightcone_chunk.shape[-1]).to(un.Mpc).value,
                     )
                 )
                 * 2
                 * np.pi
             )
 
-            kperp, kpar = np.meshgrid(kperp, kpar, indexing="ij")
+            kperp_mesh, kpar_mesh = np.meshgrid(kperp, kpar, indexing="ij")
 
             lightcone_chunk_ft = np.fft.fft2(lightcone_chunk, axes=(1, 2, 3))
             wedge_kpar_min = (
-                wedge_kpar(kperp=np.abs(kperp) / un.Mpc, z=chunk_z).to(1 / un.Mpc).value
+                wedge_kpar(kperp=np.abs(kperp_mesh) / un.Mpc, z=chunk_z).to(1 / un.Mpc).value
             )
-            wedge_mask = np.abs(kpar) < wedge_kpar_min
+            wedge_mask = np.abs(kpar_mesh) < wedge_kpar_min
+
             lightcone_chunk_ft[..., wedge_mask] = 0.0
             final_lc_real[..., i] = np.fft.ifft2(lightcone_chunk_ft, axes=(1, 2, 3))[
                 ..., lightcone_chunk.shape[-1] // 2
             ].real
             final_lc_redshifts[i] = chunk_z
-        final_lc_real = final_lc_real.to(lightcone.unit)
+        final_lc_real = final_lc_real * lightcone.unit
     else:
         final_lc_real = noisy_lc_real
         final_lc_redshifts = lightcone_redshifts
