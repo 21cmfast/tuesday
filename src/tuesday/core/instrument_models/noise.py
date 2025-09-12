@@ -1,16 +1,16 @@
 """A module to add thermal noise to lightcones."""
 
 import logging
+from collections.abc import Callable
 
 import astropy.units as un
 import numpy as np
 from astropy.constants import c
-from astropy.cosmology import Planck18, z_at_value
+from astropy.cosmology import Planck18
 from astropy.cosmology.units import littleh
 from py21cmsense import Observation
 from py21cmsense.conversions import dk_du, f2z, z2f
 from scipy.signal import windows
-from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -299,7 +299,8 @@ def thermal_noise_uv(
 
     """
     observatory = observation.observatory.clone(
-        beam=observation.observatory.beam.clone(frequency=freqs[0]))
+        beam=observation.observatory.beam.clone(frequency=freqs[0])
+    )
     time_offsets = observatory.time_offsets_from_obs_int_time(
         observation.integration_time, observation.time_per_day
     )
@@ -332,19 +333,20 @@ def thermal_noise_uv(
     return sigma
 
 
-
 def alpha(z, cosmo=Planck18):
     nu_21 = z2f(z).to(un.MHz)
     speed_of_light = c.to(un.m / un.s)
-    return (speed_of_light * (1+z) / (nu_21 * cosmo.H(z))).to(un.Mpc / un.MHz)
+    return (speed_of_light * (1 + z) / (nu_21 * cosmo.H(z))).to(un.Mpc / un.MHz)
 
-def delay2kpar(tau, freq = None, z = None):
+
+def delay2kpar(tau, freq=None, z=None):
     if z is None:
         z = f2z(freq)
-    kpar = 2*np.pi * np.abs(tau) / alpha(z)
-    return kpar.to(1/un.Mpc)
+    kpar = 2 * np.pi * np.abs(tau) / alpha(z)
+    return kpar.to(1 / un.Mpc)
 
-def kperp2baseline(kperp, cosmo=Planck18,freq = None, z = None):
+
+def kperp2baseline(kperp, cosmo=Planck18, freq=None, z=None):
     if z is None:
         z = f2z(freq)
     if freq is None:
@@ -352,16 +354,19 @@ def kperp2baseline(kperp, cosmo=Planck18,freq = None, z = None):
     baseline = np.abs(kperp * cosmo.comoving_distance(z) * c / (2 * np.pi * freq))
     return baseline.to(un.m)
 
-def horizon_limit(buffer=0.*un.ns, cosmo=Planck18):
-    def horizon_lim(kperp, freq = None, z = None):
+
+def horizon_limit(buffer=0.0 * un.ns, cosmo=Planck18):
+    def horizon_lim(kperp, freq=None, z=None):
         if z is None:
             z = f2z(freq)
         if freq is None:
             freq = z2f(z).to(un.MHz)
-        baseline = kperp2baseline(kperp, cosmo=cosmo,freq=freq, z=z)
-        tau_wedge = baseline / c # Eqn 8 in HERA+23
-        return delay2kpar(tau_wedge + buffer.to(un.ns), freq, z).to(1/un.Mpc)
+        baseline = kperp2baseline(kperp, cosmo=cosmo, freq=freq, z=z)
+        tau_wedge = baseline / c  # Eqn 8 in HERA+23
+        return delay2kpar(tau_wedge + buffer.to(un.ns), freq, z).to(1 / un.Mpc)
+
     return horizon_lim
+
 
 def sample_lc_noise(
     lightcone: un.Quantity,
@@ -416,7 +421,7 @@ def sample_lc_noise(
         Thermal noise in uv space is set to zero for
         uv cells with less than this number of baselines.
     remove_wedge : bool, optional
-        If True, remove the wedge from the noisy lightcone, 
+        If True, remove the wedge from the noisy lightcone,
         using wedge_kpar to determine the wedge boundary,
         by default False.
     wedge_kpar : callable, optional
@@ -435,7 +440,7 @@ def sample_lc_noise(
         Number of redshift slices to skip between chunks.
         If not provided, independent cubic chunks are assumed
         with wedge_chunk_skip = wedge_chunk_size.
-        If an int is provided, all chunks will be 
+        If an int is provided, all chunks will be
         separated by the same number of slices.
 
     Returns
@@ -446,7 +451,7 @@ def sample_lc_noise(
         if lightcone_redshifts is None:
             raise ValueError("You must provide either freqs or lightcone_redshifts.")
         freqs = (1420.0 / (1 + lightcone_redshifts)) * un.MHz
-    
+
     if len(freqs) != lightcone.shape[2]:
         raise ValueError(
             "The length of freqs must be the same as the "
@@ -472,7 +477,7 @@ def sample_lc_noise(
     )
 
     lightcone -= lightcone.mean(axis=(0, 1), keepdims=True)
-    
+
     lc_ft = np.fft.fft2(lightcone.value, axes=(0, 1)) * lightcone.unit
     lc_ft[sigma == 0] = 0.0
     noisy_lc_ft = lc_ft + noise_realisation_uv
@@ -481,7 +486,9 @@ def sample_lc_noise(
     noisy_lc_real = np.fft.ifft2(noisy_lc_ft, axes=(1, 2)).real.to(lightcone.unit)
     if remove_wedge:
         if wedge_chunk_size is None:
-            raise ValueError("You must provide wedge_chunk_size if remove_wedge is True.")
+            raise ValueError(
+                "You must provide wedge_chunk_size if remove_wedge is True."
+            )
         if isinstance(wedge_chunk_size, int):
             nchunks = int(np.floor(lightcone.shape[2] / wedge_chunk_size))
             wedge_chunk_size = np.array([wedge_chunk_size] * nchunks)
@@ -495,38 +502,56 @@ def sample_lc_noise(
         else:
             wedge_chunk_skip = np.asarray(wedge_chunk_skip)
             if len(wedge_chunk_skip) != nchunks:
-                raise ValueError("wedge_chunk_skip must have the same length as wedge_chunk_size.")
+                raise ValueError(
+                    "wedge_chunk_skip must have the same length as wedge_chunk_size."
+                )
         if wedge_kpar is None:
             wedge_kpar = horizon_limit(cosmo=cosmo)
 
-        kperp = np.fft.fftshift(
+        kperp = (
+            np.fft.fftshift(
                 np.fft.fftfreq(
-                    lightcone.shape[0], d=(box_length / lightcone.shape[0]).to(un.Mpc).value
+                    lightcone.shape[0],
+                    d=(box_length / lightcone.shape[0]).to(un.Mpc).value,
                 )
-            ) * 2 * np.pi
-        
+            )
+            * 2
+            * np.pi
+        )
+
         final_lc_real = np.zeros((nsamples, *lightcone.shape[:-1], nchunks))
         final_lc_redshifts = np.zeros(nchunks)
         for i in range(nchunks):
             chunk_start = np.sum(wedge_chunk_size[:i]) if i > 0 else 0
             chunk_end = chunk_start + wedge_chunk_skip[i]
-            chunk_z = lightcone_redshifts[(chunk_start+chunk_end)//2]
+            chunk_z = lightcone_redshifts[(chunk_start + chunk_end) // 2]
             lightcone_chunk = noisy_lc_real[..., chunk_start:chunk_end]
-            lightcone_chunk *= getattr(windows, "blackmanharris")(lightcone_chunk.shape[-1])[None, None,:]
+            lightcone_chunk *= windows.blackmanharris(lightcone_chunk.shape[-1])[
+                None, None, :
+            ]
             chunk_cdist = cosmo.comoving_distance(chunk_z).to(un.Mpc)
-            kpar = np.fft.fftshift(
+            kpar = (
+                np.fft.fftshift(
                     np.fft.fftfreq(
-                        lightcone_chunk.shape[-1], d=(chunk_cdist / wedge_chunk_size[i]).to(un.Mpc).value
+                        lightcone_chunk.shape[-1],
+                        d=(chunk_cdist / wedge_chunk_size[i]).to(un.Mpc).value,
                     )
-                ) * 2 * np.pi
+                )
+                * 2
+                * np.pi
+            )
 
-            kperp, kpar = np.meshgrid(kperp, kpar, indexing='ij')
+            kperp, kpar = np.meshgrid(kperp, kpar, indexing="ij")
 
             lightcone_chunk_ft = np.fft.fft2(lightcone_chunk, axes=(1, 2, 3))
-            wedge_kpar_min = wedge_kpar(kperp=np.abs(kperp)/un.Mpc, z=chunk_z).to(1/un.Mpc).value
+            wedge_kpar_min = (
+                wedge_kpar(kperp=np.abs(kperp) / un.Mpc, z=chunk_z).to(1 / un.Mpc).value
+            )
             wedge_mask = np.abs(kpar) < wedge_kpar_min
             lightcone_chunk_ft[..., wedge_mask] = 0.0
-            final_lc_real[...,i] = np.fft.ifft2(lightcone_chunk_ft, axes=(1, 2, 3))[...,lightcone_chunk.shape[-1]//2].real
+            final_lc_real[..., i] = np.fft.ifft2(lightcone_chunk_ft, axes=(1, 2, 3))[
+                ..., lightcone_chunk.shape[-1] // 2
+            ].real
             final_lc_redshifts[i] = chunk_z
         final_lc_real = final_lc_real.to(lightcone.unit)
     else:

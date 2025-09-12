@@ -31,12 +31,12 @@ __all__ = [
 ]
 from .instrument_models.noise import (
     grid_baselines_uv,
+    horizon_limit,
     sample_from_rms_noise,
     sample_lc_noise,
     taper2d,
     thermal_noise_per_voxel,
     thermal_noise_uv,
-    horizon_limit,
 )
 from .plotting.powerspectra import (
     plot_1d_power_spectrum_k,
