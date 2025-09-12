@@ -392,7 +392,7 @@ def sample_lc_noise(
             "The length of freqs must be the same as the "
             "length of the lightcone frequency axis."
         )
-    
+
     wedge_mu_min = np.asarray(wedge_mu_min) + np.zeros(len(freqs))
 
     if np.min(wedge_mu_min) < 0 or np.max(wedge_mu_min) > 1:
