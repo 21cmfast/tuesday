@@ -4,7 +4,6 @@ __all__ = [
     "CylindricalPS",
     "SphericalPS",
     "bin_kpar",
-    "blackmanharris",
     "calculate_ps",
     "calculate_ps_coeval",
     "calculate_ps_lc",
@@ -13,6 +12,7 @@ __all__ = [
     "coeval2slice_z",
     "cylindrical_to_spherical",
     "grid_baselines_uv",
+    "horizon_limit",
     "lc2slice_x",
     "lc2slice_y",
     "plot_1d_power_spectrum_k",
@@ -36,6 +36,7 @@ from .instrument_models.noise import (
     taper2d,
     thermal_noise_per_voxel,
     thermal_noise_uv,
+    horizon_limit,
 )
 from .plotting.powerspectra import (
     plot_1d_power_spectrum_k,

@@ -5,11 +5,12 @@ import logging
 import astropy.units as un
 import numpy as np
 from astropy.constants import c
-from astropy.cosmology import Planck18
+from astropy.cosmology import Planck18, z_at_value
 from astropy.cosmology.units import littleh
 from py21cmsense import Observation
-from py21cmsense.conversions import dk_du, f2z
+from py21cmsense.conversions import dk_du, f2z, z2f
 from scipy.signal import windows
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 def grid_baselines_uv(
     uvws: np.ndarray,
     freq: un.Quantity,
-    box_len: un.Quantity,
+    box_length: un.Quantity,
     box_ncells: int,
     weights: np.ndarray,
     include_mirrored_bls: bool = True,
@@ -31,7 +32,7 @@ def grid_baselines_uv(
         Baselines in uv space with shape (N bls, N time offsets, 3).
     freq : un.Quantity
         Frequency at which the baselines are projected.
-    box_len : un.Quantity
+    box_length : un.Quantity
         Transverse length of the simulation box.
     box_ncells : int
         Number of voxels Nx = Ny of a lightcone or coeval box.
@@ -53,13 +54,13 @@ def grid_baselines_uv(
         of observation with shape (Nu=Nx, Nv=Nx).
 
     """
-    if "littleh" in box_len.unit.to_string():
-        box_len = box_len.to(un.Mpc / littleh)
+    if "littleh" in box_length.unit.to_string():
+        box_length = box_length.to(un.Mpc / littleh)
     else:
-        box_len = box_len.to(un.Mpc) * Planck18.h / littleh
-    dx = float(box_len.value) / float(box_ncells)
+        box_length = box_length.to(un.Mpc) * Planck18.h / littleh
+    dx = float(box_length.value) / float(box_ncells)
     ugrid_edges = (
-        np.fft.fftshift(np.fft.fftfreq(box_ncells, d=dx)) * 2 * np.pi * box_len.unit
+        np.fft.fftshift(np.fft.fftfreq(box_ncells, d=dx)) * 2 * np.pi * box_length.unit
     )
 
     du = ugrid_edges[1] - ugrid_edges[0]
@@ -84,7 +85,7 @@ def grid_baselines_uv(
 def thermal_noise_per_voxel(
     observation: Observation,
     freqs: np.ndarray,
-    box_len: float,
+    box_length: float,
     box_ncells: int,
     antenna_effective_area: un.Quantity | None = None,
     beam_area: un.Quantity | None = None,
@@ -103,7 +104,7 @@ def thermal_noise_per_voxel(
         Instance of `Observation`.
     freqs : astropy.units.Quantity
         Frequencies at which the noise is calculated.
-    box_len : astropy.units.Quantity
+    box_length : astropy.units.Quantity
         Transverse length of the simulation box.
     box_ncells : int
         Number of voxels Nx = Ny of a lightcone or coeval box.
@@ -163,7 +164,7 @@ def thermal_noise_per_voxel(
         tsys = obs.Tsys.to(un.mK)
 
         d = Planck18.comoving_distance(f2z(nu)).to(un.Mpc)  # Mpc
-        theta_box = (box_len.to(un.Mpc) / d) * un.rad
+        theta_box = (box_length.to(un.Mpc) / d) * un.rad
         omega_pix = theta_box**2 / box_ncells**2
 
         sqrt = np.sqrt(2.0 * observation.bandwidth.to("Hz") * obs.integration_time).to(
@@ -261,7 +262,7 @@ def sample_from_rms_noise(
 def thermal_noise_uv(
     observation: Observation,
     freqs: un.Quantity,
-    box_len: un.Quantity,
+    box_length: un.Quantity,
     box_ncells: int,
     antenna_effective_area: un.Quantity | None = None,
     beam_area: un.Quantity | None = None,
@@ -275,7 +276,7 @@ def thermal_noise_uv(
         Instance of `Observation`.
     freqs : astropy.units.Quantity
         Frequencies at which the noise is calculated.
-    box_len : astropy.units.Quantity
+    box_length : astropy.units.Quantity
         Length of the box in which the noise is calculated.
     box_ncells : int
         Number of voxels Nx = Ny of a lightcone or coeval box.
@@ -296,7 +297,8 @@ def thermal_noise_uv(
         with shape (Nx, Ny, Nfreqs).
 
     """
-    observatory = observation.observatory
+    observatory = observation.observatory.clone(
+        beam=observation.observatory.beam.clone(frequency=freqs[0]))
     time_offsets = observatory.time_offsets_from_obs_int_time(
         observation.integration_time, observation.time_per_day
     )
@@ -313,13 +315,13 @@ def thermal_noise_uv(
 
     for i, freq in enumerate(freqs):
         uv_coverage[..., i] += grid_baselines_uv(
-            proj_bls[::2] * freq / freqs[0], freq, box_len, box_ncells, weights[::2]
+            proj_bls[::2] * freq / freqs[0], freq, box_length, box_ncells, weights[::2]
         )
 
     sigma_rms = thermal_noise_per_voxel(
         observation,
         freqs,
-        box_len,
+        box_length,
         box_ncells,
         antenna_effective_area=antenna_effective_area,
         beam_area=beam_area,
@@ -329,20 +331,55 @@ def thermal_noise_uv(
     return sigma
 
 
+
+def alpha(z, cosmo=Planck18):
+    nu_21 = z2f(z).to(un.MHz)
+    speed_of_light = c.to(un.m / un.s)
+    return (speed_of_light * (1+z) / (nu_21 * cosmo.H(z))).to(un.Mpc / un.MHz)
+
+def delay2kpar(tau, freq = None, z = None):
+    if z is None:
+        z = f2z(freq)
+    kpar = 2*np.pi * np.abs(tau) / alpha(z)
+    return kpar.to(1/un.Mpc)
+
+def kperp2baseline(kperp, cosmo=Planck18,freq = None, z = None):
+    if z is None:
+        z = f2z(freq)
+    if freq is None:
+        freq = z2f(z).to(un.MHz)
+    baseline = np.abs(kperp * cosmo.comoving_distance(z) * c / (2 * np.pi * freq))
+    return baseline.to(un.m)
+
+def horizon_limit(buffer=0.*un.ns, cosmo=Planck18):
+    def horizon_lim(kperp, freq = None, z = None):
+        if z is None:
+            z = f2z(freq)
+        if freq is None:
+            freq = z2f(z).to(un.MHz)
+        baseline = kperp2baseline(kperp, cosmo=cosmo,freq=freq, z=z)
+        tau_wedge = baseline / c # Eqn 8 in HERA+23
+        return delay2kpar(tau_wedge + buffer.to(un.ns), freq, z).to(1/un.Mpc)
+    return horizon_lim
+
 def sample_lc_noise(
     lightcone: un.Quantity,
     observation: Observation,
-    box_len: un.Quantity,
+    box_length: un.Quantity,
+    lightcone_redshifts: np.ndarray,
     *,
     freqs: un.Quantity | None = None,
-    lightcone_redshifts: float | None = None,
     antenna_effective_area: un.Quantity | None = None,
     beam_area: un.Quantity | None = None,
     seed: int | None = None,
     nsamples: int = 1,
     window_fnc: str = "blackmanharris",
     min_nbls_per_uv_cell: int = 1,
-    wedge_mu_min: float = 0.0,
+    remove_wedge: bool = False,
+    wedge_kpar: Callable | None = None,
+    wedge_chunk_size: np.ndarray | int = 20,
+    wedge_chunk_skip: np.ndarray | int = None,
+    cosmo=Planck18,
 ):
     """Sample thermal noise and add it to a lightcone in Fourier space.
 
@@ -352,8 +389,10 @@ def sample_lc_noise(
         Lightcone slice with shape (Nx, Ny, Nz).
     observation : py21cmsense.Observation
         Instance of `Observation`.
-    box_len : astropy.units.Quantity
+    box_length : astropy.units.Quantity
         Length of the lightcone box side.
+    lightcone_redshifts : np.ndarray
+        Redshifts corresponding to the last axis of the lightcone.
     freqs : astropy.units.Quantity, optional
         Frequencies at which the thermal noise is calculated.
         Must have the same length as the lightcone frequency axis.
@@ -374,10 +413,28 @@ def sample_lc_noise(
         the cell to be measured, by default 1.
         Thermal noise in uv space is set to zero for
         uv cells with less than this number of baselines.
-    wedge_mu_min : float, optional
-        Minimum cosine of the angle between the line of sight
-        and the k vector to consider a mode to be uncontaminated
-        by foregrounds, by default 0.0.
+    remove_wedge : bool, optional
+        If True, remove the wedge from the noisy lightcone, 
+        using wedge_kpar to determine the wedge boundary,
+        by default False.
+    wedge_kpar : callable, optional
+        Function that takes kperp and returns the corresponding kpar
+        below which modes are considered to be contaminated by foregrounds.
+        By default, the horizon limit with no buffer is used.
+    cosmo : astropy.cosmology, optional
+        Cosmology to use, by default Planck18.
+    wedge_chunk_size : int or np.ndarray, optional
+        Number of slices per chunk used to perform wedge removal.
+        See Prelogovic+23 page 4 step (i).
+        If an int is provided, all chunks will have the same size.
+        If an array is provided, it must have the same length as the number of chunks.
+        Must be provided if remove_wedge is True.
+    wedge_chunk_skip : int or np.ndarray, optional
+        Number of redshift slices to skip between chunks.
+        If not provided, independent cubic chunks are assumed
+        with wedge_chunk_skip = wedge_chunk_size.
+        If an int is provided, all chunks will be 
+        separated by the same number of slices.
 
     Returns
     -------
@@ -387,21 +444,17 @@ def sample_lc_noise(
         if lightcone_redshifts is None:
             raise ValueError("You must provide either freqs or lightcone_redshifts.")
         freqs = (1420.0 / (1 + lightcone_redshifts)) * un.MHz
+    
     if len(freqs) != lightcone.shape[2]:
         raise ValueError(
             "The length of freqs must be the same as the "
             "length of the lightcone frequency axis."
         )
 
-    wedge_mu_min = np.asarray(wedge_mu_min) + np.zeros(len(freqs))
-
-    if np.min(wedge_mu_min) < 0 or np.max(wedge_mu_min) > 1:
-        raise ValueError("wedge_mu_min must be between 0 and 1.")
-
     sigma = thermal_noise_uv(
         observation,
         freqs,
-        box_len,
+        box_length,
         lightcone.shape[0],
         antenna_effective_area=antenna_effective_area,
         beam_area=beam_area,
@@ -415,24 +468,66 @@ def sample_lc_noise(
         window_fnc=window_fnc,
         return_in_uv=True,
     )
+
     lightcone -= lightcone.mean(axis=(0, 1), keepdims=True)
-    lc_ft = np.fft.fft2(lightcone.value) * lightcone.unit
+    
+    lc_ft = np.fft.fft2(lightcone.value, axes=(0, 1)) * lightcone.unit
     lc_ft[sigma == 0] = 0.0
     noisy_lc_ft = lc_ft + noise_realisation_uv
     noisy_lc_ft[..., sigma == 0] = 0.0
-    k = (
-        np.fft.fftshift(
-            np.fft.fftfreq(
-                lightcone.shape[0], d=(box_len / lightcone.shape[0]).to(un.Mpc).value
-            )
-        )
-        * 2
-        * np.pi
-    )
-    kperp1, kperp2 = np.meshgrid(k, k)
-    theta = np.arctan(kperp1 / kperp2)
-    mu = np.cos(theta)
-    for i in range(len(freqs)):
-        noisy_lc_ft[:, np.abs(mu) < wedge_mu_min[i], i] = 0.0
 
-    return np.fft.ifft2(noisy_lc_ft, axes=(1, 2)).real.to(lightcone.unit)
+    noisy_lc_real = np.fft.ifft2(noisy_lc_ft, axes=(1, 2)).real.to(lightcone.unit)
+    if remove_wedge:
+        if wedge_chunk_size is None:
+            raise ValueError("You must provide wedge_chunk_size if remove_wedge is True.")
+        if isinstance(wedge_chunk_size, int):
+            nchunks = int(np.floor(lightcone.shape[2] / wedge_chunk_size))
+            wedge_chunk_size = np.array([wedge_chunk_size] * nchunks)
+        else:
+            wedge_chunk_size = np.asarray(wedge_chunk_size)
+            nchunks = len(wedge_chunk_size)
+        if wedge_chunk_skip is None:
+            wedge_chunk_skip = wedge_chunk_size
+        elif isinstance(wedge_chunk_skip, int):
+            wedge_chunk_skip = np.array([wedge_chunk_skip] * nchunks)
+        else:
+            wedge_chunk_skip = np.asarray(wedge_chunk_skip)
+            if len(wedge_chunk_skip) != nchunks:
+                raise ValueError("wedge_chunk_skip must have the same length as wedge_chunk_size.")
+        if wedge_kpar is None:
+            wedge_kpar = horizon_limit(cosmo=cosmo)
+
+        kperp = np.fft.fftshift(
+                np.fft.fftfreq(
+                    lightcone.shape[0], d=(box_length / lightcone.shape[0]).to(un.Mpc).value
+                )
+            ) * 2 * np.pi
+        
+        final_lc_real = np.zeros((nsamples, *lightcone.shape[:-1], nchunks))
+        final_lc_redshifts = np.zeros(nchunks)
+        for i in range(nchunks):
+            chunk_start = np.sum(wedge_chunk_size[:i]) if i > 0 else 0
+            chunk_end = chunk_start + wedge_chunk_skip[i]
+            chunk_z = lightcone_redshifts[(chunk_start+chunk_end)//2]
+            lightcone_chunk = noisy_lc_real[..., chunk_start:chunk_end]
+            lightcone_chunk *= getattr(windows, "blackmanharris")(lightcone_chunk.shape[-1])[None, None,:]
+            chunk_cdist = cosmo.comoving_distance(chunk_z).to(un.Mpc)
+            kpar = np.fft.fftshift(
+                    np.fft.fftfreq(
+                        lightcone_chunk.shape[-1], d=(chunk_cdist / wedge_chunk_size[i]).to(un.Mpc).value
+                    )
+                ) * 2 * np.pi
+
+            kperp, kpar = np.meshgrid(kperp, kpar, indexing='ij')
+
+            lightcone_chunk_ft = np.fft.fft2(lightcone_chunk, axes=(1, 2, 3))
+            wedge_kpar_min = wedge_kpar(kperp=np.abs(kperp)/un.Mpc, z=chunk_z).to(1/un.Mpc).value
+            wedge_mask = np.abs(kpar) < wedge_kpar_min
+            lightcone_chunk_ft[..., wedge_mask] = 0.0
+            final_lc_real[...,i] = np.fft.ifft2(lightcone_chunk_ft, axes=(1, 2, 3))[...,lightcone_chunk.shape[-1]//2].real
+            final_lc_redshifts[i] = chunk_z
+        final_lc_real = final_lc_real.to(lightcone.unit)
+    else:
+        final_lc_real = noisy_lc_real
+        final_lc_redshifts = lightcone_redshifts
+    return final_lc_real, final_lc_redshifts

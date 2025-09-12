@@ -132,7 +132,7 @@ def test_sample_lc_noise(observation):
         observation=observation,
         freqs=np.array([150.0, 120.0]) * un.MHz,
         box_len=300.0 * un.Mpc,
-        wedge_mu_min=0.5,
+        remove_wedge=True,
         nsamples=10,
         min_nbls_per_uv_cell=15,
         seed=4,
