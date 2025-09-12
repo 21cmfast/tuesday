@@ -284,6 +284,7 @@ def thermal_noise_uv(
         Effective area of the antenna with shape (Nfreqs,).
     beam_area : astropy.units.Quantity, optional
         Beam area of the antenna with shape (Nfreqs,).
+        Must only provide one of antenna_effective_area or beam_area.
     min_nbls_per_uv_cell : int, optional
         Minimum number of baselines per uv cell to consider
         the cell to be measured, by default 1.
@@ -401,6 +402,7 @@ def sample_lc_noise(
         Effective area of the antenna with shape (Nfreqs,).
     beam_area : astropy.units.Quantity, optional
         Beam area of the antenna with shape (Nfreqs,).
+        Must only provide one of antenna_effective_area or beam_area.
     nsamples : int, optional
         Number of noise realisations to sample, by default 1.
     seed : int, optional
