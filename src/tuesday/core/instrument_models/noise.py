@@ -528,12 +528,16 @@ def sample_lc_noise(
         for i in range(nchunks):
             chunk_start = np.sum(wedge_chunk_size[:i]) if i > 0 else 0
             chunk_end = np.min([chunk_start + wedge_chunk_skip[i], lightcone.shape[2]])
-            chunk_z = lightcone_redshifts[(chunk_start+chunk_end)//2]
+            chunk_z = lightcone_redshifts[(chunk_start + chunk_end) // 2]
             lightcone_chunk = noisy_lc_real[..., chunk_start:chunk_end]
             lightcone_chunk *= windows.blackmanharris(lightcone_chunk.shape[-1])[
                 None, None, :
             ]
-            chunk_cdist = cosmo.comoving_distance(lightcone_redshifts[chunk_end-1]).to(un.Mpc) - cosmo.comoving_distance(lightcone_redshifts[chunk_start]).to(un.Mpc)
+            chunk_cdist = cosmo.comoving_distance(
+                lightcone_redshifts[chunk_end - 1]
+            ).to(un.Mpc) - cosmo.comoving_distance(lightcone_redshifts[chunk_start]).to(
+                un.Mpc
+            )
             kpar = (
                 np.fft.fftshift(
                     np.fft.fftfreq(
@@ -549,7 +553,9 @@ def sample_lc_noise(
 
             lightcone_chunk_ft = np.fft.fft2(lightcone_chunk, axes=(1, 2, 3))
             wedge_kpar_min = (
-                wedge_kpar(kperp=np.abs(kperp_mesh) / un.Mpc, z=chunk_z).to(1 / un.Mpc).value
+                wedge_kpar(kperp=np.abs(kperp_mesh) / un.Mpc, z=chunk_z)
+                .to(1 / un.Mpc)
+                .value
             )
             wedge_mask = np.abs(kpar_mesh) < wedge_kpar_min
 
