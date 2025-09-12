@@ -335,13 +335,14 @@ def sample_lc_noise(
     boxlen: un.Quantity,
     *,
     freqs: un.Quantity | None = None,
-    lightcone_redshifts: np.ndarray | None = None,
+    lightcone_redshifts: float | None = None,
     antenna_effective_area: un.Quantity | None = None,
     beam_area: un.Quantity | None = None,
     seed: int | None = None,
     nsamples: int = 1,
     window_fnc: str = "blackmanharris",
     min_nbls_per_uv_cell: int = 1,
+    wedge_mu_min: float = 0.0,
 ):
     """Sample thermal noise and add it in Fourier space
     to a given lightcone of 21-cm signal.
@@ -349,17 +350,15 @@ def sample_lc_noise(
     Parameters
     ----------
     lightcone : astropy.units.Quantity
-        Lightcone to which the noise is to be added.
+        Lightcone slice with shape (Nx, Ny, Nz).
     observation : py21cmsense.Observation
         Instance of `Observation`.
-    freqs : astropy.units.Quantity, optional
-        Frequencies at which the noise is calculated.
-        If not provided, they are calculated from the lightcone redshifts.
-    lightcone_redshifts : np.ndarray, optional
-        Redshifts corresponding to the lightcone frequency axis.
-        If not provided, the frequencies must be provided.
     boxlen : astropy.units.Quantity
         Length of the lightcone box side.
+    freqs : astropy.units.Quantity, optional
+        Frequencies at which the thermal noise is calculated.
+        Must have the same length as the lightcone frequency axis.
+        If not provided, freqs are calculated from lightcone_redshifts.    
     antenna_effective_area : astropy.units.Quantity, optional
         Effective area of the antenna with shape (Nfreqs,).
     beam_area : astropy.units.Quantity, optional
@@ -376,12 +375,14 @@ def sample_lc_noise(
         the cell to be measured, by default 1.
         Thermal noise in uv space is set to zero for 
         uv cells with less than this number of baselines.
+    wedge_mu_min : float, optional
+        Minimum cosine of the angle between the line of sight
+        and the k vector to consider a mode to be uncontaminated
+        by foregrounds, by default 0.0.
 
     Returns
     -------
     lightcone samples with noise
-
-
     """
     if freqs is None:
         if lightcone_redshifts is None:
@@ -392,6 +393,11 @@ def sample_lc_noise(
             "The length of freqs must be the same as the "
             "length of the lightcone frequency axis."
         )
+    if type(wedge_mu_min) in [float, int]:
+        wedge_mu_min = np.zeros(len(freqs)) + wedge_mu_min
+    if np.min(wedge_mu_min) < 0 or np.max(wedge_mu_min) > 1:
+        raise ValueError("wedge_mu_min must be between 0 and 1.")
+    
     sigma = thermal_noise_uv(
         observation,
         freqs,
@@ -409,7 +415,16 @@ def sample_lc_noise(
         window_fnc=window_fnc,
         return_in_uv=True,
     )
+    lightcone -= lightcone.mean()
     lc_ft = np.fft.fft2(lightcone.value) * lightcone.unit
     lc_ft[sigma == 0] = 0.0
     noisy_lc_ft = lc_ft + sigma_noise_ft
+    noisy_lc_ft[...,sigma == 0] = 0.0
+    k = np.fft.fftshift(np.fft.fftfreq(lightcone.shape[0], d=(boxlen/lightcone.shape[0]).to(un.Mpc).value)) * 2 * np.pi
+    kperpmesh, kparmesh = np.meshgrid(k, k)
+    theta = np.arctan(kparmesh/kperpmesh)
+    mu = np.sin(theta)
+    for i in range(len(freqs)):
+        noisy_lc_ft[:,np.abs(mu) < wedge_mu_min[i],:] = 0.0
+
     return np.fft.ifft2(noisy_lc_ft, axes=(1, 2)).real.to(lightcone.unit)
