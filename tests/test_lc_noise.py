@@ -108,12 +108,14 @@ def test_thermal_noise_per_voxel(observation):
             boxnside,
             beam_area=[517.7, 200.0] * un.rad**2,
         )
-    sigma = thermal_noise_uv(observation,
+    sigma = thermal_noise_uv(
+        observation,
         np.array([150.0, 120.0, 100.0]) * un.MHz,
         boxlength,
         boxnside,
-        min_nbls_per_uv_cell=15)
-    
+        min_nbls_per_uv_cell=15,
+    )
+
     samples = sample_from_rms_noise(
         sigma,
         seed=4,

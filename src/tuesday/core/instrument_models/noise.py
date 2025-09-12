@@ -358,7 +358,7 @@ def sample_lc_noise(
     freqs : astropy.units.Quantity, optional
         Frequencies at which the thermal noise is calculated.
         Must have the same length as the lightcone frequency axis.
-        If not provided, freqs are calculated from lightcone_redshifts.    
+        If not provided, freqs are calculated from lightcone_redshifts.
     antenna_effective_area : astropy.units.Quantity, optional
         Effective area of the antenna with shape (Nfreqs,).
     beam_area : astropy.units.Quantity, optional
@@ -373,7 +373,7 @@ def sample_lc_noise(
     min_nbls_per_uv_cell : int, optional
         Minimum number of baselines per uv cell to consider
         the cell to be measured, by default 1.
-        Thermal noise in uv space is set to zero for 
+        Thermal noise in uv space is set to zero for
         uv cells with less than this number of baselines.
     wedge_mu_min : float, optional
         Minimum cosine of the angle between the line of sight
@@ -397,7 +397,7 @@ def sample_lc_noise(
         wedge_mu_min = np.zeros(len(freqs)) + wedge_mu_min
     if np.min(wedge_mu_min) < 0 or np.max(wedge_mu_min) > 1:
         raise ValueError("wedge_mu_min must be between 0 and 1.")
-    
+
     sigma = thermal_noise_uv(
         observation,
         freqs,
@@ -405,7 +405,7 @@ def sample_lc_noise(
         lightcone.shape[0],
         antenna_effective_area=antenna_effective_area,
         beam_area=beam_area,
-        min_nbls_per_uv_cell=min_nbls_per_uv_cell
+        min_nbls_per_uv_cell=min_nbls_per_uv_cell,
     )
 
     sigma_noise_ft = sample_from_rms_noise(
@@ -419,12 +419,20 @@ def sample_lc_noise(
     lc_ft = np.fft.fft2(lightcone.value) * lightcone.unit
     lc_ft[sigma == 0] = 0.0
     noisy_lc_ft = lc_ft + sigma_noise_ft
-    noisy_lc_ft[...,sigma == 0] = 0.0
-    k = np.fft.fftshift(np.fft.fftfreq(lightcone.shape[0], d=(boxlen/lightcone.shape[0]).to(un.Mpc).value)) * 2 * np.pi
+    noisy_lc_ft[..., sigma == 0] = 0.0
+    k = (
+        np.fft.fftshift(
+            np.fft.fftfreq(
+                lightcone.shape[0], d=(boxlen / lightcone.shape[0]).to(un.Mpc).value
+            )
+        )
+        * 2
+        * np.pi
+    )
     kperpmesh, kparmesh = np.meshgrid(k, k)
-    theta = np.arctan(kparmesh/kperpmesh)
+    theta = np.arctan(kparmesh / kperpmesh)
     mu = np.sin(theta)
     for i in range(len(freqs)):
-        noisy_lc_ft[:,np.abs(mu) < wedge_mu_min[i],:] = 0.0
+        noisy_lc_ft[:, np.abs(mu) < wedge_mu_min[i], :] = 0.0
 
     return np.fft.ifft2(noisy_lc_ft, axes=(1, 2)).real.to(lightcone.unit)
