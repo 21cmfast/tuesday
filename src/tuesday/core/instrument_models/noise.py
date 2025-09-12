@@ -344,8 +344,7 @@ def sample_lc_noise(
     min_nbls_per_uv_cell: int = 1,
     wedge_mu_min: float = 0.0,
 ):
-    """Sample thermal noise and add it in Fourier space
-    to a given lightcone of 21-cm signal.
+    """Sample thermal noise and add it to a lightcone in Fourier space.
 
     Parameters
     ----------

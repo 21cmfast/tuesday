@@ -121,7 +121,7 @@ def test_thermal_noise_per_voxel(observation):
         seed=4,
         nsamples=10,
     )
-    assert samples.shape == (10,) + sigma.shape
+    assert samples.shape == (10, *sigma.shape)
 
 
 def test_sample_lc_noise(observation):
