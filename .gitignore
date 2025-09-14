@@ -16,3 +16,6 @@ docs/_build/
 _version.py
 _autosummary/
 coverage.xml
+.ipynboook_checkpoints
+.pytest_cache/
+__pycache__/
