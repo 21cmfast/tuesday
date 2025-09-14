@@ -9,7 +9,7 @@ from py21cmfast.drivers.lightcone import (
     setup_lightcone_instance,
 )
 from py21cmfast.io.caching import RunCache
-from py21cmfast.lightcones import Lightconer
+from py21cmfast.lightconers import Lightconer
 
 
 def construct_lightcone_from_cache(
