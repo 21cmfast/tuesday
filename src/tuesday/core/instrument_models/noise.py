@@ -482,7 +482,8 @@ def observe_lightcone(
     lightcone_freqs: un.Quantity | None = None,
     seed: int | None = None,
     nsamples: int = 1,
-    window_fnc: str = "blackmanharris",
+    spatial_taper: str = "blackmanharris",
+    apply_spatial_taper: bool = True,
     remove_wedge: bool = False,
     wedge_chunk_size: int | None = None,
     wedge_slope: float = 1.0,
@@ -583,7 +584,6 @@ def observe_lightcone(
         thermal_rms_uv,
         seed=seed,
         nsamples=nsamples,
-        window_fnc=window_fnc,  # not applied in uv case.
         return_in_uv=True,
     )
 
@@ -612,6 +612,10 @@ def observe_lightcone(
             buffer=wedge_buffer,
             mode=wedge_mode,
         )
+
+    if apply_spatial_taper:
+        window_fnc = np.fft.fftshift(taper2d(lightcone.shape[0], spatial_taper))
+        lc_uv_nu *= window_fnc[None, ..., None]
 
     noisy_lc_real = np.fft.ifft2(lc_uv_nu, axes=(1, 2)).real.to(lightcone.unit)
 
