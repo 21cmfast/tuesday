@@ -6,10 +6,10 @@ import pytest
 from py21cmsense import Observation, Observatory
 
 from tuesday.core import (
-    grid_baselines_uv,
-    sample_from_rms_noise,
-    sample_lc_noise,
-    thermal_noise_per_voxel,
+    compute_thermal_rms_per_snapshot_vis,
+    compute_thermal_rms_uvgrid,
+    observe_lightcone,
+    sample_from_rms_uvgrid,
 )
 
 
@@ -17,8 +17,7 @@ from tuesday.core import (
 def observation():
     """Fixture to create an observatory instance."""
     return Observation(
-        observatory=Observatory.from_ska("AA4"),
-        time_per_day=1.0 * un.hour,
+        observatory=Observatory.from_ska("LOW_FULL_AA4"),
         lst_bin_size=1.0 * un.hour,
         integration_time=120.0 * un.second,
         bandwidth=50 * un.kHz,
@@ -26,50 +25,19 @@ def observation():
     )
 
 
-def test_grid_baselines(observation):
-    """Test the grid_baselines function."""
-
-    observatory = observation.observatory
-    hours_tracking = observation.time_per_day
-    integration_time = observation.integration_time
-    freqs = np.array([150.0]) * un.MHz
-    time_offsets = observatory.time_offsets_from_obs_int_time(
-        integration_time, hours_tracking
-    )
-
-    baseline_groups = observatory.get_redundant_baselines()
-    baselines = observatory.baseline_coords_from_groups(baseline_groups)
-
-    weights = observatory.baseline_weights_from_groups(baseline_groups)
-
-    # Call the function
-    proj_bls = observatory.projected_baselines(
-        baselines=baselines, time_offset=time_offsets
-    )
-    lc_shape = np.array([20, 20, 1945])
-    boxlength = 30.0 * un.Mpc
-    uv_coverage = np.zeros((lc_shape[0], lc_shape[0], len(freqs)))
-
-    for i, freq in enumerate(freqs):
-        # uv coverage integrated over one field
-        uv_coverage[..., i] += grid_baselines_uv(
-            proj_bls[::2] * freq / freqs[0], freq, boxlength, lc_shape, weights[::2]
-        )
-
-
-def test_thermal_noise_per_voxel(observation):
+def test_rms_per_snapshot_vis(observation):
     """Test the thermal_noise_per_voxel function."""
     boxlength = 300.0 * un.Mpc
-    lc_shape = (20, 20, 1945)
-    thermal_noise_per_voxel(
+    boxnside = 20
+    compute_thermal_rms_per_snapshot_vis(
         observation,
         150 * un.MHz,
         boxlength,
-        lc_shape,
+        boxnside,
         antenna_effective_area=[517.7] * un.m**2,
     )
-    thermal_noise_per_voxel(
-        observation, np.array([150.0, 120.0]) * un.MHz, boxlength, lc_shape
+    compute_thermal_rms_per_snapshot_vis(
+        observation, np.array([150.0, 120.0]) * un.MHz, boxlength, boxnside
     )
     with pytest.raises(
         ValueError,
@@ -77,11 +45,11 @@ def test_thermal_noise_per_voxel(observation):
         "and antenna_effective_area."
         " Proceding with beam_area.",
     ):
-        thermal_noise_per_voxel(
+        compute_thermal_rms_per_snapshot_vis(
             observation,
             np.array([150.0, 120.0]) * un.MHz,
             boxlength,
-            lc_shape,
+            boxnside,
             antenna_effective_area=517.7 * un.m**2,
             beam_area=1.0 * un.arcmin**2,
         )
@@ -90,39 +58,93 @@ def test_thermal_noise_per_voxel(observation):
         match="Antenna effective area must either be a float or have the"
         " same shape as freqs.",
     ):
-        thermal_noise_per_voxel(
+        compute_thermal_rms_per_snapshot_vis(
             observation,
             np.array([150.0, 120.0, 100.0]) * un.MHz,
             boxlength,
-            lc_shape,
+            boxnside,
             antenna_effective_area=[517.7, 200.0] * un.m**2,
         )
     with pytest.raises(
         ValueError, match="Beam area must be a float or have the same shape as freqs."
     ):
-        thermal_noise_per_voxel(
+        compute_thermal_rms_per_snapshot_vis(
             observation,
             np.array([150.0, 120.0, 100.0]) * un.MHz,
             boxlength,
-            lc_shape,
+            boxnside,
             beam_area=[517.7, 200.0] * un.rad**2,
         )
+    _, sigma = compute_thermal_rms_uvgrid(
+        observation,
+        np.array([150.0, 120.0, 100.0]) * un.MHz,
+        boxlength,
+        boxnside,
+        min_nbls_per_uv_cell=15,
+    )
 
-
-def test_sample_from_rms_noise():
-    """Test the sample_from_rms_noise function."""
-    sample_from_rms_noise(
-        np.random.default_rng(0).normal(5.0, 1.0, (10, 10, 2)) * un.mK,
+    samples = sample_from_rms_uvgrid(
+        sigma,
         seed=4,
         nsamples=10,
     )
+    assert samples.shape == (10, *sigma.shape)
 
 
-def test_sample_lc_noise(observation):
-    """Test the sample_lc_noise function."""
-    sample_lc_noise(
-        observation,
-        np.array([150.0, 120.0]) * un.MHz,
-        300.0 * un.Mpc,
-        (20, 20, 15),
-    )
+class TestSampleFromRmsNoise:
+    @pytest.mark.parametrize("nsamples", [1, 2])
+    @pytest.mark.parametrize("ncells", [10, 11])
+    def test_image_noise_reality(self, nsamples, ncells):
+        """Test that the UV noise is Hermitian."""
+        img_noise = sample_from_rms_uvgrid(
+            np.ones((ncells, ncells)) * un.mK,
+            nsamples=nsamples,
+            seed=4,
+            return_in_uv=False,
+        )
+        np.testing.assert_allclose(img_noise.imag, 0.0)
+
+
+class TestObserveLightcone:
+    def setup_class(self):
+        self.lc_freqs = np.linspace(100.0, 105.0, 50) * un.MHz
+        self.ncells = 20
+        obs = Observation(
+            observatory=Observatory.from_ska("LOW_INNER_R350M_AA4"),
+            lst_bin_size=0.5 * un.hour,
+            integration_time=120.0 * un.second,
+            bandwidth=50 * un.kHz,
+            n_days=1000,
+        )
+
+        _, sigma = compute_thermal_rms_uvgrid(
+            obs,
+            freqs=self.lc_freqs,
+            box_length=300.0 * un.Mpc,
+            box_ncells=self.ncells,
+            min_nbls_per_uv_cell=15,
+        )
+        self.sigma = sigma
+
+    @pytest.mark.parametrize("wedge_slope", [0.0, 1.0])
+    @pytest.mark.parametrize("wedge_buffer", [0.0, 300 * un.ns])
+    @pytest.mark.parametrize("wedge_mode", ["rolling", "chunk"])
+    def test_sample_lc_noise(self, observation, wedge_slope, wedge_buffer, wedge_mode):
+        """Test the sample_lc_noise function."""
+        lc = np.zeros((self.ncells, self.ncells, self.lc_freqs.size)) * un.mK
+
+        out, _ = observe_lightcone(
+            lightcone=lc,
+            thermal_rms_uv=self.sigma,
+            box_length=300.0 * un.Mpc,
+            lightcone_freqs=self.lc_freqs,
+            remove_wedge=True,
+            nsamples=1,
+            wedge_slope=wedge_slope,
+            wedge_buffer=wedge_buffer,
+            wedge_mode=wedge_mode,
+            wedge_chunk_size=self.lc_freqs.size,
+            seed=4,
+        )
+        assert np.sum(np.abs(out)) > 0
+        assert out.shape == (1, *lc.shape)
