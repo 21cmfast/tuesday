@@ -207,13 +207,15 @@ def compute_thermal_rms_uvgrid(
 
     # Combine redundant baselines together to reduce memory/computation time.
     # Weights is the number of baselines in each redundant group.
-    baseline_groups = observatory.get_redundant_baselines()
+    # Note that we add conjugates here because it makes prettier symmetric plots.
+    # We have to divide by two later to get the right noise level.
+    baseline_groups = observatory.get_redundant_baselines(add_conjugates=True)
     baselines = observatory.baseline_coords_from_groups(baseline_groups)
     weights = observatory.baseline_weights_from_groups(baseline_groups)
 
     kperp = np.fft.fftshift(
         np.fft.fftfreq(box_ncells, d=(box_length / box_ncells).value)
-    ) * (1 / box_length.unit)
+    ) * (2 * np.pi / box_length.unit)
 
     kperp_to_u = 1 / dk_du(f2z(freqs), with_h=with_h)
 
@@ -223,16 +225,20 @@ def compute_thermal_rms_uvgrid(
     ugrid_edges -= du
     ugrid_edges = np.vstack((ugrid_edges, ugrid_edges[-1] + du))
 
-    uv_coverage = grid_baselines(
-        coherent=True,
-        baselines=baselines,
-        weights=weights,
-        time_offsets=time_offsets,
-        frequencies=freqs,
-        ugrid_edges=ugrid_edges.T,
-        phase_center_dec=observation.phase_center_dec,
-        telescope_latitude=observatory.latitude,
-        world=observatory.world,
+    # Divide by two to account for the conjugate baselines added above.
+    uv_coverage = (
+        grid_baselines(
+            coherent=True,
+            baselines=baselines,
+            weights=weights,
+            time_offsets=time_offsets,
+            frequencies=freqs,
+            ugrid_edges=ugrid_edges.T,
+            phase_center_dec=observation.phase_center_dec,
+            telescope_latitude=observatory.latitude,
+            world=observatory.world,
+        )
+        / 2
     )
 
     sigma_rms = compute_thermal_rms_per_snapshot_vis(
@@ -245,7 +251,7 @@ def compute_thermal_rms_uvgrid(
     )
     sigma = sigma_rms / np.sqrt(uv_coverage.T * observation.n_days)
     sigma[min_nbls_per_uv_cell > uv_coverage.T] = 0.0
-    return ugrid_edges, sigma
+    return ugrid_edges, sigma, uv_coverage.T
 
 
 def sample_from_rms_uvgrid(
@@ -593,13 +599,11 @@ def observe_lightcone(
 
     lc_uv_nu = np.fft.fft2(lightcone.value, axes=(0, 1)) * lightcone.unit
     thermal_rms_uv = np.fft.fftshift(thermal_rms_uv, axes=(0, 1))
-
     kperp_grid = np.fft.fftfreq(
         lightcone.shape[0], d=(box_length / lightcone.shape[0]).value
     ) * (1 / box_length.unit)
 
     lc_uv_nu = lc_uv_nu + noise_realisation_uv
-
     lc_uv_nu[:, thermal_rms_uv == 0] = 0.0
 
     if remove_wedge:
