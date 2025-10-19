@@ -22,6 +22,7 @@ dependencies:
   - pip
   - python=3.10
   - setuptools_scm
+  - matplotlib
   - pip:
     - furo
     - lunarsky>=0.2.5
