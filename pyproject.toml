@@ -33,7 +33,7 @@ classifiers = [
 dependencies = [
     "21cmfast",
     "21cmsense>=2.0.0",
-    "astropy>=7.0.1",
+    "astropy>=6.0",
     "attrs>=25.3.0",
     "numpy>=2",
     "powerbox>=0.8.2",
