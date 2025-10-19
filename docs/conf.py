@@ -36,6 +36,12 @@ autosectionlabel_prefix_document = True
 autosummary_generate = True
 numpydoc_show_class_members = False
 
+autodoc_default_options = {
+    "members": True,
+    "undoc-members": True,
+    "show-inheritance": True,
+}
+
 source_suffix = ".rst"
 master_doc = "index"
 project = "tuesday"
