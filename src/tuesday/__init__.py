@@ -2,7 +2,6 @@
 
 __all__ = ["__version__", "core", "simulators"]
 from . import core, simulators
-from __future__ import annotations
 
 try:
     from ._version import version as __version__
