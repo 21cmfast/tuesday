@@ -22,8 +22,8 @@ dependencies:
   - pip
   - python=3.10
   - setuptools_scm
-  - 21cmSense>=2.2.1
   - pip:
     - furo
     - lunarsky>=0.2.5
     - sphinx_design
+    - 21cmSense>=2.2.1
