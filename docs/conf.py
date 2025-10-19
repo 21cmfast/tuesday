@@ -2,32 +2,10 @@
 
 import os
 from datetime import datetime, timezone
-
-from tuesday import __version__
-
-from unittest.mock import MagicMock
-
+import sys
+from pathlib import Path
 sys.path.insert(0, str(Path(__file__).absolute().parent.parent / "src"))
-
-
-class Mock(MagicMock):
-    """Make a Mock so that a package doesn't have to actually exist."""
-
-    @classmethod
-    def __getattr__(cls, name):
-        """Get stuff."""
-        return MagicMock()
-
-
-MOCK_MODULES = [
-    "py21cmfast.c_21cmfast",
-    "click",
-    "tqdm",
-    "pyyaml",
-    "h5py",
-    "cached_property",
-]
-sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+import tuesday
 
 extensions = [
     "sphinx.ext.autodoc",
@@ -61,9 +39,9 @@ source_suffix = ".rst"
 master_doc = "index"
 project = "tuesday"
 year = str(datetime.now(tz=timezone.utc).year)
-author = "21cmFAST Team"
+author = "Daniela Breitman and Steven Murray"
 copyright = f"{year}, {author}"
-version = release = __version__
+version = release = tuesday.__version__
 templates_path = ["templates"]
 
 pygments_style = "trac"
