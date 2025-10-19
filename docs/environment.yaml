@@ -28,3 +28,4 @@ dependencies:
     - lunarsky>=0.2.5
     - sphinx_design
     - 21cmSense>=2.2.1
+    - powerbox
