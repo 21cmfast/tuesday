@@ -20,8 +20,8 @@ A collection of lightcone postprocessing tools such as calculating power spectra
 .. |Python Version| image:: https://img.shields.io/pypi/pyversions/tuesday-eor.svg
     :target: https://pypi.python.org/pypi/tuesday-eor/
     :alt: Python Version
-.. |Docs| image:: https://readthedocs.org/projects/tuesday/badge/?version=latest
-    :target: http://tuesday.readthedocs.io/?badge=latest
+.. |Docs| image:: https://readthedocs.org/projects/tuesday-eor/badge/?version=latest
+    :target: http://tuesday-eor.readthedocs.io/?badge=latest
     :alt: Documentation Status
 .. |Code Style| image:: https://img.shields.io/badge/code%20style-ruff-red.svg
     :target: https://github.com/astral-sh/ruff
