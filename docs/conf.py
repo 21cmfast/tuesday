@@ -5,7 +5,11 @@ from datetime import datetime, timezone
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).absolute().parent.parent / "src"))
-import tuesday
+
+from importlib.metadata import version as get_version
+release: str = get_version("tuesday-eor")
+# for example take major/minor
+version: str = ".".join(release.split('.')[:2])
 
 extensions = [
     "sphinx.ext.autodoc",
@@ -41,7 +45,6 @@ project = "tuesday"
 year = str(datetime.now(tz=timezone.utc).year)
 author = "Daniela Breitman and Steven Murray"
 copyright = f"{year}, {author}"
-version = release = tuesday.__version__
 templates_path = ["templates"]
 
 pygments_style = "trac"
