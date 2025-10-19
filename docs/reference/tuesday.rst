@@ -1,4 +1,4 @@
-py21cmsense
+tuesday
 ===========
 
 .. testsetup::
@@ -9,5 +9,5 @@ py21cmsense
     :toctree: _autosummary
     :template: module.rst
 
-    tuesday.core.summaries
-    tuesday.core.postprocessing
+    tuesday.core
+    tuesday.simulators
