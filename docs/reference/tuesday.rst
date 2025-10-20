@@ -28,4 +28,3 @@ Instrument noise simulation
     :template: module.rst
 
     tuesday.core.instrument_models
-
