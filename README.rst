@@ -55,7 +55,7 @@ to exit the virtual environment.
 Documentation
 -------------
 
-See the `documentation <https://tuesday.readthedocs.io/en/latest/>`_ for more information on how to use ``tuesday``.
+See the `documentation <https://tuesday-eor.readthedocs.io/en/latest/>`_ for more information on how to use ``tuesday``.
 
 Contribute
 ----------
