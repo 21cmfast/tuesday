@@ -416,9 +416,7 @@ def apply_wedge_filter(
         uvtau = np.fft.fft(uv_chunk, axis=-1)
         this_dnu = np.mean(np.diff(freqs_chunk))
         tau = (
-            np.fft.fftshift(
                 np.fft.fftfreq(uv_chunk.shape[-1], d=this_dnu.to(un.Hz).value)
-            )
             * un.s
         )
 
@@ -429,7 +427,7 @@ def apply_wedge_filter(
         # frequencies are probably not exactly regular).
         wedge = wedge_slope * umag / f0
 
-        mask = tau[None, None] < wedge[:, :, None] + buffer
+        mask = np.abs(tau)[None, None] < wedge[:, :, None] + buffer
         uvtau[:, mask] = 0.0
         return np.fft.ifft(uvtau, axis=-1)
 
