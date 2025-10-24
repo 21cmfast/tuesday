@@ -415,10 +415,7 @@ def apply_wedge_filter(
 
         uvtau = np.fft.fft(uv_chunk, axis=-1)
         this_dnu = np.mean(np.diff(freqs_chunk))
-        tau = (
-                np.fft.fftfreq(uv_chunk.shape[-1], d=this_dnu.to(un.Hz).value)
-            * un.s
-        )
+        tau = np.fft.fftfreq(uv_chunk.shape[-1], d=this_dnu.to(un.Hz).value) * un.s
 
         kperp_mag = np.add.outer(kperp_grid**2, kperp_grid**2) ** 0.5
         umag = kperp_mag / dk_du(f2z(f0), with_h=with_h)
