@@ -119,8 +119,7 @@ def compute_thermal_rms_per_snapshot_vis(
         beam_area = (
             observation.observatory.beam.area if omega_beam is None else omega_beam[i]
         )
-        # I need this 1e6 to get the same numbers as tools...
-        sig_uv[i] = tsys.value * beam_area / omega_pix / sqrt / 1e6
+        sig_uv[i] = tsys.value * beam_area / omega_pix / sqrt
 
     return sig_uv * tsys.unit
 
