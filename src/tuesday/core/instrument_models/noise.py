@@ -260,6 +260,7 @@ def sample_from_rms_uvgrid(
     nsamples: int = 1,
     window_fnc: str = "blackmanharris",
     return_in_uv: bool = False,
+    apply_inverse_variance_weighting: bool = False,
 ):
     """Sample noise for a lightcone slice given the corresponding rms noise in uv space.
 
@@ -281,6 +282,10 @@ def sample_from_rms_uvgrid(
     return_in_uv : bool, optional
         If True, return the noise sampled in uv space instead of real space,
         by default False.
+    apply_inverse_variance_weighting : bool, optional
+        If True, apply inverse variance weighting to the noise samples in uv space.
+        This ensures that uv cells with lower noise contribute more to the final
+        real-space noise. By default False.
 
     Returns
     -------
@@ -306,6 +311,14 @@ def sample_from_rms_uvgrid(
     if not return_in_uv:
         window_fnc = taper2d(rms_noise.shape[0], window_fnc)
         noise *= window_fnc[None, ..., None]
+
+    # FIXME: this seems to be suppressing noise a LOT. Is this correct?
+    if apply_inverse_variance_weighting:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            w = 1.0 / (rms_noise**2).value
+        w[np.isinf(w)] = 0.0
+        wsum = w.sum(axis=(0, 1), keepdims=True)
+        noise *= w.shape[0] * w.shape[1] * w[None, ...] / wsum[None, ...]
 
     noise = np.fft.ifftshift(noise, axes=(1, 2))
 
