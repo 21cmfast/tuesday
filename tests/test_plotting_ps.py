@@ -88,8 +88,7 @@ def test_1d_ps_plot(ps1d: SphericalPS):
     with pytest.raises(
         ValueError,
         match="power_spectrum must be a SphericalPS object or a list of "
-        "SphericalPS objects,"
-        " got <class 'numpy.ndarray'> instead.",
+        "SphericalPS objects",
     ):
         plot_1d_power_spectrum_z(
             [ps1d, np.ones((10, 10))],

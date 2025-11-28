@@ -1,13 +1,10 @@
 """Configuration for docs."""
 
 import os
-from datetime import datetime, timezone
-
-from tuesday import __version__
-
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
-sys.path.insert(0, str(Path(__file__).absolute().parent.parent / "src"))
+from tuesday import __version__
 
 
 class Mock(MagicMock):
@@ -27,7 +24,6 @@ MOCK_MODULES = [
     "h5py",
     "cached_property",
 ]
-sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 extensions = [
     "sphinx.ext.autodoc",
@@ -60,7 +56,7 @@ numpydoc_show_class_members = False
 source_suffix = ".rst"
 master_doc = "index"
 project = "tuesday"
-year = str(datetime.now(tz=timezone.utc).year)
+year = str(datetime.now(tz=UTC).year)
 author = "21cmFAST Team"
 copyright = f"{year}, {author}"
 version = release = __version__

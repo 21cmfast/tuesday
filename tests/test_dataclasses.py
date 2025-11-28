@@ -31,11 +31,9 @@ def ps():
 
 
 def test_one_ps_per_obj(ps, ps2):
-    with pytest.raises(ValueError, match="The ps array must be 1D for a SphericalPS."):
+    with pytest.raises(ValueError, match="The ps array must be 1D for a SphericalPS"):
         SphericalPS(np.append(ps.ps[None, ...], ps.ps[None, ...], axis=0), k=ps.k)
-    with pytest.raises(
-        ValueError, match="The ps array must be 2D for a CylindricalPS."
-    ):
+    with pytest.raises(ValueError, match="The ps array must be 2D for a CylindricalPS"):
         CylindricalPS(
             np.append(ps2.ps[None, ...], ps2.ps[None, ...], axis=0),
             kperp=ps2.kperp,

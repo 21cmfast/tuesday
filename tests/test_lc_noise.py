@@ -40,10 +40,7 @@ def test_rms_per_snapshot_vis(observation):
         observation, np.array([150.0, 120.0]) * un.MHz, boxlength, boxnside
     )
     with pytest.raises(
-        ValueError,
-        match="You cannot provide both beam_area "
-        "and antenna_effective_area."
-        " Proceding with beam_area.",
+        ValueError, match="You cannot provide both beam_area and antenna_effective_area"
     ):
         compute_thermal_rms_per_snapshot_vis(
             observation,
@@ -56,7 +53,7 @@ def test_rms_per_snapshot_vis(observation):
     with pytest.raises(
         ValueError,
         match="Antenna effective area must either be a float or have the"
-        " same shape as freqs.",
+        " same shape as freqs",
     ):
         compute_thermal_rms_per_snapshot_vis(
             observation,
@@ -66,7 +63,7 @@ def test_rms_per_snapshot_vis(observation):
             antenna_effective_area=[517.7, 200.0] * un.m**2,
         )
     with pytest.raises(
-        ValueError, match="Beam area must be a float or have the same shape as freqs."
+        ValueError, match="Beam area must be a float or have the same shape as freqs"
     ):
         compute_thermal_rms_per_snapshot_vis(
             observation,

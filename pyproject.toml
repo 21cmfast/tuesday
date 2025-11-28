@@ -111,18 +111,23 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"docs/tutorials/lc_noise_compare_tools21cm.ipynb" = [
+    "T201", # print statements
+    "N",
+    "F",  # TODO: remove all these once this notebook is fixed.
+]
 "tests/*.py" = [
     "D",  # ignore missing docstring in tests
     "DTZ",   # ignore datetime in tests
     "T",     # print statements
 ]
+"*.ipynb" = [
+    "T201", # print statements
+]
 "docs/conf.py" = [
     "A",  # conf.py can shadow builtins
     "ERA",
     "DTZ",
-]
-"docs/tutorials/*.ipynb" = [
-    "T201", # print statements
 ]
 
 [tool.ruff.lint.pydocstyle]
