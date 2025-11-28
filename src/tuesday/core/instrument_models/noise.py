@@ -119,8 +119,7 @@ def compute_thermal_rms_per_snapshot_vis(
         beam_area = (
             observation.observatory.beam.area if omega_beam is None else omega_beam[i]
         )
-        # I need this 1e6 to get the same numbers as tools...
-        sig_uv[i] = tsys.value * beam_area / omega_pix / sqrt / 1e6
+        sig_uv[i] = tsys.value * beam_area / omega_pix / sqrt
 
     return sig_uv * tsys.unit
 
@@ -150,7 +149,7 @@ def compute_thermal_rms_uvgrid(
     box_ncells: int,
     antenna_effective_area: un.Quantity | None = None,
     beam_area: un.Quantity | None = None,
-    min_nbls_per_uv_cell: int = 1,
+    min_nbls_per_uv_cell: int = 0.1,
 ) -> tuple[np.ndarray, un.Quantity]:
     """Thermal noise RMS per voxel in uv space.
 
@@ -222,7 +221,7 @@ def compute_thermal_rms_uvgrid(
     # ugrid is frequency dependent, so this is (Nu, Nz)
     ugrid_edges = np.outer(kperp, kperp_to_u).to(un.dimensionless_unscaled).value
     du = ugrid_edges[1] - ugrid_edges[0]
-    ugrid_edges -= du
+    ugrid_edges -= du / 2
     ugrid_edges = np.vstack((ugrid_edges, ugrid_edges[-1] + du))
 
     # Divide by two to account for the conjugate baselines added above.
@@ -312,7 +311,6 @@ def sample_from_rms_uvgrid(
         window_fnc = taper2d(rms_noise.shape[0], window_fnc)
         noise *= window_fnc[None, ..., None]
 
-    # FIXME: this seems to be suppressing noise a LOT. Is this correct?
     if apply_inverse_variance_weighting:
         with np.errstate(divide="ignore", invalid="ignore"):
             w = 1.0 / (rms_noise**2).value

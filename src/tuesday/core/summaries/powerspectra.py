@@ -184,7 +184,7 @@ def calculate_ps(
     ps2d = None
     ps1d = None
     if calc_2d:
-        results = get_power(
+        ps_2d, kperp, variance, nmodes, kpar = get_power(
             chunk.value,
             (
                 box_length.value,
@@ -203,29 +203,25 @@ def calculate_ps(
             get_variance=get_variance,
             bins_upto_boxlen=True,
         )
-        if get_variance:
-            ps_2d, kperp, variance, nmodes, kpar = results
-            lc_var_2d = variance
-        else:
-            ps_2d, kperp, nmodes, kpar = results
 
         kpar = np.array(kpar).squeeze()
-        lc_ps_2d = ps_2d[..., kpar > 0]
+        ps_2d = ps_2d[..., kpar > 0]
         if get_variance:
-            lc_var_2d = lc_var_2d[..., kpar > 0]
+            variance = variance[..., kpar > 0]
+        nmodes = nmodes[..., kpar > 0]
         kpar = kpar[kpar > 0]
         ps2d = CylindricalPS(
-            ps=lc_ps_2d * ps_unit,
-            kperp=kperp.squeeze() / box_length.unit,
+            ps=ps_2d * ps_unit,
+            kperp=kperp[:, 0] / box_length.unit,
             kpar=kpar / box_length.unit,
             redshift=chunk_redshift,
             n_modes=nmodes,
-            variance=lc_var_2d * ps_unit**2 if get_variance else None,
+            variance=variance * ps_unit**2 if get_variance else None,
             is_deltasq=prefactor_fnc is not None,
         )
 
     if calc_1d:
-        results = get_power(
+        ps_1d, k, var_1d, nmodes_1d = get_power(
             chunk,
             (
                 box_length.value,
@@ -243,19 +239,12 @@ def calculate_ps(
             get_variance=get_variance,
             bins_upto_boxlen=True,
         )
-        if get_variance:
-            ps_1d, k, var_1d, nmodes_1d = results
-            lc_var_1d = var_1d
-        else:
-            ps_1d, k, nmodes_1d = results
-        lc_ps_1d = ps_1d
-
         ps1d = SphericalPS(
-            ps=lc_ps_1d * ps_unit,
+            ps=ps_1d * ps_unit,
             k=k.squeeze() / box_length.unit,
             redshift=chunk_redshift,
             n_modes=nmodes_1d.squeeze(),
-            variance=lc_var_1d * ps_unit**2 if get_variance else None,
+            variance=var_1d * ps_unit**2 if get_variance else None,
             is_deltasq=prefactor_fnc is not None,
         )
 
@@ -391,7 +380,8 @@ def calculate_ps_lc(
 
             interp_points_generator = above_mu_min_angular_generator(mu=mu_min)
     else:
-        k_weights_1d = ignore_zero_ki
+        if k_weights_1d is None:
+            k_weights_1d = ignore_zero_ki
         if interp is not None:
             interp_points_generator = regular_angular_generator()
 
