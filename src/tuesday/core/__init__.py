@@ -22,6 +22,7 @@ __all__ = [
     "plot_lightcone_slice",
     "plot_pdf",
     "plot_power_spectrum",
+    "plot_redshift_slice",
     "sample_from_rms_noise",
     "sample_lc_noise",
     "taper2d",
@@ -50,6 +51,7 @@ from .plotting.sliceplots import (
     plot_coeval_slice,
     plot_lightcone_slice,
     plot_pdf,
+    plot_redshift_slice,
 )
 from .summaries.powerspectra import (
     bin_kpar,
