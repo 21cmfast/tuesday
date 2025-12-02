@@ -5,9 +5,12 @@ from collections.abc import Callable
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy import units as un
+from deprecation import deprecated
 from matplotlib import colormaps, colors, rcParams
 from matplotlib.colors import LogNorm
 from scipy.ndimage import gaussian_filter
+
+from tuesday import __version__
 
 from ..units import validate
 
@@ -174,7 +177,7 @@ def coeval2slice_z(
     return slice_index
 
 
-def plot_redshift_slice(
+def plot_lightcone_slice(
     lightcone: un.Quantity,
     box_length: un.Quantity,
     redshift: np.ndarray | un.Quantity,
@@ -197,6 +200,9 @@ def plot_redshift_slice(
     transform2slice: Callable | None = None,
 ) -> plt.Axes:
     """Plot a slice from a lightcone of shape (N_x, N_y, N_redshifts).
+
+    The plot will have redshift on the x-axis and (transverse) distance on the y-axis,
+    so it will show the cosmic evolution of the volume along the line of sight.
 
     Parameters
     ----------
@@ -236,8 +242,6 @@ def plot_redshift_slice(
         Whether to apply Gaussian smoothing to the lightcone data.
         If True, a default sigma of 1.0 will be used.
         If a float, it will be used as the sigma for the Gaussian filter.
-
-
     """
     validate(box_length, "length")
     rcParams.update({"font.size": fontsize})
@@ -257,7 +261,7 @@ def plot_redshift_slice(
 
     if clabel is None:
         if lightcone.unit.physical_type == un.get_physical_type("temperature"):
-            clabel = "Brightness Temperature " + f" [{lightcone.unit:latex_inline}]"
+            clabel = f"Brightness Temperature  [{lightcone.unit:latex_inline}]"
         elif lightcone.unit.is_equivalent(un.dimensionless_unscaled):
             clabel = "Density Contrast"
         else:
@@ -287,6 +291,20 @@ def plot_redshift_slice(
         cmap=cmap,
         ax=ax,
     )
+
+
+@deprecated(
+    deprecated_in="2.3.2",
+    removed_in="3.0.0",
+    current_version=__version__,
+    details="Please use plot_lightcone_slice instead",
+)
+def plot_redshift_slice(*args, **kwargs):
+    """PLot a slice from a lightcone.
+
+    Deprecated: use plot_lightcone_slice instead.
+    """
+    return plot_lightcone_slice(*args, **kwargs)
 
 
 def plot_coeval_slice(

@@ -16,3 +16,4 @@ docs/_build/
 _version.py
 _autosummary/
 coverage.xml
+.ipynb_checkpoints/

@@ -1,9 +1,10 @@
 """Configuration for docs."""
 
 import os
-from datetime import datetime, timezone
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).absolute().parent.parent / "src"))
 
 import tuesday
@@ -45,7 +46,7 @@ autodoc_default_options = {
 source_suffix = ".rst"
 master_doc = "index"
 project = "tuesday"
-year = str(datetime.now(tz=timezone.utc).year)
+year = str(datetime.now(tz=UTC).year)
 author = "Daniela Breitman and Steven Murray"
 copyright = f"{year}, {author}"
 version = release = tuesday.__version__

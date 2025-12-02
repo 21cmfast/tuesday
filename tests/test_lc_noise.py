@@ -72,10 +72,7 @@ def test_thermal_noise_per_voxel(observation):
         observation, np.array([150.0, 120.0]) * un.MHz, boxlength, lc_shape
     )
     with pytest.raises(
-        ValueError,
-        match="You cannot provide both beam_area "
-        "and antenna_effective_area."
-        " Proceding with beam_area.",
+        ValueError, match="You cannot provide both beam_area and antenna_effective_area"
     ):
         thermal_noise_per_voxel(
             observation,
@@ -87,8 +84,7 @@ def test_thermal_noise_per_voxel(observation):
         )
     with pytest.raises(
         ValueError,
-        match="Antenna effective area must either be a float or have the"
-        " same shape as freqs.",
+        match="Antenna effective area must either be a float or have the same shape",
     ):
         thermal_noise_per_voxel(
             observation,
@@ -98,7 +94,7 @@ def test_thermal_noise_per_voxel(observation):
             antenna_effective_area=[517.7, 200.0] * un.m**2,
         )
     with pytest.raises(
-        ValueError, match="Beam area must be a float or have the same shape as freqs."
+        ValueError, match="Beam area must be a float or have the same shape as freqs"
     ):
         thermal_noise_per_voxel(
             observation,

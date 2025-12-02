@@ -19,6 +19,7 @@ __all__ = [
     "plot_1d_power_spectrum_z",
     "plot_2d_power_spectrum",
     "plot_coeval_slice",
+    "plot_lightcone_slice",
     "plot_pdf",
     "plot_power_spectrum",
     "plot_redshift_slice",
@@ -48,6 +49,7 @@ from .plotting.sliceplots import (
     lc2slice_x,
     lc2slice_y,
     plot_coeval_slice,
+    plot_lightcone_slice,
     plot_pdf,
     plot_redshift_slice,
 )
