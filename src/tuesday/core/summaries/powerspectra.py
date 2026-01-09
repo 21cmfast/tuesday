@@ -704,7 +704,7 @@ def bin_kpar(
             idxs = np.digitize(ps.kpar.value, final_bins_kpar.value) - 1
             final_nmodes = np.zeros(len(final_bins_kpar))
             for i in range(len(final_bins_kpar)):
-                final_nmodes[i] = np.sum(idxs == i)
+                final_nmodes[i] = np.sum(idxs == i) if np.sum(idxs == i) > 0 else 1
 
         else:
             final_ps = np.zeros((len(ps.kperp), len(final_bins_kpar) - 1))
@@ -754,11 +754,8 @@ def bin_kpar(
             if crop_kpar is not None
             else final_nmodes
         )
-        kpar_grid, kperp_grid = np.meshgrid(
-            final_kperp_modes, final_kpar_modes, indexing="ij"
-        )
 
-        final_nmodes = np.sqrt(kperp_grid**2 + kpar_grid**2)
+        final_nmodes = np.outer(final_kperp_modes, final_kpar_modes)
 
         return CylindricalPS(
             ps=final_ps,
