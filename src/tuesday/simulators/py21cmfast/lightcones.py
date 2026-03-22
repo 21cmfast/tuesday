@@ -123,9 +123,6 @@ def construct_lightcone_from_filelist(
         A list of paths to 21cmFAST output struct files.
     lightconer
         The object used to generate lightcone slices.
-    global_quantities
-        A list of global quantities to extract. These must exist in the files
-        given.
     """
     boxes = [read_output_struct(fl) for fl in filelist]
     inputs = boxes[0].inputs
