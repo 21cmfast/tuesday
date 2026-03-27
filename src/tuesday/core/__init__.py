@@ -12,6 +12,7 @@ __all__ = [
     "coeval2slice_z",
     "compute_thermal_rms_per_snapshot_vis",
     "compute_thermal_rms_uvgrid",
+    "compute_uv_sampling",
     "cylindrical_to_spherical",
     "horizon_limit",
     "lc2slice_x",
@@ -31,6 +32,7 @@ __all__ = [
 from .instrument_models.noise import (
     compute_thermal_rms_per_snapshot_vis,
     compute_thermal_rms_uvgrid,
+    compute_uv_sampling,
     observe_lightcone,
     sample_from_rms_uvgrid,
     taper2d,

@@ -83,7 +83,7 @@ def test_rms_per_snapshot_vis(observation):
     samples = sample_from_rms_uvgrid(
         sigma,
         seed=4,
-        nsamples=10,
+        nrealizations=10,
     )
     assert samples.shape == (10, *sigma.shape)
 
@@ -95,7 +95,7 @@ class TestSampleFromRmsNoise:
         """Test that the UV noise is Hermitian."""
         img_noise = sample_from_rms_uvgrid(
             np.ones((ncells, ncells)) * un.mK,
-            nsamples=nsamples,
+            nrealizations=nsamples,
             seed=4,
             return_in_uv=False,
         )

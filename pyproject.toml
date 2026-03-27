@@ -16,7 +16,7 @@ authors = [
     { name = "James Davies", email = "james.davies@sns.it" },
     { name = "Steven Murray", email = "murray.steveng@gmail.com" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {text="MIT"}
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -31,7 +31,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "21cmfast",
+    "21cmfast>=4.1.0",
     "21cmsense>=2.0.0",
     "astropy>=7.0.1",
     "attrs>=25.3.0",
@@ -41,19 +41,25 @@ dependencies = [
 ]
 dynamic = ['version']
 
-[project.optional-dependencies]
-21cmfast = ['21cmFAST>=4.0.0b']
+[dependency-groups]
 tests = [
-    "coverage",
-    "pytest-cov",
-    "pre-commit",
-    "pytest",
-    "sphinx",
-]
-dev = [
-    "tuesday-eor[tests,21cmfast]"
+    "coverage>=7.8.2",
+    "pytest>=8.3.5",
+    "pytest-cov>=6.1.1",
 ]
 
+docs = [
+    "sphinx>=8.2.3",
+    "tools21cm>=2.3.10",
+]
+
+dev = [
+    "ipykernel>=7.2.0",
+    "pip>=26.0.1",
+    "pre-commit>=4.2.0",
+    {include-group = "tests"},
+    {include-group = "docs"},
+]
 
 [project.urls]
 Repository = "https://github.com/21cmfast/tuesday"
@@ -141,16 +147,5 @@ property-decorators = [
 max-complexity = 21
 
 [tool.uv.sources]
-21cmfast = { git = "https://github.com/21cmFAST/21cmFAST" }
-
-[dependency-groups]
-21cmfast = [
-    "21cmfast",
-]
-dev = [
-    "coverage>=7.8.2",
-    "pre-commit>=4.2.0",
-    "pytest>=8.3.5",
-    "pytest-cov>=6.1.1",
-    "sphinx>=8.2.3",
-]
+powerbox = { git = "https://github.com/steven-murray/powerbox", rev = "better-interp" }
+21cmsense = { git = "https://github.com/rasg-affiliates/21cmSense", rev = "fast-hist" }
