@@ -156,7 +156,7 @@ def calculate_ps(
             raise ValueError("chunk2 should have the same units as chunk.")
         if chunk2.shape != chunk.shape:
             raise ValueError("chunk2 should have the same shape as chunk.")
-        
+
     if not interp:
         interp = None
     if not isinstance(chunk, un.Quantity):
@@ -217,7 +217,7 @@ def calculate_ps(
         ps_2d = ps_2d[..., kpar > 0]
         if get_variance:
             variance = variance[..., kpar > 0]
-        
+
         kpar = kpar[kpar > 0]
         ps2d = CylindricalPS(
             ps=ps_2d * ps_unit,

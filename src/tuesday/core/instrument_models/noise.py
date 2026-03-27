@@ -119,8 +119,8 @@ def compute_thermal_rms_per_snapshot_vis(
         omega_pix = theta_box**2 / box_ncells**2
 
         df = np.abs(
-            z2f(z_at_value(Planck18.comoving_distance, d + dx / 2)) - 
-            z2f(z_at_value(Planck18.comoving_distance, d - dx / 2))
+            z2f(z_at_value(Planck18.comoving_distance, d + dx / 2))
+            - z2f(z_at_value(Planck18.comoving_distance, d - dx / 2))
         ).to(un.Hz)
 
         npolarizations = 2  # assume dual polarization
@@ -128,7 +128,9 @@ def compute_thermal_rms_per_snapshot_vis(
             un.dimensionless_unscaled
         )
         beam_area = (
-            observation.observatory.beam.area(observation.frequency) if omega_beam is None else omega_beam[i]
+            observation.observatory.beam.area(observation.frequency)
+            if omega_beam is None
+            else omega_beam[i]
         )
         sig_uv[i] = tsys.value * beam_area / omega_pix / sqrt
 
@@ -151,6 +153,7 @@ def taper2d(n: int, taper: str = "blackmanharris"):
     """
     wf = getattr(windows, taper)(n)
     return np.sqrt(np.outer(wf, wf))
+
 
 def compute_uv_sampling(
     observation: Observation,
@@ -195,7 +198,7 @@ def compute_uv_sampling(
         level is calculated. Each redshift has a different v grid. Shape (Nv+1, Nz).
     uv_coverage : np.ndarray
         Number of baseline samples in each uv cell, with shape (Nx, Ny, Nfreqs).
-        This includes the effect of rotation synthesis over the lst_bin_size and n_days 
+        This includes the effect of rotation synthesis over the lst_bin_size and n_days
         of the observation.
 
     Notes
@@ -204,11 +207,11 @@ def compute_uv_sampling(
     so that it has shape (Nx//2 + 1, Nz). This is because the negative half of the plane
     is redundant, and we don't need to compute the coverage for both halves.
 
-    The ordering of the uv_coverage output is such that the first axis corresponds to 
-    the full u grid in ascending order (i.e. from negative to positive u), and the 
-    second axis corresponds to the non-negative v modes in ascending order (i.e. from 
+    The ordering of the uv_coverage output is such that the first axis corresponds to
+    the full u grid in ascending order (i.e. from negative to positive u), and the
+    second axis corresponds to the non-negative v modes in ascending order (i.e. from
     zero to the Nyquist frequency of the simulation box that has been specified via
-    box_length and box_ncells). 
+    box_length and box_ncells).
     """
     observatory = observation.observatory
     time_offsets = observatory.time_offsets_from_obs_int_time(
@@ -227,18 +230,17 @@ def compute_uv_sampling(
     ) * (2 * np.pi / box_length.unit)
 
     kperp_to_u = 1 / dk_du(f2z(freqs)).to(
-        box_length.unit**-1, 
-        with_H0(observation.cosmo.H0)
+        box_length.unit**-1, with_H0(observation.cosmo.H0)
     )
 
     # ugrid is frequency dependent, so this is (Nu, Nz)
     ugrid_edges = np.outer(kperp, kperp_to_u).to(un.dimensionless_unscaled).value
-    
+
     # In the v direction we only need the non-negative half of the plane. We take all
     # the non-negative modes here, being careful to always include the highest-frequency
-    # component (which, in the case of an even number of pixels, is the nyquist 
+    # component (which, in the case of an even number of pixels, is the nyquist
     # frequency and must be included).
-    vgrid_edges = np.abs(ugrid_edges[:box_ncells // 2 + 1])[::-1]
+    vgrid_edges = np.abs(ugrid_edges[: box_ncells // 2 + 1])[::-1]
     du = ugrid_edges[1] - ugrid_edges[0]
     ugrid_edges -= du / 2
     vgrid_edges -= du / 2
@@ -246,7 +248,7 @@ def compute_uv_sampling(
     # So far we've been dealing with centres. Turn them into edges.
     ugrid_edges = np.vstack((ugrid_edges, ugrid_edges[-1] + du))
     vgrid_edges = np.vstack((vgrid_edges, vgrid_edges[-1] + du))
-    
+
     uv_coverage = grid_baselines(
         coherent=True,
         baselines=baselines,
@@ -261,6 +263,7 @@ def compute_uv_sampling(
     ).transpose(1, 2, 0)  # (Nu, Nv, Nfreqs)
 
     return ugrid_edges, vgrid_edges, uv_coverage
+
 
 def compute_thermal_rms_uvgrid(
     observation: Observation,
@@ -321,21 +324,23 @@ def compute_thermal_rms_uvgrid(
         with shape (Nx, Ny, Nfreqs).
     uv_coverage : np.ndarray
         Number of baseline samples in each uv cell, with shape (Nx, Ny, Nfreqs).
-        This includes the effect of rotation synthesis over the lst_bin_size and n_days 
+        This includes the effect of rotation synthesis over the lst_bin_size and n_days
         of the observation.
     """
     nx, ny, nfreqs = uv_coverage.shape
     assert ny == nx // 2 + 1, "uv_coverage should have shape (Nx, Nx//2 + 1, Nfreqs)"
-    assert nfreqs == len(freqs), "uv_coverage should have the same number of frequency channels as freqs"
+    assert nfreqs == len(freqs), (
+        "uv_coverage should have the same number of frequency channels as freqs"
+    )
 
     if observation.lst_bin_size != observation.time_per_day:
         raise NotImplementedError(
             "Cannot deal with an LST-bin size (i.e. time over which a field is tracked)"
-            " that differs from the total time observed in a particular day. This would" \
+            " that differs from the total time observed in a particular day. This would"
             "imply that separate fields (in RA) are observed, but this function only"
             "computes one output box."
         )
-    
+
     sigma_rms = compute_thermal_rms_per_snapshot_vis(
         observation=observation,
         freqs=freqs,
@@ -346,31 +351,32 @@ def compute_thermal_rms_uvgrid(
     )
     with np.errstate(divide="ignore", invalid="ignore"):
         sigma = sigma_rms / np.sqrt(uv_coverage * observation.n_days)
-    
+
     sigma[min_nbls_per_uv_cell > uv_coverage] = 0.0
     return sigma
 
+
 def _prepare_2d_complex_noise_for_irfft2(x: np.ndarray):
-    # Note that this function is not very generic. 
-    # we assume the input has a first dimension of nrealization which should not 
+    # Note that this function is not very generic.
+    # we assume the input has a first dimension of nrealization which should not
     # be fourier transformed. The FT axes should be (1, 2). The array can
     # have as many other axes as we want. We only call this internally from the
-    # sample_from_rms_uvgrid function, and we know that the shape of the noise array 
+    # sample_from_rms_uvgrid function, and we know that the shape of the noise array
     # there is
     assert x.ndim >= 3
 
     n = x.shape[1]
-    
+
     x[:, 0, 0] = np.real(x[:, 0, 0])
-    if n%2!=0:
-        x[:, 1:n//2+1, 0] = np.conj(x[:, -1:n//2:-1,0])
-    if n%2==0:
-        x[:, 1:n//2+1, 0] = np.conj(x[:, -1:n//2-1:-1,0])
-        x[:, n//2, 0] = np.real(x[:, n//2, 0])
-        x[:, 0,-1] = np.real(x[:, 0, -1])
-        x[:, 1:n//2+1, -1] = np.conj(x[:, -1:n//2-1:-1,-1])
-        x[:, n//2, -1] = np.real(x[:, n//2, -1])
-        
+    if n % 2 != 0:
+        x[:, 1 : n // 2 + 1, 0] = np.conj(x[:, -1 : n // 2 : -1, 0])
+    if n % 2 == 0:
+        x[:, 1 : n // 2 + 1, 0] = np.conj(x[:, -1 : n // 2 - 1 : -1, 0])
+        x[:, n // 2, 0] = np.real(x[:, n // 2, 0])
+        x[:, 0, -1] = np.real(x[:, 0, -1])
+        x[:, 1 : n // 2 + 1, -1] = np.conj(x[:, -1 : n // 2 - 1 : -1, -1])
+        x[:, n // 2, -1] = np.real(x[:, n // 2, -1])
+
 
 def sample_from_rms_uvgrid(
     rms_noise: un.Quantity,
@@ -390,15 +396,15 @@ def sample_from_rms_uvgrid(
     ----------
     rms_noise : astropy.units.Quantity
         RMS noise in uv space, shape (Nx, Ny, Nfreqs). The shape and ordering
-        of this array must be such that in the first dimension (u) the pixels go 
+        of this array must be such that in the first dimension (u) the pixels go
         from negative to positive u in ascending order, such that the central pixel
         is zero. In the case that the number of pixels is even, the zero mode must
         still be indexed by Nx//2. This is the standard format for FFT frequency output
         from numpy, and also the format output by `compute_thermal_rms_uvgrid`.
         The second axis should only have the non-negative modes, in ascending order,
-        starting with zero and including the Nyquist frequency (i.e. the same 
-        assumptions that ``np.fft.irrft`` uses). Note that this function 
-        cannot check this ordering, so it is up to the user to ensure that the input is 
+        starting with zero and including the Nyquist frequency (i.e. the same
+        assumptions that ``np.fft.irrft`` uses). Note that this function
+        cannot check this ordering, so it is up to the user to ensure that the input is
         in the correct format.
     seed : int, optional
         Random seed for reproducibility, by default None.
@@ -406,7 +412,7 @@ def sample_from_rms_uvgrid(
         Number of noise realisations to sample, by default 1.
     window_fnc : str, optional
         Name of window function to be applied (in 2D) to the noise sampled in uv space.
-        By default don't apply a window function. 
+        By default don't apply a window function.
     return_in_uv : bool, optional
         If True, return the noise sampled in uv space instead of real space,
         by default False.
@@ -429,14 +435,14 @@ def sample_from_rms_uvgrid(
 
     # Check that the shape of rms_noise is correct.
     nx, ny, nfreqs = rms_noise.shape
-    if nx//2 + 1 != ny:
+    if nx // 2 + 1 != ny:
         raise ValueError(
             "The shape of rms_noise is not correct. The first dimension should be "
             "the full u grid, and the second dimension should be the non-negative v "
             "modes. If the first dimension has size Nx, the second "
             f"dimension should have size Ny = Nx//2 + 1. Got {rms_noise.shape}."
         )
-    
+
     if seed is None:
         seed = np.random.default_rng().integers(0, 2**31 - 1)
         logger.info(f"Setting random seed to {seed}", stacklevel=2)
@@ -444,7 +450,7 @@ def sample_from_rms_uvgrid(
     rng = np.random.default_rng(seed)
 
     # Get some complex-value noise. The shape of the noise
-    # is (Nrealizations, Nu, Nv, Nfreqs), where Nu is the full u grid and Nv is the 
+    # is (Nrealizations, Nu, Nv, Nfreqs), where Nu is the full u grid and Nv is the
     # non-negative v modes.
     noise = (
         rng.normal(size=(nrealizations, *rms_noise.shape))
@@ -461,29 +467,23 @@ def sample_from_rms_uvgrid(
             w = 1.0 / (rms_noise**2).value
         w[np.isinf(w)] = 0.0
         wsum = w.sum(axis=(0, 1), keepdims=True)
-        # We multiply by the number of pixels so that the overall normalization of the 
+        # We multiply by the number of pixels so that the overall normalization of the
         # noise is not changed by this weighting (i.e. consider a uniform visibility
-        # as a function of (u, v) and a uniform weighting... we should get the same 
-        # result as if we had NOT weighted, which requires multiplying by the number of 
+        # as a function of (u, v) and a uniform weighting... we should get the same
+        # result as if we had NOT weighted, which requires multiplying by the number of
         # pixels).
         noise *= w.shape[0] * w.shape[1] * w[None, ...] / wsum[None, ...]
-        
+
     # The second axis needs to be ifftshifted such that it is in the right format
     # for ifft.
     noise = np.fft.ifftshift(noise, axes=(1,))
-    
+
     # In a 2D array, some of the entries in the noise are still redundant, and must
     # be set properly to be either real or the conjugate of another entry. Do that now.
     _prepare_2d_complex_noise_for_irfft2(noise)
 
-    # Make the noise Hermitian so that the real-space noise is real.
-    # noise[:, 0, 0] += noise[:, 0, 0].conj()
-    # noise[:, 0, 1:] += noise[:, 0, 1:][:, ::-1].conj()
-    # noise[:, 1:, 0] += noise[:, 1:, 0][:, ::-1].conj()
-    # noise[:, 1:, 1:] += noise[:, 1:, 1:][:, ::-1, ::-1].conj()
-
     if not return_in_uv:
-        # We need to normalise by n^2 here because of the normalization convention of 
+        # We need to normalise by n^2 here because of the normalization convention of
         # the FFT in numpy. This will mean that we regain the correct normalisation of
         # the noise power spectrum. This was set by looking at the normalization of the
         # inverse FT in powerbox (applied to the sampled k-modes from a power spectrum).
@@ -550,7 +550,7 @@ def apply_wedge_filter(
     ----------
     uv_lightcones : astropy.units.Quantity
         Lightcones in uv space, shape (Nrealizations, Nx, Ny, Nz).
-        Note that Ny should have a size Nx//2 + 1, i.e. only the non-negative modes. 
+        Note that Ny should have a size Nx//2 + 1, i.e. only the non-negative modes.
         This can be gotten from doing ``rfft2`` of the real-space lightcone.
     kperp_grid : np.ndarray
         The kperp grid cell centers (along one dimension) in which the noise
@@ -576,13 +576,13 @@ def apply_wedge_filter(
         raise ValueError(
             "The shape of uv_lightcones is not correct. The second dimension should be "
             "the non-negative v modes. If the first dimension has size Nx, the second "
-            f"dimension should have size Ny = ceil(Nx/2) + 1. Got {uv_lightcones.shape}."
+            f"dimension should have size Ny=ceil(Nx/2) + 1. Got {uv_lightcones.shape}."
         )
-    
+
     if mode not in ["rolling", "chunk"]:
         raise ValueError("mode must be either 'rolling' or 'chunk'.")
 
-    with_h = "hlittle" in kperp_grid.unit.to_string()
+    with_h = "hlittle" in kperp_x.unit.to_string()
 
     if window_size is None and mode == "chunk":
         window_size = nz
@@ -777,17 +777,13 @@ def observe_lightcone(
 
     # TODO: check all the orderings of axes here
     lc_uv_nu = np.fft.rfft2(lightcone.value, axes=(0, 1)) * lightcone.unit
-    
-    # Only shift the first axis here, because the second axis only has the non-negative 
-    # modes, so there is no negative half to shift.
-    thermal_rms_uv = np.fft.fftshift(thermal_rms_uv, axes=(0, ))
 
-    kperp_x = np.fft.fftfreq(
-        nx, d=(box_length / nx).value
-    ) * (1 / box_length.unit)
-    kperp_y = np.fft.rfftfreq(
-        ny, d=(box_length / ny).value
-    ) * (1 / box_length.unit)
+    # Only shift the first axis here, because the second axis only has the non-negative
+    # modes, so there is no negative half to shift.
+    thermal_rms_uv = np.fft.fftshift(thermal_rms_uv, axes=(0,))
+
+    kperp_x = np.fft.fftfreq(nx, d=(box_length / nx).value) * (1 / box_length.unit)
+    kperp_y = np.fft.rfftfreq(ny, d=(box_length / ny).value) * (1 / box_length.unit)
 
     lc_uv_nu = lc_uv_nu + noise_realisation_uv
     lc_uv_nu[:, thermal_rms_uv == 0] = 0.0
@@ -804,11 +800,12 @@ def observe_lightcone(
             mode=wedge_mode,
         )
 
-
     if apply_spatial_taper:
         _, nx, ny = lc_uv_nu.shape
         window_fnc = taper2d(lightcone.shape[0], spatial_taper)[:, -ny:]
-        window_fnc = np.fft.fftshift(window_fnc, axes=(0,))  # shift the window to be in the right format for FFT
+        window_fnc = np.fft.fftshift(
+            window_fnc, axes=(0,)
+        )  # shift the window to be in the right format for FFT
         lc_uv_nu *= window_fnc[None, ..., None]
 
     noisy_lc_real = np.fft.irfft2(lc_uv_nu, s=(nx, nx), axes=(1, 2)).to(lightcone.unit)
