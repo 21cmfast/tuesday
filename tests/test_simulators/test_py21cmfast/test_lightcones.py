@@ -23,9 +23,7 @@ def create_mock_cache_output(cachedir: Path, ics: bool = False) -> RunCache:
     cachedir.mkdir()
     inputs = InputParameters.from_template(
         "simple", random_seed=1, node_redshifts=[10, 9, 8, 7, 6]
-    ).evolve_input_structs(
-        BOX_LEN=100, HII_DIM=50, DIM=100, APPLY_RSDS=False, KEEP_3D_VELOCITIES=True
-    )
+    ).evolve_input_structs(BOX_LEN=100, HII_DIM=50, DIM=100, KEEP_3D_VELOCITIES=True)
     cache = RunCache.from_inputs(inputs, cache=OutputCache(cachedir))
 
     for fldname, fld in attrs.asdict(cache, recurse=False).items():
@@ -62,7 +60,7 @@ def test_construct_rect_lightcone_from_cache(tmp_path: Path):
 
     lightconer = RectilinearLightconer.with_equal_cdist_slices(
         min_redshift=6,
-        max_redshift=10,
+        max_redshift=9.6,
         resolution=cache.inputs.simulation_options.BOX_LEN
         * un.Mpc
         / cache.inputs.simulation_options.HII_DIM,
@@ -78,8 +76,8 @@ def test_construct_rect_lightcone_from_cache(tmp_path: Path):
     assert isinstance(lightcone, LightCone)
 
     # Check that the data is stored in the lightcone object
-    assert lightcone.lightcones["brightness_temp"].shape == (50, 50, 607)
-    assert lightcone.lightcones["density"].shape == (50, 50, 607)
+    assert lightcone.lightcones["brightness_temp"].shape == (50, 50, 562)
+    assert lightcone.lightcones["density"].shape == (50, 50, 562)
 
     assert lightcone.global_quantities["log10_mturn_acg"].shape == (
         len(cache.inputs.node_redshifts),
@@ -99,18 +97,16 @@ def test_construct_ang_lightcone_from_cache(tmp_path: Path):
 
     lightconer = AngularLightconer.like_rectilinear(
         simulation_options=cache.inputs.simulation_options,
-        max_redshift=10,
+        max_redshift=9.6,
         match_at_z=6.0,
         quantities=("density", "brightness_temp"),
-        get_los_velocity=True,
     )
 
     lightcone = construct_lightcone_from_cache(cache, lightconer)
 
     assert isinstance(lightcone, LightCone)
-    assert lightcone.lightcones["brightness_temp"].shape == (2500, 607)
-    assert lightcone.lightcones["density"].shape == (2500, 607)
-    assert lightcone.global_quantities == {}
+    assert lightcone.lightcones["brightness_temp"].shape == (2500, 562)
+    assert lightcone.lightcones["density"].shape == (2500, 562)
 
 
 def test_exceptions(tmp_path: Path):
@@ -119,7 +115,7 @@ def test_exceptions(tmp_path: Path):
     cache.PerturbedField[cache.inputs.node_redshifts[-1]].unlink()
     lightconer = AngularLightconer.like_rectilinear(
         simulation_options=cache.inputs.simulation_options,
-        max_redshift=10,
+        max_redshift=9.6,
         match_at_z=6.0,
         quantities=("density", "brightness_temp"),
     )

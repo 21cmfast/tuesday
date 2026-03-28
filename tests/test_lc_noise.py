@@ -11,6 +11,7 @@ from tuesday.core import (
     observe_lightcone,
     sample_from_rms_uvgrid,
 )
+from tuesday.core.instrument_models.noise import compute_uv_sampling
 
 
 @pytest.fixture
@@ -19,6 +20,7 @@ def observation():
     return Observation(
         observatory=Observatory.from_ska("LOW_FULL_AA4"),
         lst_bin_size=1.0 * un.hour,
+        time_per_day=1.0 * un.hour,
         integration_time=120.0 * un.second,
         bandwidth=50 * un.kHz,
         n_days=1000,
@@ -31,22 +33,23 @@ def test_rms_per_snapshot_vis(observation):
     boxnside = 20
     compute_thermal_rms_per_snapshot_vis(
         observation,
-        150 * un.MHz,
-        boxlength,
-        boxnside,
+        freqs=150 * un.MHz,
+        box_res=boxlength / boxnside,
         antenna_effective_area=[517.7] * un.m**2,
     )
     compute_thermal_rms_per_snapshot_vis(
-        observation, np.array([150.0, 120.0]) * un.MHz, boxlength, boxnside
+        observation,
+        freqs=np.array([150.0, 120.0]) * un.MHz,
+        box_res=boxlength / boxnside,
+        antenna_effective_area=[517.7] * un.m**2,
     )
     with pytest.raises(
         ValueError, match="You cannot provide both beam_area and antenna_effective_area"
     ):
         compute_thermal_rms_per_snapshot_vis(
             observation,
-            np.array([150.0, 120.0]) * un.MHz,
-            boxlength,
-            boxnside,
+            freqs=np.array([150.0, 120.0]) * un.MHz,
+            box_res=boxlength / boxnside,
             antenna_effective_area=517.7 * un.m**2,
             beam_area=1.0 * un.arcmin**2,
         )
@@ -57,26 +60,32 @@ def test_rms_per_snapshot_vis(observation):
     ):
         compute_thermal_rms_per_snapshot_vis(
             observation,
-            np.array([150.0, 120.0, 100.0]) * un.MHz,
-            boxlength,
-            boxnside,
+            freqs=np.array([150.0, 120.0, 100.0]) * un.MHz,
+            box_res=boxlength / boxnside,
             antenna_effective_area=[517.7, 200.0] * un.m**2,
         )
     with pytest.raises(
-        ValueError, match="Beam area must be a float or have the same shape as freqs"
+        ValueError, match="Beam area must have length one or the same shape as freqs"
     ):
         compute_thermal_rms_per_snapshot_vis(
             observation,
-            np.array([150.0, 120.0, 100.0]) * un.MHz,
-            boxlength,
-            boxnside,
+            freqs=np.array([150.0, 120.0, 100.0]) * un.MHz,
+            box_res=boxlength / boxnside,
             beam_area=[517.7, 200.0] * un.rad**2,
         )
-    _, sigma = compute_thermal_rms_uvgrid(
+
+    _, _, uvcov = compute_uv_sampling(
         observation,
-        np.array([150.0, 120.0, 100.0]) * un.MHz,
-        boxlength,
-        boxnside,
+        freqs=np.array([150.0, 120.0, 100.0]) * un.MHz,
+        box_length=boxlength,
+        box_ncells=boxnside,
+    )
+
+    sigma = compute_thermal_rms_uvgrid(
+        observation,
+        uv_coverage=uvcov,
+        box_length=boxlength,
+        freqs=np.array([150.0, 120.0, 100.0]) * un.MHz,
         min_nbls_per_uv_cell=15,
     )
 
@@ -85,7 +94,7 @@ def test_rms_per_snapshot_vis(observation):
         seed=4,
         nrealizations=10,
     )
-    assert samples.shape == (10, *sigma.shape)
+    assert samples.shape == (10, boxnside, boxnside, 3)
 
 
 class TestSampleFromRmsNoise:
@@ -94,7 +103,7 @@ class TestSampleFromRmsNoise:
     def test_image_noise_reality(self, nsamples, ncells):
         """Test that the UV noise is Hermitian."""
         img_noise = sample_from_rms_uvgrid(
-            np.ones((ncells, ncells)) * un.mK,
+            np.ones((ncells, ncells // 2 + 1)) * un.mK,
             nrealizations=nsamples,
             seed=4,
             return_in_uv=False,
@@ -109,22 +118,26 @@ class TestObserveLightcone:
         obs = Observation(
             observatory=Observatory.from_ska("LOW_INNER_R350M_AA4"),
             lst_bin_size=0.5 * un.hour,
+            time_per_day=0.5 * un.hour,
             integration_time=120.0 * un.second,
             bandwidth=50 * un.kHz,
             n_days=1000,
         )
 
-        _, sigma = compute_thermal_rms_uvgrid(
+        _, _, uvcov = compute_uv_sampling(
+            obs, freqs=self.lc_freqs, box_length=300.0 * un.Mpc, box_ncells=self.ncells
+        )
+        sigma = compute_thermal_rms_uvgrid(
             obs,
+            uv_coverage=uvcov,
             freqs=self.lc_freqs,
             box_length=300.0 * un.Mpc,
-            box_ncells=self.ncells,
             min_nbls_per_uv_cell=15,
         )
         self.sigma = sigma
 
     @pytest.mark.parametrize("wedge_slope", [0.0, 1.0])
-    @pytest.mark.parametrize("wedge_buffer", [0.0, 300 * un.ns])
+    @pytest.mark.parametrize("wedge_buffer", [0.0 * un.ns, 300 * un.ns])
     @pytest.mark.parametrize("wedge_mode", ["rolling", "chunk"])
     def test_sample_lc_noise(self, observation, wedge_slope, wedge_buffer, wedge_mode):
         """Test the sample_lc_noise function."""
@@ -136,7 +149,7 @@ class TestObserveLightcone:
             box_length=300.0 * un.Mpc,
             lightcone_freqs=self.lc_freqs,
             remove_wedge=True,
-            nsamples=1,
+            nrealizations=1,
             wedge_slope=wedge_slope,
             wedge_buffer=wedge_buffer,
             wedge_mode=wedge_mode,

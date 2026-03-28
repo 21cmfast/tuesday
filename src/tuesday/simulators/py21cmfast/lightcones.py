@@ -6,6 +6,7 @@ import numpy as np
 from py21cmfast.drivers.lightcone import (
     AngularLightcone,
     LightCone,
+    do_rsds,
     setup_lightcone_instance,
 )
 from py21cmfast.io.caching import RunCache
@@ -16,6 +17,9 @@ def construct_lightcone_from_cache(
     cache: RunCache,
     lightconer: Lightconer,
     global_quantities: Sequence[str] = (),
+    apply_rsds: bool = False,
+    include_dvdr_in_tau21: bool = False,
+    n_rsd_subcells: int = 10,
 ) -> LightCone:
     """Construct a lightcone from a cached coeval simulation run.
 
@@ -49,14 +53,17 @@ def construct_lightcone_from_cache(
     inputs = cache.inputs
     node_redshifts = sorted(cache.BrightnessTemp.keys(), reverse=True)
 
-    lightconer.validate_options(cache.inputs.matter_options, cache.inputs.astro_options)
+    lightconer.validate_options(
+        cache.inputs, apply_rsds=apply_rsds, include_dvdr_in_tau21=include_dvdr_in_tau21
+    )
 
     # Create the LightCone instance, loading from file if needed
     lightcone = setup_lightcone_instance(
         lightconer=lightconer,
         inputs=inputs,
         scrollz=node_redshifts,
-        global_quantities=global_quantities,
+        include_dvdr_in_tau21=include_dvdr_in_tau21,
+        apply_rsds=apply_rsds,
         photon_nonconservation_data={},
     )
 
@@ -102,10 +109,16 @@ def construct_lightcone_from_cache(
 
         # last redshift things
         if iz == len(node_redshifts) - 1 and (
-            isinstance(lightcone, AngularLightcone) and lightconer.get_los_velocity
+            isinstance(lightcone, AngularLightcone) and apply_rsds
         ):
-            lightcone.lightcones["brightness_temp_with_rsds"] = lightcone.compute_rsds(
-                n_subcells=inputs.astro_params.N_RSD_STEPS
+            field_with_rsds = do_rsds(
+                field=lightcone.lightcones["brightness_temp"],
+                los_velocity=lightcone.lightcones["los_velocity"],
+                redshifts=lightcone.lightcone_redshifts,
+                inputs=inputs,
+                periodic=False,
+                n_rsd_subcells=n_rsd_subcells,
             )
+            lightcone.lightcones["brightness_temp_with_rsds"] = field_with_rsds
 
     return lightcone
