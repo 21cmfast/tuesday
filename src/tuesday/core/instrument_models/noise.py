@@ -87,7 +87,7 @@ from astropy.cosmology import units as cu
 from py21cmsense import Observation
 from py21cmsense import units as tp
 from py21cmsense._utils import grid_baselines
-from py21cmsense.conversions import dk_du, f2z, z2f
+from py21cmsense.conversions import dk_deta, dk_du, f2z, z2f
 from scipy.signal import windows
 
 logger = logging.getLogger(__name__)
@@ -460,17 +460,25 @@ def compute_thermal_rms_uvgrid(
     ----------
     observation : py21cmsense.Observation
         Instance of `Observation`.
+    uv_coverage : np.ndarray
+        Number of baseline samples in each uv cell, with shape (Nx, Ny, Nfreqs).
+        This should be computed with :func:`compute_uv_sampling`, and should include the
+        effect of rotation synthesis over the lst_bin_size and n_days of the
+        observation. It will be in the upper half-plane convention, so that the second
+        axis corresponds to the non-negative v.
     freqs : astropy.units.Quantity
         Frequencies at which the noise is calculated.
     box_length : astropy.units.Quantity
         Length of the box in which the noise is calculated.
-    box_ncells : int
-        Number of voxels Nx = Ny of a lightcone or coeval box.
     antenna_effective_area : astropy.units.Quantity, optional
         Effective area of the antenna with shape (Nfreqs,).
     beam_area : astropy.units.Quantity, optional
         Beam area of the antenna with shape (Nfreqs,).
         Must only provide one of antenna_effective_area or beam_area.
+    box_slice_depth : astropy.units.Quantity, optional
+        Depth of each slice in the simulation box. If not provided, it is assumed to
+        be equal to the transverse resolution of the box, which is
+        box_length / box_ncells.
     min_nbls_per_uv_cell : int, optional
         Minimum number of baselines per uv cell to consider
         the cell to be measured, by default 1.
@@ -670,13 +678,14 @@ def apply_beam(
     return lc
 
 
+@un.quantity_input
 def sample_from_rms_uvgrid(
-    rms_noise: un.Quantity,
+    rms_noise: tp.Temperature,
     seed: int | None = None,
     nrealizations: int = 1,
     return_in_uv: bool = False,
     spatial_taper: str | None = None,
-):
+) -> un.mK:
     """Sample noise for a lightcone slice given the corresponding rms noise in uv space.
 
     Note that this function assumes that the rms_noise is on a 3D grid (2 uv dimensions,
@@ -1071,7 +1080,7 @@ def observe_lightcone(
     ):
         d = box_length / nx
         kperp_x = np.fft.fftfreq(nx, d=d)
-        kperp_y = np.fft.rfftfreq(ny, d=d)
+        kperp_y = np.fft.rfftfreq(nx, d=d)
 
         if remove_wedge:
             lc_uv_nu = apply_wedge_filter(
@@ -1096,3 +1105,229 @@ def observe_lightcone(
     noisy_lc_real = np.fft.irfft2(lc_uv_nu, s=(nx, nx), axes=(1, 2)).to(lightcone.unit)
 
     return noisy_lc_real, lightcone_redshifts
+
+
+@un.quantity_input
+def apply_wedge_filter_coeval(
+    box_uv_nu: tp.Temperature,
+    kperp_x: tp.Wavenumber,
+    kperp_y: tp.Wavenumber,
+    redshift: float,
+    box_res: tp.Length,
+    cosmo=Planck18,
+    wedge_slope: float = 1.0,
+    wedge_buffer: tp.Time | tp.Wavenumber = 0.0 * un.ns,
+) -> un.mK:
+    """
+    Apply a wedge filter to a coeval cube in uv space.
+
+    Parameters
+    ----------
+    box_uv_nu : astropy.units.Quantity
+        Coeval cube in uv space, shape (..., Nu, Nv, Nfreqs).
+    kperp_x : astropy.units.Quantity
+        The kperp grid cell centers (along one dimension) in which the noise
+        level is calculated. Shape (Nkperp,).
+    kperp_y : astropy.units.Quantity
+        The kperp grid cell centers (along the other dimension) in which the noise
+        level is calculated. Shape (Nkperp//2+1,).
+    redshift : float
+        Redshift of the coeval cube.
+    box_res : astropy.units.Quantity
+        The resolution of the coeval cube (assumed to be the same in all dimensions).
+    cosmo : astropy.cosmology, optional
+        Cosmology to use, by default Planck18.
+    wedge_slope : float, optional
+        Slope of the wedge in (b, tau) space, by default 1.0 (horizon limit).
+    wedge_buffer : astropy.units.Quantity, optional
+        Additional buffer to add to the wedge in delay space, by default 0.0 ns.
+        This can also be provided in kpar space, in which case it will be converted to
+        tau space using the cosmology and redshift provided.
+
+    Returns
+    -------
+    filtered_cube : astropy.units.Quantity
+        Coeval cube with the wedge filter applied, in real space, with the same shape as
+        the input cube.
+    """
+    # First, fourier transform over the frequency dimension
+    uvtau = np.fft.fft(box_uv_nu, axis=-1)
+    kpar = np.fft.fftfreq(box_uv_nu.shape[-1], d=box_res)
+    tau = kpar / dk_deta(redshift, cosmo=cosmo)
+    kperp_mag = np.add.outer(kperp_x**2, kperp_y**2) ** 0.5
+
+    umag = kperp_mag / dk_du(redshift, cosmo=cosmo)
+
+    # This wedge is exact for the central slice (except for the fact that the
+    # frequencies are probably not exactly regular).
+    f0 = z2f(redshift)
+    wedge = wedge_slope * umag / f0
+
+    if not wedge_buffer.unit.is_equivalent(un.s):
+        # Convert the buffer from kpar to tau if needed.
+        wedge_buffer = wedge_buffer / dk_deta(redshift, cosmo=cosmo)
+
+    mask = np.abs(tau)[None, None] < wedge[:, :, None] + wedge_buffer
+
+    uvtau[..., mask] = 0.0
+    return np.fft.ifft(uvtau, axis=-1)
+
+
+@un.quantity_input
+def observe_coeval(
+    *,
+    box: tp.Temperature,
+    box_length: tp.Length,
+    observation: Observation,
+    redshift: float | None = None,
+    frequency: tp.Frequency | None = None,
+    seed: int | None = None,
+    nrealizations: int = 1,
+    spatial_taper: str | None = None,
+    min_nbls_per_uv_cell: int = 1,
+    remove_wedge: bool = False,
+    wedge_slope: float = 1.0,
+    wedge_buffer: tp.Time | tp.Wavenumber = 0.0 * un.ns,
+    remove_mean: bool = True,
+    multiply_by_beam: bool = True,
+) -> un.mK:
+    """Mock observe a coeval cube.
+
+    This adds thermal noise consistent with a given telescope's UV coverage, accounting
+    for rotation synthesis over the observation's `lst_bin_size` and `n_days`.
+
+    Optionally, the foreground wedge can be removed from the noisy cube.
+
+    Parameters
+    ----------
+    ncells
+        Number of cells in the transverse direction of the coeval cube.
+    box_length : astropy.units.Quantity
+        Length of the lightcone box side.
+    observation : py21cmsense.Observation, optional
+        Instance of `Observation`, defining the telescope and observation parameters.
+    nrealizations : int, optional
+        Number of noise realisations to sample, by default 1.
+    seed : int, optional
+        Random seed for reproducibility, by default None.
+    window_fnc : str, optional
+        Name of window function to be applied to the noise sampled in uv space,
+        by default windows.blackmanharris.
+    min_nbls_per_uv_cell : int, optional
+        Minimum number of baselines per uv cell to consider
+        the cell to be measured, by default 1.
+        Thermal noise in uv space is set to zero for
+        uv cells with less than this number of baselines.
+    remove_wedge : bool, optional
+        If True, remove the wedge from the noisy lightcone,
+        using wedge_kpar to determine the wedge boundary,
+        by default False.
+    cosmo : astropy.cosmology, optional
+        Cosmology to use, by default Planck18.
+    multiply_by_beam : bool, optional
+        Whether to multiply the output cube by the primary beam of the telescope.
+
+    Returns
+    -------
+    coeval
+        New coeval cube with noise added, and optionally the wedge removed. The shape of
+        the output has an extra first dimension of size nrealizations, i.e.
+        ``(nrealizations, Nx, Ny, Nz)``.
+    """
+    ncells = box.shape[0]
+    assert box.shape[0] == box.shape[1] == box.shape[2], "Box must be cubic."
+
+    if frequency is None:
+        if redshift is None:
+            raise ValueError("You must provide either frequency or redshift.")
+        frequency = z2f(redshift)
+
+    if redshift is None:
+        redshift = f2z(frequency)
+
+    # Compute one UV sampling grid for the whole cube, since the redshift is the same
+    # for the full cube.
+    *_, uv_sampling = compute_uv_sampling(
+        observation=observation,
+        freqs=un.Quantity([frequency]),
+        box_length=box_length,
+        box_ncells=ncells,
+        freq_dependent_uv_grid=False,
+    )
+
+    sigma_uv = compute_thermal_rms_uvgrid(
+        observation=observation,
+        uv_coverage=uv_sampling,
+        freqs=un.Quantity([frequency]),
+        box_length=box_length,
+        min_nbls_per_uv_cell=min_nbls_per_uv_cell,
+    )
+
+    nx, ny, _ = sigma_uv.shape
+
+    # sigma_uv now has only one frequency channel, but we need to copy this into the
+    # full 3D coeval cube.
+    sigma_uv = np.repeat(sigma_uv, repeats=ncells, axis=-1)
+
+    # Here the noise realizations are a 4D array (nrealizations, Nu, Nv, Nfreqs).
+    # The ordering of the Nx, Ny axes is in standard format for FFT (i.e. zero-mode
+    # first, then negatives then positives). Also, Nv=Nu//2 + 1, i.e. only the
+    # non-negative modes in the second axis.
+    noise_realisation_uv = sample_from_rms_uvgrid(
+        sigma_uv,
+        seed=seed,
+        nrealizations=nrealizations,
+        return_in_uv=True,
+    )
+
+    if remove_mean:
+        # Don't subtract in-place or the user could get a nasty surprise.
+        box = box - box.mean(axis=(0, 1), keepdims=True)
+
+    box_uv_nu = np.fft.rfft2(box, axes=(0, 1))
+
+    # Only shift the first axis here, because the second axis only has the non-negative
+    # modes, so there is no negative half to shift.
+    sigma_uv = np.fft.fftshift(sigma_uv, axes=(0,))
+
+    box_uv_nu = box_uv_nu + noise_realisation_uv
+    box_uv_nu[:, sigma_uv == 0] = 0.0
+
+    with un.set_enabled_equivalencies(
+        cu.with_H0(observation.cosmo.H0) + cu.dimensionless_redshift()
+    ):
+        d = box_length / ncells
+        kperp_x = np.fft.fftfreq(nx, d=d)
+        kperp_y = np.fft.rfftfreq(nx, d=d)
+
+        if remove_wedge:
+            box_uv_nu = apply_wedge_filter_coeval(
+                box_uv_nu,
+                kperp_x=kperp_x,
+                kperp_y=kperp_y,
+                redshift=redshift,
+                box_res=d,
+                wedge_slope=wedge_slope,
+                wedge_buffer=wedge_buffer,
+                cosmo=observation.cosmo,
+            )
+
+    if spatial_taper is not None:
+        window_fnc = taper2d(nx, spatial_taper)[:, -ny:]
+        window_fnc = np.fft.fftshift(
+            window_fnc, axes=(0,)
+        )  # shift the window to be in the right format for FFT
+        box_uv_nu *= window_fnc[None, ..., None]
+
+    noisy_lc_real = np.fft.irfft2(box_uv_nu, s=(nx, nx), axes=(1, 2))
+
+    if multiply_by_beam:
+        beam = compute_beam(
+            observation=observation,
+            freqs=un.Quantity([frequency]),
+            box_ncells=ncells,
+            box_length=box_length,
+        )
+        noisy_lc_real *= beam
+
+    return noisy_lc_real
