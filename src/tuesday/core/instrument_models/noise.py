@@ -953,7 +953,7 @@ def observe_lightcone(
     wedge_mode: Literal["rolling", "chunk"] = "chunk",
     cosmo=Planck18,
     remove_mean: bool = True,
-    image_weighting : str | None = None,
+    image_weighting: str | None = None,
 ):
     """Mock observe a lightcone.
 
@@ -1022,7 +1022,7 @@ def observe_lightcone(
         with wedge_chunk_skip = wedge_chunk_size.
         If an int is provided, all chunks will be
         separated by the same number of slices.
-   image_weighting : str, optional
+    image_weighting : str, optional
         Filters the last image according to the chosen filter
         If not provided, the last image is unfiltered
 
@@ -1098,27 +1098,29 @@ def observe_lightcone(
         lc_uv_nu *= window_fnc[None, ..., None]
 
     if image_weighting != None:
-        _apply_weighting_for_imaging(weight_type=image_weighting, 
-                                     thermal_rms_uv_nu = thermal_rms_uv , 
-                                     noisy_lightcone_uv_nu = lc_uv_nu, 
-                                     intrinsic_lightcone_uv_nu = lightcone)
+        _apply_weighting_for_imaging(
+            weight_type=image_weighting,
+            thermal_rms_uv_nu=thermal_rms_uv,
+            noisy_lightcone_uv_nu=lc_uv_nu,
+            intrinsic_lightcone_uv_nu=lightcone,
+        )
 
     noisy_lc_real = np.fft.irfft2(lc_uv_nu, s=(nx, nx), axes=(1, 2)).to(lightcone.unit)
 
     return noisy_lc_real, lightcone_redshifts
 
 
+def _apply_weighting_for_imaging(
+    weight_type: str,
+    thermal_rms_uv_nu: tp.Temperature,
+    noisy_lightcone_uv_nu: tp.Temperature,
+    intrinsic_lightcone_uv_nu: tp.Temperature,
+):
+    """Applies weighting in the Fourier transform to real space for imaging.
 
-
-def _apply_weighting_for_imaging(weight_type: str, 
-                                 thermal_rms_uv_nu: tp.Temperature, 
-                                 noisy_lightcone_uv_nu: tp.Temperature, 
-                                 intrinsic_lightcone_uv_nu: tp.Temperature):
-    """Applies weighting in the Fourier transform to real space for imaging. 
-    
-    The choice of filtering is not obvious and is application-specific, 
+    The choice of filtering is not obvious and is application-specific,
     WARNING: the simple wiener filtering takes into account the pure intrinsic signal (i.e., not realistic).
-    
+
     Parameters
     ----------
     weight_type : str
@@ -1129,66 +1131,77 @@ def _apply_weighting_for_imaging(weight_type: str,
         The previous unfiltered observed lightcone in uv_nu space
     intrinsic_lightcone_uv_nu : astropy.units.Quantity
         The intrinsic signal of the observed lightcone in uv_nu space (be careful with the simple 'wiener' filter as it is unrealistic)
-    
+
     Returns
     -------
     lc_uv_nu : astropy.units.Quantity
-        lightcone samples with filtered noise in uv_nu space 
+        lightcone samples with filtered noise in uv_nu space
     """
-    lc_uv_nu  = noisy_lightcone_uv_nu
+    lc_uv_nu = noisy_lightcone_uv_nu
     lightcone = intrinsic_lightcone_uv_nu
     thermal_rms_uv = thermal_rms_uv_nu
-    
-    if weight_type == 'none' or weight_type == None:
-        return lc_uv_nu
-    
-    elif weight_type in ('inverse_variance', 'iv'):
-        with np.errstate(divide="ignore", invalid="ignore"):
-            w = 1.0 / (2*(thermal_rms_uv**2).value)   # inverse variance weights
 
-    elif weight_type in ('wiener', 'w'): # essentially matching the power spectrum of the observed with the signal
+    if weight_type == "none" or weight_type == None:
+        return lc_uv_nu
+
+    if weight_type in ("inverse_variance", "iv"):
+        with np.errstate(divide="ignore", invalid="ignore"):
+            w = 1.0 / (2 * (thermal_rms_uv**2).value)  # inverse variance weights
+
+    elif weight_type in (
+        "wiener",
+        "w",
+    ):  # essentially matching the power spectrum of the observed with the signal
         # Estimate signal power spectrum from the measured signal and the known noise
         # Wiener filter is defined usually for the power spectrum as w = (p_signal)/(p_signal + p_noise)
-        # the sigma in our case is applied in the real and imaginary parts separately. 
+        # the sigma in our case is applied in the real and imaginary parts separately.
         # So the w computed should be further processed to w = np.sqrt(w)/2 (like in generating ICs for cosmological simulations)
-        p_signal = np.abs(np.fft.rfft2(lightcone.value, axes=(0,1)))**2  # shape (nx, ny_rfft)
+        p_signal = (
+            np.abs(np.fft.rfft2(lightcone.value, axes=(0, 1))) ** 2
+        )  # shape (nx, ny_rfft)
 
         # Now p_signal is the pure signal, just fourier transformed. Let's take the mean along the frequency axis and repeat it to be used as a prior
         p_signal = np.mean(p_signal, axis=2)
-        
+
         p_signal = p_signal[..., np.newaxis]
         print(p_signal.shape)
         p_signal = np.repeat(p_signal, 200, axis=2)
         # Perhaps smooth it (maybe good but also sort of prior dependent)
         # p_signal = gaussian_filter(p_signal, sigma=2)  # from scipy.ndimage
-        p_noise = 2*(thermal_rms_uv.value)**2  # our existing noise variance (real and imaginary parts so the variance is 2 sigma^2, hence the "2")
+        p_noise = (
+            2 * (thermal_rms_uv.value) ** 2
+        )  # our existing noise variance (real and imaginary parts so the variance is 2 sigma^2, hence the "2")
         with np.errstate(divide="ignore", invalid="ignore"):
-            w = p_signal / (p_signal + p_noise)   # Wiener filter, values in [0,1]
-            w = np.sqrt(w/2) # applied on the 2D UV space on real and imag parts. 
-       
-    elif weight_type in ('realistic_wiener', 'rw'):
+            w = p_signal / (p_signal + p_noise)  # Wiener filter, values in [0,1]
+            w = np.sqrt(w / 2)  # applied on the 2D UV space on real and imag parts.
+
+    elif weight_type in ("realistic_wiener", "rw"):
         # Same as "Wiener" but estimate p_signal from observation
-        
-        p_measured = 2*np.abs((lc_uv_nu[0].value))**2
-        p_noise = 2*(thermal_rms_uv.value)**2 
-        
+
+        p_measured = 2 * np.abs(lc_uv_nu[0].value) ** 2
+        p_noise = 2 * (thermal_rms_uv.value) ** 2
+
         p_signal = p_measured - p_noise
         with np.errstate(divide="ignore", invalid="ignore"):
-            w = p_signal / (p_signal + p_noise)   
-            w = np.sqrt(w/2) 
-            
+            w = p_signal / (p_signal + p_noise)
+            w = np.sqrt(w / 2)
+
     else:
         raise ValueError(
             "Invalid_filtering "
             "Choose between ['none', 'inverse_variance', 'wiener', 'realistic_wiener']"
         )
-    
+
     # Make sure unphysical values are skipped
-    w[np.isinf(w)] = 0.0                # set unsampled cells to 0, w is in uv_nu space
+    w[np.isinf(w)] = 0.0  # set unsampled cells to 0, w is in uv_nu space
     w[np.isnan(w)] = 0.0
-    w[thermal_rms_uv.value == 0] = 0.0  # zero where unsampled, probably covered by the previous line
-    wsum = w.sum(axis=(0,1), keepdims=True)
-    lc_uv_nu *= w.shape[0] * w.shape[1] * w[None, ...] / wsum[None, ...] # ad-hoc normalization
+    w[thermal_rms_uv.value == 0] = (
+        0.0  # zero where unsampled, probably covered by the previous line
+    )
+    wsum = w.sum(axis=(0, 1), keepdims=True)
+    lc_uv_nu *= (
+        w.shape[0] * w.shape[1] * w[None, ...] / wsum[None, ...]
+    )  # ad-hoc normalization
     # 2nd and 3rd dimensions of w and wsum will not match but numpy is broadcasting
-        
+
     return lc_uv_nu
