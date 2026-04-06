@@ -17,3 +17,11 @@ _version.py
 _autosummary/
 coverage.xml
 .ipynb_checkpoints/
+
+.DS_Store
+__pycache__/
+.pytest_cache/
+*.log
+*~
+.tox/
+.idea/
