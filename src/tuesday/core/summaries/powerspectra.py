@@ -304,6 +304,10 @@ def calculate_ps_lc(
         the power any k_i = 0 mode.
         Typically, only the central zero mode |k| = 0 is excluded,
         in which case use powerbox.tools.ignore_zero_absk.
+    log_bins : bool, optional
+        If True, use logarithmic binning for kperp and kpar.
+        Note that if the bins are already provided with kperp_bins or k_bins,
+        this argument has no effect.
     calc_1d : bool, optional
         If True, calculate the 1D power spectrum.
     k_bins : int, optional
@@ -475,6 +479,10 @@ def calculate_ps_coeval(
         the power any k_i = 0 mode.
         Typically, only the central zero mode |k| = 0 is excluded,
         in which case use powerbox.tools.ignore_zero_absk.
+    log_bins : bool, optional
+        If True, use logarithmic binning for kperp and kpar.
+        Note that if the bins are already provided with kperp_bins or k_bins,
+        this argument has no effect.
     calc_1d : bool, optional
         If True, calculate the 1D power spectrum.
     k_bins : int, optional
