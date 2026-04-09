@@ -438,7 +438,7 @@ def calculate_ps_coeval(
     k_bins: int | None = None,
     mu_min: float | None = None,
     bin_ave: bool | None = True,
-    interp: bool | None = None,
+    interp: str | None = None,
     deltasq: bool | None = True,
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
@@ -486,9 +486,9 @@ def calculate_ps_coeval(
         If False, return the left edge of each bin
         i.e. len(kperp) = ps_2d.shape[0] + 1.
     interp : str, optional
-        If True, use linear interpolation to calculate the PS
-        at the points specified by interp_points_generator.
-        Note that this significantly slows down the calculation.
+        Supports 'linear', 'nan-aware', and None.
+        Check powerbox.tools.get_power documentation for more details
+        on interpolation options.
     delta : bool, optional
         Whether to convert the power P [mK^2 Mpc^{-3}] to the dimensionless
         power :math:`\\delta^2` [mK^2].
@@ -551,11 +551,8 @@ def calculate_ps_coeval(
             k_weights_1d = mask_fnc
 
         if interp is not None:
-            k_weights_1d = ignore_zero_ki
-
             interp_points_generator = above_mu_min_angular_generator(mu=mu_min)
     else:
-        k_weights_1d = ignore_zero_ki
         if interp is not None:
             interp_points_generator = regular_angular_generator()
     prefactor_fnc = power2delta if deltasq else None
@@ -589,7 +586,7 @@ def calculate_ps_coeval(
 def bin_kpar(
     bins_kpar: int | un.Quantity | None = None,
     log_kpar: bool | None = False,
-    interp_kpar: bool | None = False,
+    interp_kpar: str | None = None,
     crop_kperp: tuple[int, int] | None = None,
     crop_kpar: tuple[int, int] | None = None,
 ):
@@ -605,9 +602,9 @@ def bin_kpar(
     log_kpar : bool or None, optional
         If True, use logarithmic binning for kpar.
         If False or None, use linear binning. Default is False.
-    interp_kpar : bool or None, optional
-        If True, interpolate the power spectrum onto the new kpar bins.
-        If False or None, aggregate using bin means. Default is False.
+    interp_kpar : str or None, optional
+        If 'linear', interpolate the power spectrum onto the new kpar bins.
+        If None, aggregate using bin means. Default is None.
     crop_kperp : tuple of int or None, optional
         Tuple specifying the (start, end) indices to crop the kperp axis after binning.
         If None, no cropping is applied. Default is None.
@@ -628,12 +625,14 @@ def bin_kpar(
 
     Notes
     -----
-    - If `interp_kpar` is True, the power spectrum and its variance (if present) are
+    - If `interp_kpar` is 'linear', the power spectrum and its variance (if present) are
       interpolated onto the new kpar bins.
-    - If `interp_kpar` is False, the power spectrum and its variance are aggregated
+    - If `interp_kpar` is None, the power spectrum and its variance are aggregated
       using the mean within each bin.
     - Cropping is applied after binning/interpolation.
     """
+    if isinstance(interp_kpar, bool) and interp_kpar:
+        interp_kpar = "linear"
 
     def transform_ps(ps: CylindricalPS):
         if bins_kpar is None:
@@ -666,7 +665,7 @@ def bin_kpar(
             if not isinstance(bins_kpar, np.ndarray):
                 raise ValueError("bins_kpar must be an array of bin edges or centres.")
             final_bins_kpar = bins_kpar
-        if interp_kpar:
+        if interp_kpar == "linear":
             mask = np.isnan(np.nanmean(ps.ps, axis=-1))
             interp_fnc = RegularGridInterpolator(
                 (ps.kperp.value[~mask], ps.kpar.value),
@@ -693,7 +692,7 @@ def bin_kpar(
             idxs = np.digitize(ps.kpar.value, final_bins_kpar.value) - 1
             final_nmodes = np.zeros(len(final_bins_kpar))
             for i in range(len(final_bins_kpar)):
-                final_nmodes[i] = np.sum(idxs == i) if np.sum(idxs == i) > 0 else 1
+                final_nmodes[i] = np.sum(idxs == i)
 
         else:
             final_ps = np.zeros((len(ps.kperp), len(final_bins_kpar) - 1))
@@ -744,7 +743,11 @@ def bin_kpar(
             else final_nmodes
         )
 
-        final_nmodes = np.outer(final_kperp_modes, final_kpar_modes)
+        kpar_nmodes_grid, kperp_nmodes_grid = np.meshgrid(
+            final_kperp_modes, final_kpar_modes, indexing="ij"
+        )
+
+        final_nmodes = kperp_nmodes_grid * kpar_nmodes_grid
 
         return CylindricalPS(
             ps=final_ps,
