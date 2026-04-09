@@ -81,7 +81,7 @@ def calculate_ps(
     k_bins: int | None = None,
     k_weights_1d: Callable | None = ignore_zero_ki,
     bin_ave: bool | None = True,
-    interp: bool | None = None,
+    interp: str | None = None,
     prefactor_fnc: Callable | None = power2delta,
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
@@ -121,9 +121,12 @@ def calculate_ps(
         If False, return the left edge of each bin
         i.e. len(kperp) = ps_2d.shape[0] + 1.
     interp : str, optional
-        If True, use linear interpolation to calculate the PS
+        If 'linear', use linear interpolation to calculate the PS
         at the points specified by interp_points_generator.
-        Note that this significantly slows down the calculation.
+        If 'nan-aware', use linear interpolation that ignores NaN values in
+        the input PS.
+        Note that interpolating significantly slows down the calculation.
+        Default is None, which means no interpolation.
     prefactor_fnc : callable, optional
         A function that takes a frequency tuple and returns the prefactor
         to multiply the PS with.
@@ -148,13 +151,14 @@ def calculate_ps(
     if not calc_1d and not calc_2d:
         raise ValueError("At least one of calc_1d or calc_2d must be True.")
 
-    if not interp:
-        interp = None
     if not isinstance(chunk, un.Quantity):
         raise TypeError("chunk should be a Quantity.")
 
     if not isinstance(box_length, un.Quantity):
         raise TypeError("box_length should be a Quantity.")
+
+    if interp is not None and interp not in ["linear", "nan-aware"]:
+        raise ValueError("interp should be either 'linear', 'nan-aware', or None.")
     # Split the lightcone into chunks for each redshift bin
     # Infer HII_DIM from lc side shape
     box_side_shape = chunk.shape[0]
@@ -166,9 +170,6 @@ def calculate_ps(
         out["ps_1d"] = {}
     if calc_2d:
         out["ps_2d"] = {}
-
-    if interp:
-        interp = "linear"
 
     if prefactor_fnc is None:
         ps_unit = chunk.unit**2 * box_length.unit**3
@@ -221,7 +222,7 @@ def calculate_ps(
 
     if calc_1d:
         results = get_power(
-            chunk,
+            chunk.value,
             (
                 box_length.value,
                 box_length.value,
@@ -269,7 +270,7 @@ def calculate_ps_lc(
     k_bins: int | None = None,
     mu_min: float | None = None,
     bin_ave: bool = True,
-    interp: bool | None = None,
+    interp: str | None = None,
     deltasq: bool = True,
     interp_points_generator: Callable | None = None,
     get_variance: bool = False,
@@ -318,9 +319,12 @@ def calculate_ps_lc(
         If False, return the left edge of each bin
         i.e. len(kperp) = ps_2d.shape[0] + 1.
     interp : str, optional
-        If True, use linear interpolation to calculate the PS
+        If 'linear', use linear interpolation to calculate the PS
         at the points specified by interp_points_generator.
-        Note that this significantly slows down the calculation.
+        If 'nan-aware', use linear interpolation that ignores NaN values in
+        the input PS.
+        Note that interpolating significantly slows down the calculation.
+        Default is None, which means no interpolation.
     delta : bool, optional
         Whether to convert the power P [mK^2 Mpc^{-3}] to the dimensionless
         power :math:`\\delta^2` [mK^2].
@@ -772,7 +776,7 @@ def cylindrical_to_spherical(
     kpar,
     nbins=16,
     weights=1,
-    interp=False,
+    interp=None,
     mu_min=None,
     generator=None,
     bin_ave=True,
@@ -795,8 +799,11 @@ def cylindrical_to_spherical(
         Note that to obtain a 1D PS from the 2D PS that is consistent with
         the 1D PS obtained directly from the 3D PS, the weights should be
         the number of modes in each bin of the 2D PS (`Nmodes`).
-    interp : bool, optional
-        If True, use linear interpolation to calculate the 1D PS.
+    interp : str | None, optional
+        If 'linear', use linear interpolation to calculate the 1D PS.
+        If 'nan-aware', use linear interpolation that ignores NaN values in
+        the input PS.
+        If None, no interpolation is used.
     mu_min : float, optional
         The minimum value of
         :math:`\\cos(\theta), \theta = \arctan (k_\\perp/k_\\parallel)`
@@ -827,7 +834,7 @@ def cylindrical_to_spherical(
         weights=weights,
         bin_ave=bin_ave,
         log_bins=True,
-        interpolation_method="linear" if interp else None,
+        interpolation_method=interp,
         interp_points_generator=generator,
     )
     return ps_1d, k, sws
