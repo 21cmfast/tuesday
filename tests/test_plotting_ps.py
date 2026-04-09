@@ -26,7 +26,7 @@ def _psboth():
         box_length=200 * un.Mpc,
         calc_2d=True,
         calc_1d=True,
-        interp=True,
+        interp="linear",
     )
     return ps1d, ps2d
 
