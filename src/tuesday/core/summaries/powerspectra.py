@@ -199,15 +199,10 @@ def calculate_ps(
             k_weights=k_weights_2d,
             prefactor_fnc=prefactor_fnc,
             interpolation_method=interp,
-            return_sumweights=True,
             get_variance=get_variance,
             bins_upto_boxlen=True,
         )
-        if get_variance:
-            ps_2d, kperp, variance, nmodes, kpar = results
-            lc_var_2d = variance
-        else:
-            ps_2d, kperp, nmodes, kpar = results
+        ps_2d, kperp, lc_var_2d, nmodes, kpar = results
 
         kpar = np.array(kpar).squeeze()
         lc_ps_2d = ps_2d[..., kpar > 0]
@@ -239,16 +234,10 @@ def calculate_ps(
             prefactor_fnc=prefactor_fnc,
             interpolation_method=interp,
             interp_points_generator=interp_points_generator,
-            return_sumweights=True,
             get_variance=get_variance,
             bins_upto_boxlen=True,
         )
-        if get_variance:
-            ps_1d, k, var_1d, nmodes_1d = results
-            lc_var_1d = var_1d
-        else:
-            ps_1d, k, nmodes_1d = results
-        lc_ps_1d = ps_1d
+        lc_ps_1d, k, lc_var_1d, nmodes_1d = results
 
         ps1d = SphericalPS(
             ps=lc_ps_1d * ps_unit,
@@ -828,14 +817,13 @@ def cylindrical_to_spherical(
         mu_mesh = np.cos(theta)
         weights = mu_mesh >= mu_min
 
-    ps_1d, k, sws = angular_average(
+    ps_1d, k, _, sws = angular_average(
         ps,
         coords=[kperp, kpar],
         bins=nbins,
         weights=weights,
         bin_ave=bin_ave,
         log_bins=True,
-        return_sumweights=True,
         interpolation_method="linear" if interp else None,
         interp_points_generator=generator,
     )
