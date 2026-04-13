@@ -253,3 +253,8 @@ def test_ps_avg():
         ps_2d, x, x, nbins=32, interp="nan-aware", mu_min=0.98
     )
     assert np.nanmean(ps[-20:]) == 1000.0
+
+    ps, k, sws = cylindrical_to_spherical(
+        ps_2d, x, x, nbins=32, interp=None, mu_min=0.98
+    )
+    assert np.nanmean(ps[-20:]) == 1000.0

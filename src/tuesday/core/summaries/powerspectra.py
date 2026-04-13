@@ -646,8 +646,6 @@ def bin_kpar(
       using the mean within each bin.
     - Cropping is applied after binning/interpolation.
     """
-    if isinstance(interp_kpar, bool) and interp_kpar:
-        interp_kpar = "linear"
 
     def transform_ps(ps: CylindricalPS):
         if bins_kpar is None:
@@ -834,10 +832,10 @@ def cylindrical_to_spherical(
         If False, return the left edge of each bin
         i.e. len(k) = ps_1d.shape[0] + 1.
     """
-    if mu_min is not None and interp and generator is None:
+    if mu_min is not None and interp is not None and generator is None:
         generator = above_mu_min_angular_generator(mu=mu_min)
 
-    if mu_min is not None and not interp:
+    if mu_min is not None and interp is None:
         kpar_mesh, kperp_mesh = np.meshgrid(kpar, kperp)
         theta = np.arctan(kperp_mesh / kpar_mesh)
         mu_mesh = np.cos(theta)
