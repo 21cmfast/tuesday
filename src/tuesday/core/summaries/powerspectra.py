@@ -2,7 +2,6 @@
 
 import warnings
 from collections.abc import Callable
-
 from typing import Literal
 
 import astropy.units as un
@@ -21,7 +20,8 @@ from scipy.interpolate import RegularGridInterpolator
 from ..units import validate
 from .psclasses import CylindricalPS, SphericalPS
 
-interp_type = Literal['linear', 'nan-aware'] | None
+interp_type = Literal["linear", "nan-aware"] | None
+
 
 def get_chunk_indices(
     lc_redshifts: np.ndarray,
@@ -601,7 +601,7 @@ def calculate_ps_coeval(
 def bin_kpar(
     bins_kpar: int | un.Quantity | None = None,
     log_kpar: bool | None = False,
-    interp_kpar: Literal['linear'] | None = None,
+    interp_kpar: Literal["linear"] | None = None,
     crop_kperp: tuple[int, int] | None = None,
     crop_kpar: tuple[int, int] | None = None,
 ):
@@ -762,7 +762,7 @@ def bin_kpar(
             final_kperp_modes, final_kpar_modes, indexing="ij"
         )
 
-        # In a log kperp and linear kpar binning, 
+        # In a log kperp and linear kpar binning,
         # the number of modes in each bin = the number of modes in each kperp bin
         # (since there is one mode in each kpar bin)
         # In a log-log binning, the number of modes in each bin is
@@ -791,7 +791,7 @@ def cylindrical_to_spherical(
     kperp: np.ndarray,
     kpar: np.ndarray,
     nbins: int = 16,
-    weights: float | np.ndarray = 1.,
+    weights: float | np.ndarray = 1.0,
     interp: interp_type = None,
     mu_min: float | None = None,
     generator: Callable | None = None,
