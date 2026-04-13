@@ -3,6 +3,8 @@
 import warnings
 from collections.abc import Callable
 
+from typing import Literal
+
 import astropy.units as un
 import numpy as np
 from powerbox.tools import (
@@ -19,6 +21,7 @@ from scipy.interpolate import RegularGridInterpolator
 from ..units import validate
 from .psclasses import CylindricalPS, SphericalPS
 
+interp_type = Literal['linear', 'nan-aware'] | None
 
 def get_chunk_indices(
     lc_redshifts: np.ndarray,
@@ -81,7 +84,7 @@ def calculate_ps(
     k_bins: int | None = None,
     k_weights_1d: Callable | None = ignore_zero_ki,
     bin_ave: bool | None = True,
-    interp: str | None = None,
+    interp: interp_type = None,
     prefactor_fnc: Callable | None = power2delta,
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
@@ -446,7 +449,7 @@ def calculate_ps_coeval(
     k_bins: int | None = None,
     mu_min: float | None = None,
     bin_ave: bool | None = True,
-    interp: str | None = None,
+    interp: interp_type = None,
     deltasq: bool | None = True,
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
@@ -598,7 +601,7 @@ def calculate_ps_coeval(
 def bin_kpar(
     bins_kpar: int | un.Quantity | None = None,
     log_kpar: bool | None = False,
-    interp_kpar: str | None = None,
+    interp_kpar: Literal['linear'] | None = None,
     crop_kperp: tuple[int, int] | None = None,
     crop_kpar: tuple[int, int] | None = None,
 ):
@@ -759,6 +762,11 @@ def bin_kpar(
             final_kperp_modes, final_kpar_modes, indexing="ij"
         )
 
+        # In a log kperp and linear kpar binning, 
+        # the number of modes in each bin = the number of modes in each kperp bin
+        # (since there is one mode in each kpar bin)
+        # In a log-log binning, the number of modes in each bin is
+        # the number of modes in each kperp bin * the number of modes in each kpar bin
         final_nmodes = kperp_nmodes_grid * kpar_nmodes_grid
 
         return CylindricalPS(
@@ -779,15 +787,15 @@ def bin_kpar(
 
 
 def cylindrical_to_spherical(
-    ps,
-    kperp,
-    kpar,
-    nbins=16,
-    weights=1,
-    interp=None,
-    mu_min=None,
-    generator=None,
-    bin_ave=True,
+    ps: np.ndarray,
+    kperp: np.ndarray,
+    kpar: np.ndarray,
+    nbins: int = 16,
+    weights: float | np.ndarray = 1.,
+    interp: interp_type = None,
+    mu_min: float | None = None,
+    generator: Callable | None = None,
+    bin_ave: bool = True,
 ):
     r"""
     Angularly average 2D PS to 1D PS.
