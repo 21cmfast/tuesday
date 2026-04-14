@@ -96,10 +96,10 @@ def test_calculate_ps_lc(log_bins, test_lc, test_redshifts):
         test_redshifts,
         ps_redshifts=6.8,
         calc_1d=False,
-        interp=True,
+        interp="nan-aware",
         mu_min=0.5,
         log_bins=log_bins,
-        transform_ps2d=bin_kpar(bins_kpar=10, log_kpar=True, interp_kpar=True),
+        transform_ps2d=bin_kpar(bins_kpar=10, log_kpar=True, interp_kpar="linear"),
     )
 
     def transform1d(ps):
@@ -115,7 +115,7 @@ def test_calculate_ps_lc(log_bins, test_lc, test_redshifts):
         transform_ps2d=bin_kpar(
             bins_kpar=None,
             log_kpar=False,
-            interp_kpar=False,
+            interp_kpar=None,
             crop_kpar=(0, 3),
             crop_kperp=(0, 8),
         ),
@@ -124,13 +124,28 @@ def test_calculate_ps_lc(log_bins, test_lc, test_redshifts):
 
 
 def test_calculate_ps_coeval(test_coeval):
-    with np.testing.assert_raises(TypeError):
+    with pytest.raises(
+        TypeError,
+        match=r"calculate_ps_coeval\(\) got an unexpected keyword"
+        r" argument 'ps_redshifts'",
+    ):
         calculate_ps_coeval(
             test_coeval * un.mK,
             box_length=200 * un.Mpc,
             ps_redshifts=6.8,
             calc_1d=False,
-            interp=True,
+            interp="nan-aware",
+            mu_min=0.5,
+        )
+
+    with pytest.raises(
+        ValueError, match=r"interp should be either 'linear', 'nan-aware', or None."
+    ):
+        calculate_ps_coeval(
+            test_coeval * un.mK,
+            box_length=200 * un.Mpc,
+            calc_1d=False,
+            interp="ultimate-interp",
             mu_min=0.5,
         )
 
@@ -141,12 +156,12 @@ def test_calculate_ps_coeval(test_coeval):
         test_coeval * un.dimensionless_unscaled,
         box_length=200 * un.Mpc,
         calc_1d=False,
-        interp=True,
+        interp="linear",
         mu_min=0.5,
         transform_ps2d=bin_kpar(
             bins_kpar=np.array([0.1, 0.5, 1]) / un.Mpc,
             log_kpar=True,
-            interp_kpar=True,
+            interp_kpar="linear",
             crop_kpar=(0, 3),
             crop_kperp=(0, 8),
         ),
@@ -174,7 +189,7 @@ def test_calculate_ps_corner_cases(test_lc, test_redshifts):
         200 * un.Mpc,
         test_redshifts,
         calc_1d=True,
-        interp=True,
+        interp="linear",
         mu_min=0.5,
         deltasq=True,
     )
@@ -184,7 +199,7 @@ def test_calculate_ps_corner_cases(test_lc, test_redshifts):
         200 * un.Mpc,
         test_redshifts,
         calc_1d=True,
-        interp=True,
+        interp="linear",
         mu_min=0.5,
         deltasq=False,
     )
@@ -235,6 +250,11 @@ def test_ps_avg():
     mask = mu_mesh >= 0.9
     ps_2d[mask] = 1000
     ps, k, sws = cylindrical_to_spherical(
-        ps_2d, x, x, nbins=32, interp=True, mu_min=0.98
+        ps_2d, x, x, nbins=32, interp="nan-aware", mu_min=0.98
+    )
+    assert np.nanmean(ps[-20:]) == 1000.0
+
+    ps, k, sws = cylindrical_to_spherical(
+        ps_2d, x, x, nbins=32, interp=None, mu_min=0.98
     )
     assert np.nanmean(ps[-20:]) == 1000.0
