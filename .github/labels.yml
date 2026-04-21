@@ -10,6 +10,9 @@
 - name: good first issue
   description: Good for newcomers
   color: 7057ff
+- name: Science Project
+  description: Something that we can write a paper on
+  color: "#5319e7"
 
 - name: "status: duplicate"
   description: This issue or pull request already exists
@@ -64,7 +67,7 @@
 - name: "type: performance: memory"
   description: Performance improvements that reduce memory usage
   color: "016175"
-- name: "type: performance: cpu"
+- name: "type: performance: speed"
   description: Performance improvements that reduce walltime
   color: "016175"
 - name: "type: ci"
@@ -82,4 +85,11 @@
   color: "E99695"
 - name: "priority: high"
   description: High priority
+  color: "B60205"
+
+- name: "effort: low"
+  description: Issues that will require less than a day of coding to implement
+  color: "BFD4F2"
+- name: "effort: high"
+  description: Issues that will probably require >1 full day of coding to implement
   color: "B60205"
