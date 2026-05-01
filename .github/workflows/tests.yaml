@@ -36,7 +36,7 @@ jobs:
 
       - name: Install Non-Python Dependencies
         run: |
-          conda install fftw gsl
+          conda install fftw gsl compilers pkg-config
 
       - name: Install the Package
         run: pip install ".[dev]" --pre
