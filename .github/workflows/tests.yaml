@@ -39,7 +39,7 @@ jobs:
           conda install fftw gsl compilers pkg-config
 
       - name: Install the Package
-        run: pip install --group dev --all-extras .
+        run: pip install --group dev .[21cmfast]
 
       - name: Install Poetry
         run: |
