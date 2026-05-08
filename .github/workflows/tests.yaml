@@ -39,22 +39,25 @@ jobs:
           conda install fftw gsl compilers pkg-config
 
       - name: Install the Package
-        run: pip install --group dev .[21cmfast]
-
-      - name: Install Poetry
         run: |
-          pipx install poetry
-          poetry --version
+          pip install --group dev .[21cmfast]
+          pip install --extra-index-url https://artefact.skao.int/repository/pypi-internal/simple ska-ost-config-array
 
-      - name: Install ska-ost-array
-        run: |
-          git clone https://gitlab.com/ska-telescope/ost/ska-ost-array-config.git
-          cd ska-ost-array-config
-          poetry install
-          cd ..
+      # - name: Install Poetry
+      #   run: |
+      #     pipx install poetry
+      #     poetry --version
+
+      # - name: Install ska-ost-array
+      #   run: |
+      #     git clone https://gitlab.com/ska-telescope/ost/ska-ost-array-config.git
+      #     cd ska-ost-array-config
+      #     poetry install
+      #     cd ..
 
       - name: Run Tests
         run: |
+          echo "$(which coverage)"
           coverage run -m pytest
 
       - name: Upload coverage report
