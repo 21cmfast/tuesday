@@ -41,7 +41,7 @@ jobs:
       - name: Install the Package
         run: |
           pip install --group dev .[21cmfast]
-          pip install --extra-index-url https://artefact.skao.int/repository/pypi-internal/simple ska-ost-config-array
+          pip install --extra-index-url https://artefact.skao.int/repository/pypi-internal/simple ska-ost-array-config
 
       # - name: Install Poetry
       #   run: |
