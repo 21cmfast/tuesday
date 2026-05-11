@@ -16,7 +16,7 @@ authors = [
     { name = "James Davies", email = "james.davies@sns.it" },
     { name = "Steven Murray", email = "murray.steveng@gmail.com" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {text="MIT"}
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -31,7 +31,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "21cmfast",
     "21cmsense>=2.0.0",
     "astropy>=6.0",
     "attrs>=25.3.0",
@@ -44,22 +43,27 @@ dynamic = ['version']
 
 [project.optional-dependencies]
 21cmfast = ['21cmFAST>=4.0.0b']
-tests = [
-    "coverage",
-    "pytest-cov",
-    "pre-commit",
-    "pytest",
-    "sphinx",
-]
-dev = [
-    "tuesday-eor[tests,21cmfast]"
-]
 
 
 [project.urls]
 Repository = "https://github.com/21cmfast/tuesday"
 Issues = "https://github.com/21cmfast/tuesday/issues"
 Changelog = "https://github.com/21cmfast/tuesday/releases"
+
+[dependency-groups]
+tests = [
+    "coverage>=7.8.2",
+    "pytest>=8.3.5",
+    "pytest-cov>=6.1.1",
+]
+dev = [
+    {"include-group" = "tests"},
+    "prek>=0.3.13",
+]
+docs = [
+    "sphinx>=9.0.4",
+]
+
 
 [tool.pytest.ini_options]
 addopts = "--durations=25 --cov tuesday --cov-config=.coveragerc --cov-report xml:./coverage.xml "
@@ -138,15 +142,3 @@ max-complexity = 21
 
 [tool.uv.sources]
 21cmfast = { git = "https://github.com/21cmFAST/21cmFAST" }
-
-[dependency-groups]
-21cmfast = [
-    "21cmfast",
-]
-dev = [
-    "coverage>=7.8.2",
-    "pre-commit>=4.2.0",
-    "pytest>=8.3.5",
-    "pytest-cov>=6.1.1",
-    "sphinx>=8.2.3",
-]

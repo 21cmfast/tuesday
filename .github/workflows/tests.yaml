@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
     defaults:
      run:
        # Adding -l {0} ensures conda can be found properly in each step
@@ -27,7 +27,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Miniconda
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         with:
           # auto-update-conda: true
           channels: conda-forge,defaults
@@ -36,25 +36,28 @@ jobs:
 
       - name: Install Non-Python Dependencies
         run: |
-          conda install fftw gsl
+          conda install fftw gsl compilers pkg-config
 
       - name: Install the Package
-        run: pip install ".[dev]" --pre
-
-      - name: Install Poetry
         run: |
-          pipx install poetry
-          poetry --version
+          pip install --group dev .[21cmfast]
+          pip install --extra-index-url https://artefact.skao.int/repository/pypi-internal/simple ska-ost-array-config
 
-      - name: Install ska-ost-array
-        run: |
-          git clone https://gitlab.com/ska-telescope/ost/ska-ost-array-config.git
-          cd ska-ost-array-config
-          poetry install
-          cd ..
+      # - name: Install Poetry
+      #   run: |
+      #     pipx install poetry
+      #     poetry --version
+
+      # - name: Install ska-ost-array
+      #   run: |
+      #     git clone https://gitlab.com/ska-telescope/ost/ska-ost-array-config.git
+      #     cd ska-ost-array-config
+      #     poetry install
+      #     cd ..
 
       - name: Run Tests
         run: |
+          echo "$(which coverage)"
           coverage run -m pytest
 
       - name: Upload coverage report
