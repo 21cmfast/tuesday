@@ -8,6 +8,7 @@ from py21cmsense import Observation, Observatory
 from tuesday.core import (
     compute_thermal_rms_per_snapshot_vis,
     compute_thermal_rms_uvgrid,
+    observe_coeval,
     observe_lightcone,
     sample_from_rms_uvgrid,
 )
@@ -108,7 +109,22 @@ class TestSampleFromRmsNoise:
             seed=4,
             return_in_uv=False,
         )
+
         np.testing.assert_allclose(img_noise.imag, 0.0)
+
+    @pytest.mark.parametrize("nsamples", [1, 2])
+    @pytest.mark.parametrize("ncells", [100, 101])
+    def test_half_plane_unity_noise(self, nsamples, ncells):
+        """Test that the UV noise is Hermitian."""
+        uv_noise = sample_from_rms_uvgrid(
+            np.ones((ncells, ncells // 2 + 1)) * un.mK,
+            nrealizations=nsamples,
+            seed=4,
+            return_in_uv=True,
+        )
+
+        assert np.isclose(np.std(uv_noise.real), 1.0 * un.mK, rtol=0.01)
+        assert np.isclose(np.std(uv_noise.real), 1.0 * un.mK, rtol=0.01)
 
 
 class TestObserveLightcone:
@@ -143,7 +159,7 @@ class TestObserveLightcone:
         """Test the sample_lc_noise function."""
         lc = np.zeros((self.ncells, self.ncells, self.lc_freqs.size)) * un.mK
 
-        out, _ = observe_lightcone(
+        out = observe_lightcone(
             lightcone=lc,
             thermal_rms_uv=self.sigma,
             box_length=300.0 * un.Mpc,
@@ -158,3 +174,83 @@ class TestObserveLightcone:
         )
         assert np.sum(np.abs(out)) > 0
         assert out.shape == (1, *lc.shape)
+
+
+class TestObserveCoeval:
+    def setup_class(self):
+        self.ncells = 20
+        self.obs = Observation(
+            observatory=Observatory.from_ska("LOW_INNER_R350M_AA4"),
+            lst_bin_size=0.5 * un.hour,
+            time_per_day=0.5 * un.hour,
+            integration_time=120.0 * un.second,
+            bandwidth=50 * un.kHz,
+            n_days=1000,
+        )
+
+    @pytest.mark.parametrize("spatial_taper", [None, "hann"])
+    @pytest.mark.parametrize("remove_wedge", [False, True])
+    @pytest.mark.parametrize("remove_mean", [False, True])
+    def test_it_runs_through(self, spatial_taper, remove_wedge, remove_mean):
+        """Test that observe_coeval runs through without error."""
+        box = np.zeros((self.ncells, self.ncells, self.ncells)) * un.mK
+
+        out = observe_coeval(
+            box=box,
+            box_length=35.0 * un.Mpc,
+            observation=self.obs,
+            redshift=7.0,
+            seed=1,
+            nrealizations=1,
+            remove_wedge=remove_wedge,
+            wedge_slope=1.0,
+            wedge_buffer=100 * un.ns,
+            spatial_taper=spatial_taper,
+            remove_mean=remove_mean,
+        )
+
+        assert out.unit == un.mK
+        assert np.sum(np.abs(out)) > 0
+        assert out.shape == (1, *box.shape)
+
+    def test_slope_zero_equals_no_wedge_removal(self):
+        """Test that setting wedge slope to zero is same as not removing the wedge."""
+        box = np.zeros((self.ncells, self.ncells, self.ncells)) * un.mK
+
+        out_no_wedge_removal = observe_coeval(
+            box=box,
+            box_length=35.0 * un.Mpc,
+            observation=self.obs,
+            redshift=7.0,
+            seed=1,
+            nrealizations=1,
+            remove_wedge=False,
+        )
+
+        out_zero_slope = observe_coeval(
+            box=box,
+            box_length=35.0 * un.Mpc,
+            observation=self.obs,
+            redshift=7.0,
+            seed=1,
+            nrealizations=1,
+            remove_wedge=True,
+            wedge_slope=0.0,
+        )
+
+        np.testing.assert_allclose(out_no_wedge_removal, out_zero_slope)
+
+    def test_no_freq_or_redshift(self):
+        """Test that observe_coeval raises an error if neither z nor f is provided."""
+        box = np.zeros((self.ncells, self.ncells, self.ncells)) * un.mK
+
+        with pytest.raises(
+            ValueError, match="You must provide either frequency or redshift"
+        ):
+            observe_coeval(
+                box=box,
+                box_length=300.0 * un.Mpc,
+                observation=self.obs,
+                seed=1,
+                nrealizations=1,
+            )
