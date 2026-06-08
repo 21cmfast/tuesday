@@ -43,7 +43,7 @@ from .instrument_models.noise import (
     compute_thermal_rms_per_snapshot_vis,
     compute_thermal_rms_uvgrid,
     compute_uv_sampling,
-    convert_half_to_full_uv_plane,
+    # convert_half_to_full_uv_plane,
     observe_coeval,
     observe_lightcone,
     sample_from_rms_uvgrid,

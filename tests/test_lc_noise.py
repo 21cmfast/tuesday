@@ -109,7 +109,22 @@ class TestSampleFromRmsNoise:
             seed=4,
             return_in_uv=False,
         )
+
         np.testing.assert_allclose(img_noise.imag, 0.0)
+
+    @pytest.mark.parametrize("nsamples", [1, 2])
+    @pytest.mark.parametrize("ncells", [100, 101])
+    def test_half_plane_unity_noise(self, nsamples, ncells):
+        """Test that the UV noise is Hermitian."""
+        uv_noise = sample_from_rms_uvgrid(
+            np.ones((ncells, ncells // 2 + 1)) * un.mK,
+            nrealizations=nsamples,
+            seed=4,
+            return_in_uv=True,
+        )
+
+        assert np.isclose(np.std(uv_noise.real), 1.0 * un.mK, rtol=0.01)
+        assert np.isclose(np.std(uv_noise.real), 1.0 * un.mK, rtol=0.01)
 
 
 class TestObserveLightcone:
@@ -144,7 +159,7 @@ class TestObserveLightcone:
         """Test the sample_lc_noise function."""
         lc = np.zeros((self.ncells, self.ncells, self.lc_freqs.size)) * un.mK
 
-        out, _ = observe_lightcone(
+        out = observe_lightcone(
             lightcone=lc,
             thermal_rms_uv=self.sigma,
             box_length=300.0 * un.Mpc,

@@ -387,6 +387,17 @@ def compute_uv_sampling(
         world=observatory.world,
     ).transpose(1, 2, 0)  # (Nu, Nv, Nfreqs)
 
+    # The v=0 modes are not necessarily symmetric in grid-baselines (because it only
+    # counts one of the two conjugate baselines at random). This would give a non-real
+    # inverse fourier transform after weighting by the baseline counts. We fix this
+    # here by symmetrizing the v=0 modes, which is equivalent to the weighting that
+    # would have been achieved by using a full uv grid.
+    if box_ncells % 2 == 1:
+        uv_coverage[:, 0, :] = (uv_coverage[:, 0, :] + uv_coverage[::-1, 0, :]) / 2
+    else:
+        uv_coverage[1:, 0, :] = (
+            uv_coverage[1:, 0, :] + uv_coverage[1:, 0, :][::-1]
+        ) / 2
     return ugrid_edges, vgrid_edges, uv_coverage
 
 
@@ -478,67 +489,6 @@ def compute_thermal_rms_uvgrid(
 
     sigma[min_nbls_per_uv_cell > uv_coverage] = 0.0
     return sigma
-
-
-def _prepare_2d_complex_noise_for_irfft2(x: np.ndarray):
-    # Note that this function is not very generic.
-    # we assume the input has a first dimension of nrealization which should not
-    # be fourier transformed. The FT axes should be (1, 2). The array can
-    # have as many other axes as we want. We only call this internally from the
-    # sample_from_rms_uvgrid function, and we know that the shape of the noise array
-    # there is
-    assert x.ndim >= 3
-
-    n = x.shape[1]
-
-    x[:, 0, 0] = np.real(x[:, 0, 0])
-    if n % 2 != 0:
-        x[:, 1 : n // 2 + 1, 0] = np.conj(x[:, -1 : n // 2 : -1, 0])
-    if n % 2 == 0:
-        x[:, 1 : n // 2 + 1, 0] = np.conj(x[:, -1 : n // 2 - 1 : -1, 0])
-        x[:, n // 2, 0] = np.real(x[:, n // 2, 0])
-        x[:, 0, -1] = np.real(x[:, 0, -1])
-        x[:, 1 : n // 2 + 1, -1] = np.conj(x[:, -1 : n // 2 - 1 : -1, -1])
-        x[:, n // 2, -1] = np.real(x[:, n // 2, -1])
-
-
-def _prepare_2d_complex_noise_for_ifft2(x: np.ndarray):
-    # Note that this function is not very generic.
-    # we assume the input has a first dimension of nrealization which should not
-    # be fourier transformed. The FT axes should be (1, 2). The array can
-    # have as many other axes as we want. We only call this internally from the
-    # sample_from_rms_uvgrid function, and we know that the shape of the noise array
-    # there is.
-
-    # The incoming array has the frequency order e.g. (0, 1,2,3, -4,-3,-2,-1)
-    assert x.ndim >= 3
-
-    n = x.shape[1]
-    mid = n // 2
-
-    x[:, 0, 0] = np.real(x[:, 0, 0])
-    if n % 2 != 0:
-        x[:, 0, 1:mid] = np.conj(x[:, 0, mid:])[:, ::-1]
-        x[:, 1:mid] = np.conj(x[:, mid:])[:, ::-1]
-
-    else:
-        x[:, 0, 1:mid] = np.conj(x[:, 0, mid + 1 :])[:, ::-1]
-        x[:, 1:mid] = np.conj(x[:, mid + 1 :])[:, ::-1]
-
-        # Now deal with Nyquist frequency
-        # Actually there's nothing to deal with... samples in the Nyq. Freq. bins
-        # can have arbirary complex noise values -- they are sourced by baselines
-        # that are different from every other bin.
-        # This however might make the image space noise non-real! Maybe the answer to
-        # this is that we really never do restrict the UV plane so weirdly -- we always
-        # have the same upper-half as lower-half plane (i.e. we always have odd number
-        # of pixels!)
-
-        x[:, 1 : n // 2 + 1, 0] = np.conj(x[:, -1 : n // 2 - 1 : -1, 0])
-        x[:, n // 2, 0] = np.real(x[:, n // 2, 0])
-        x[:, 0, -1] = np.real(x[:, 0, -1])
-        x[:, 1 : n // 2 + 1, -1] = np.conj(x[:, -1 : n // 2 - 1 : -1, -1])
-        x[:, n // 2, -1] = np.real(x[:, n // 2, -1])
 
 
 @un.quantity_input
@@ -715,6 +665,21 @@ def sample_from_rms_uvgrid(
         (nrealizations, Nx or Nu, Ny or Nv, Nfreqs). If in UV space, note that the
         ordering of the grid is switched to be in standard FFT format (i.e.
         zero-mode first, then negatives then positives).
+
+    Notes
+    -----
+    If the number of cells in the simulation is even then there is ambiguity in how to
+    properly sample the noise, because there are UV cells that have no conjugate
+    counterpart. In the case that a full UV plane is provided, this will result in
+    drawing noise that does not quite fourier transform back to a fully-real
+    image-space representation, but we manually take the real component in this
+    implementation. In the case when a half-plane is provided, numpy will effectively
+    fill in the gaps with the values required to obtain a real image-space
+    representation, which means that the uv-space noise will be slightly different
+    than what it would be if weighted by the actual baseline counts in those cells.
+    Note that this is only a problem when the baseline distribution exceeds the range
+    that is covered by the simulation box, and in general even then its effect should
+    be small.
     """
     # TODO: add the ability to weight the samples in UV space by an arbitrary weighting
     #       before taking the inverse FT, to e.g. have natural vs uniform weighting.
@@ -745,10 +710,13 @@ def sample_from_rms_uvgrid(
     # Get some complex-value noise. The shape of the noise
     # is (Nrealizations, Nu, Nv, Nfreqs), where Nu is the full u grid and Nv is the
     # non-negative v modes.
-    noise = (
-        rng.normal(size=(nrealizations, *rms_noise.shape))
-        + 1j * rng.normal(size=(nrealizations, *rms_noise.shape))
-    ) * rms_noise.value[None, ...]
+    noise = rng.normal(size=(nrealizations, nx, nx, nfreqs)) * np.sqrt(2) / nx
+    if full_plane:
+        noise = np.fft.fftshift(np.fft.fft2(noise, axes=(1, 2)), axes=(1, 2))
+    else:
+        noise = np.fft.fftshift(np.fft.rfft2(noise, s=(nx, nx), axes=(1, 2)), axes=(1,))
+
+    noise *= rms_noise.value[None, ...]
 
     if not return_in_uv and spatial_taper is not None:
         spatial_taper = taper2d(rms_noise.shape[0], spatial_taper)
@@ -764,16 +732,9 @@ def sample_from_rms_uvgrid(
         # If we have the full plane, we also need to ifftshift the third axis.
         noise = np.fft.ifftshift(noise, axes=(2,))
 
-    # In a 2D array, some of the entries in the noise are still redundant, and must
-    # be set properly to be either real or the conjugate of another entry. Do that now.
-    if full_plane:
-        _prepare_2d_complex_noise_for_ifft2(noise)
-    else:
-        _prepare_2d_complex_noise_for_irfft2(noise)
-
     if not return_in_uv:
         if full_plane:
-            noise = np.fft.ifft2(noise, axes=(1, 2)) * rms_noise.unit
+            noise = np.fft.ifft2(noise, axes=(1, 2)).real * rms_noise.unit
         else:
             noise = np.fft.irfft2(noise, s=(nx, nx), axes=(1, 2)) * rms_noise.unit
     else:
@@ -958,7 +919,7 @@ def observe_lightcone(
     remove_wedge: bool = False,
     wedge_chunk_size: int | None = None,
     wedge_slope: float = 1.0,
-    wedge_buffer: tp.Time = 0.0,
+    wedge_buffer: tp.Time = 0.0 * un.ns,
     wedge_mode: Literal["rolling", "chunk"] = "chunk",
     cosmo=Planck18,
     remove_mean: bool = True,

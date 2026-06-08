@@ -32,7 +32,7 @@ classifiers = [
 
 dependencies = [
     "21cmfast>=4.1.0",
-    "21cmsense>=2.0.0",
+    "21cmsense",
     "astropy>=7.0.1",
     "attrs>=25.3.0",
     "numpy>=2",
@@ -57,6 +57,7 @@ dev = [
     "ipykernel>=7.2.0",
     "pip>=26.0.1",
     "pre-commit>=4.2.0",
+    "prek>=0.4.4",
     {include-group = "tests"},
     {include-group = "docs"},
 ]
