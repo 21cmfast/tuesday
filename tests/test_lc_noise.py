@@ -124,7 +124,7 @@ class TestSampleFromRmsNoise:
         )
 
         assert np.isclose(np.std(uv_noise.real), 1.0 * un.mK, rtol=0.01)
-        assert np.isclose(np.std(uv_noise.real), 1.0 * un.mK, rtol=0.01)
+        assert np.isclose(np.std(uv_noise.imag), 1.0 * un.mK, rtol=0.01)
 
 
 class TestObserveLightcone:
