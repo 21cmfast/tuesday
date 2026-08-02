@@ -41,7 +41,10 @@ def create_mock_cache_output(cachedir: Path, ics: bool = False) -> RunCache:
                     setattr(o, k, v.with_value(v.value))
 
                 # Mock the primitive fields as well...
-                for fld in o.struct.primitive_fields:
+                # NOTE: py21cmfast 4.2 renamed the `struct` property to `_struct`; the
+                # pyproject.toml pin (>=4.0.0b) allows either, so support both here.
+                struct = o._struct if hasattr(o, "_struct") else o.struct
+                for fld in struct.primitive_fields:
                     setattr(o, fld, 0.0)
 
                 h5.write_output_to_hdf5(o, fname)
