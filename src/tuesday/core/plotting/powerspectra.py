@@ -296,7 +296,7 @@ def plot_power_spectrum(
     xlabel: str | None = None,
     ylabel: str | None = None,
     clabel: str | None = None,
-    at_k: float | int | None = None,
+    at_k: float | None = None,
     cmap: str | None = "viridis",
     color: list | None = None,
     fontsize: float | None = 16,
