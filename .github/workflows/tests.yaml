@@ -67,4 +67,7 @@ jobs:
           files: "./coverage.xml"
           flags: unittests
           name: codecov-umbrella
-          fail_ci_if_error: true
+          # Codecov's uploader intermittently fails GPG signature verification
+          # due to upstream key-hosting issues (see codecov/codecov-action#1955).
+          # Don't fail the whole test job over a flaky third-party upload step.
+          fail_ci_if_error: false
