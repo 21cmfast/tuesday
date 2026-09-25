@@ -31,10 +31,10 @@ classifiers = [
 ]
 
 dependencies = [
-    "21cmfast>=4.1.0",
     "21cmsense>=3.0.0",
-    "astropy>=7.0.1",
+    "astropy>=6.0",
     "attrs>=25.3.0",
+    "deprecation",
     "numpy>=2",
     "powerbox>=1.0.0",
     "scipy>=1.15.2",
@@ -42,9 +42,17 @@ dependencies = [
 dynamic = ['version']
 
 [project.optional-dependencies]
+21cmfast = [
+    "21cmFAST>=4.1.0",
+]
 ska = [
     "ska-ost-array-config>=5",
 ]
+
+[project.urls]
+Repository = "https://github.com/21cmfast/tuesday"
+Issues = "https://github.com/21cmfast/tuesday/issues"
+Changelog = "https://github.com/21cmfast/tuesday/releases"
 
 [dependency-groups]
 tests = [
@@ -52,12 +60,10 @@ tests = [
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
 ]
-
 docs = [
-    "sphinx>=8.2.3",
+    "sphinx>=9.0.4",
     "tools21cm>=2.3.10",
 ]
-
 dev = [
     "ipykernel>=7.2.0",
     "pip>=26.0.1",
@@ -67,10 +73,6 @@ dev = [
     {include-group = "docs"},
 ]
 
-[project.urls]
-Repository = "https://github.com/21cmfast/tuesday"
-Issues = "https://github.com/21cmfast/tuesday/issues"
-Changelog = "https://github.com/21cmfast/tuesday/releases"
 
 [tool.pytest.ini_options]
 addopts = "--durations=25 --cov tuesday --cov-config=.coveragerc --cov-report xml:./coverage.xml "
@@ -127,6 +129,9 @@ ignore = [
     "T201", # print statements
     "N",
     "F",  # TODO: remove all these once this notebook is fixed.
+]
+"src/tuesday/__init__.py" = [
+    "BLE001",  # deliberate broad except in version-detection fallback
 ]
 "tests/*.py" = [
     "D",  # ignore missing docstring in tests

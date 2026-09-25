@@ -55,7 +55,7 @@ def plot_1d_power_spectrum_k(
         Keyword arguments for the legend.
     """
     if not isinstance(power_spectrum, SphericalPS):
-        raise ValueError(
+        raise ValueError(  # noqa: TRY004 - ValueError is the tested/public contract here
             "power_spectrum must be a SphericalPS object,"
             f" got {type(power_spectrum)} instead."
         )
@@ -138,7 +138,7 @@ def plot_1d_power_spectrum_z(
     """
     for i in range(len(power_spectra)):
         if not isinstance(power_spectra[i], SphericalPS):
-            raise ValueError(
+            raise ValueError(  # noqa: TRY004 - ValueError is the tested/public contract here
                 "power_spectrum must be a SphericalPS object or a list of "
                 "SphericalPS objects,"
                 f" got {type(power_spectra[i])} instead."
@@ -226,7 +226,7 @@ def plot_2d_power_spectrum(
         Default is False, if True, uses a standard deviation of 1.
     """
     if not isinstance(power_spectrum, CylindricalPS):
-        raise ValueError(
+        raise ValueError(  # noqa: TRY004 - ValueError is the tested/public contract here
             "power_spectrum must be a CylindricalPS object,"
             f" got {type(power_spectrum)} instead."
         )
@@ -296,7 +296,7 @@ def plot_power_spectrum(
     xlabel: str | None = None,
     ylabel: str | None = None,
     clabel: str | None = None,
-    at_k: float | int | None = None,
+    at_k: float | None = None,
     cmap: str | None = "viridis",
     color: list | None = None,
     fontsize: float | None = 16,

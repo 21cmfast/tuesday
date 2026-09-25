@@ -26,7 +26,7 @@ def _psboth():
         box_length=200 * un.Mpc,
         calc_2d=True,
         calc_1d=True,
-        interp=True,
+        interp="linear",
     )
     return ps1d, ps2d
 
@@ -87,8 +87,7 @@ def test_1d_ps_plot(ps1d: SphericalPS):
 
     with pytest.raises(
         ValueError,
-        match="power_spectrum must be a SphericalPS object or a list of "
-        "SphericalPS objects",
+        match="power_spectrum must be a SphericalPS object or a list of SphericalPS",
     ):
         plot_1d_power_spectrum_z(
             [ps1d, np.ones((10, 10))],

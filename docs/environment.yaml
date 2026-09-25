@@ -2,7 +2,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - numpy<1.22
+  - numpy>2.0
   - scipy
   - future
   - click
@@ -22,7 +22,10 @@ dependencies:
   - pip
   - python=3.10
   - setuptools_scm
+  - matplotlib
   - pip:
     - furo
     - lunarsky>=0.2.5
     - sphinx_design
+    - 21cmSense>=2.2.1
+    - powerbox

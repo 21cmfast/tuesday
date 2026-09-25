@@ -1,29 +1,13 @@
 """Configuration for docs."""
 
 import os
+import sys
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
+from pathlib import Path
 
-from tuesday import __version__
+sys.path.insert(0, str(Path(__file__).absolute().parent.parent / "src"))
 
-
-class Mock(MagicMock):
-    """Make a Mock so that a package doesn't have to actually exist."""
-
-    @classmethod
-    def __getattr__(cls, name):
-        """Get stuff."""
-        return MagicMock()
-
-
-MOCK_MODULES = [
-    "py21cmfast.c_21cmfast",
-    "click",
-    "tqdm",
-    "pyyaml",
-    "h5py",
-    "cached_property",
-]
+import tuesday
 
 extensions = [
     "sphinx.ext.autodoc",
@@ -53,13 +37,19 @@ autosectionlabel_prefix_document = True
 autosummary_generate = True
 numpydoc_show_class_members = False
 
+autodoc_default_options = {
+    "members": True,
+    "undoc-members": True,
+    "show-inheritance": True,
+}
+
 source_suffix = ".rst"
 master_doc = "index"
 project = "tuesday"
 year = str(datetime.now(tz=UTC).year)
-author = "21cmFAST Team"
+author = "Daniela Breitman and Steven Murray"
 copyright = f"{year}, {author}"
-version = release = __version__
+version = release = tuesday.__version__
 templates_path = ["templates"]
 
 pygments_style = "trac"

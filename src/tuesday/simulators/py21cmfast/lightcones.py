@@ -1,6 +1,8 @@
 """Generate lightcones from 21cmFAST output cache."""
 
 from collections.abc import Sequence
+from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 from py21cmfast.drivers.lightcone import (
@@ -9,6 +11,7 @@ from py21cmfast.drivers.lightcone import (
     do_rsds,
     setup_lightcone_instance,
 )
+from py21cmfast.io import read_output_struct
 from py21cmfast.io.caching import RunCache
 from py21cmfast.lightconers import Lightconer
 
@@ -120,5 +123,72 @@ def construct_lightcone_from_cache(
                 n_rsd_subcells=n_rsd_subcells,
             )
             lightcone.lightcones["brightness_temp_with_rsds"] = field_with_rsds
+
+    return lightcone
+
+
+def construct_lightcone_from_filelist(
+    filelist: Sequence[Path],
+    lightconer: Lightconer,
+) -> LightCone:
+    """Construct a Lightcone from a list of OutputStruct files.
+
+    This function assumes that the list of files are 21cmFAST output structs, each
+    at a different redshift. These may be from a RunCache, but don't need to be.
+
+    Parameters
+    ----------
+    filelist
+        A list of paths to 21cmFAST output struct files.
+    lightconer
+        The object used to generate lightcone slices.
+    """
+    boxes = [read_output_struct(fl) for fl in filelist]
+    inputs = boxes[0].inputs
+    boxes = sorted(boxes, key=lambda b: b.redshift, reverse=True)
+    node_redshifts = [b.redshift for b in boxes]
+
+    lightconer.validate_options(inputs, apply_rsds=False, include_dvdr_in_tau21=False)
+
+    # Create the LightCone instance, loading from file if needed
+    lightcone = setup_lightcone_instance(
+        lightconer=lightconer,
+        inputs=inputs,
+        scrollz=node_redshifts,
+        photon_nonconservation_data={},
+        include_dvdr_in_tau21=False,
+        apply_rsds=False,
+    )
+
+    lightcone._last_completed_node = -1
+    lightcone._last_completed_lcidx = (
+        np.sum(
+            lightcone.lightcone_redshifts
+            >= node_redshifts[lightcone._last_completed_node]
+        )
+        - 1
+    )
+
+    prev_box = None
+    for box in boxes:
+        # This hacks an OutputStruct to look like a Coeval, which has all the
+        # boxes defined directly as attributes. Later versions
+        # of 21cmFAST will not require this.
+        _box = SimpleNamespace()
+        _box.__dict__.update(box.__dict__)
+        _box.simulation_options = box.inputs.simulation_options
+        _box.cosmo_params = box.inputs.cosmo_params
+        for q in lightconer.quantities:
+            setattr(_box, q, box.get(q))
+
+        # Get lightcone slices
+        if prev_box is not None:
+            for quantity, idx, this_lc in lightconer.make_lightcone_slices(
+                _box, prev_box
+            ):
+                if this_lc is not None:
+                    lightcone.lightcones[quantity][..., idx] = this_lc
+
+        prev_box = _box
 
     return lightcone
