@@ -597,7 +597,7 @@ def apply_beam(
     elif lightcone.ndim != 4:
         raise ValueError("lightcone must be either 2, 3 or 4D.")
 
-    nrealizations, nx, ny, nz = lightcone.shape
+    _, nx, ny, nz = lightcone.shape
     if nx != ny:
         raise ValueError("lightcone must have the same number of pixels in x and y.")
     if nz != len(freqs):
@@ -820,7 +820,7 @@ def apply_wedge_filter(
     buffer : astropy.units.Quantity, optional
         Additional buffer to add to the wedge in delay space, by default 0.0 ns.
     """
-    nrealizations, nx, ny, nz = uv_lightcones.shape
+    _, nx, ny, nz = uv_lightcones.shape
 
     if ny != nx // 2 + 1:
         raise ValueError(
