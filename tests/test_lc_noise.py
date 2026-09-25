@@ -112,7 +112,7 @@ class TestSampleFromRmsNoise:
 
         np.testing.assert_allclose(img_noise.imag, 0.0)
 
-    @pytest.mark.parametrize("nsamples", [1, 2])
+    @pytest.mark.parametrize("nsamples", [10, 20])
     @pytest.mark.parametrize("ncells", [100, 101])
     def test_half_plane_unity_noise(self, nsamples, ncells):
         """Test that the UV noise is Hermitian."""

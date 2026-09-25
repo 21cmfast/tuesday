@@ -193,7 +193,7 @@ def calculate_ps(
     ps2d = None
     ps1d = None
     if calc_2d:
-        ps_2d, kperp, variance, nmodes, kpar = get_power(
+        res = get_power(
             chunk.value,
             (
                 box_length.value,
@@ -201,19 +201,21 @@ def calculate_ps(
                 box_length.value * chunk.shape[-1] / box_side_shape,
             ),
             res_ndim=2,
-            bin_ave=bin_ave,
             bins=kperp_bins,
             log_bins=log_bins,
             nthreads=1,
             k_weights=k_weights_2d,
             prefactor_fnc=prefactor_fnc,
             interpolation_method=interp,
-            return_sumweights=True,
             get_variance=get_variance,
             bins_upto_boxlen=True,
             deltax2=chunk2.to_value(chunk.unit) if chunk2 is not None else None,
         )
-        kpar = np.array(kpar).squeeze()
+        ps_2d = res.power
+        variance = res.variance
+        nmodes = res.nsamples
+        kperp = res.bin_avg if bin_ave else res.bin_centres
+        kpar = np.array(res.k_unbinned).squeeze()
         ps_2d = ps_2d[..., kpar > 0]
         if get_variance:
             variance = variance[..., kpar > 0]
@@ -230,25 +232,27 @@ def calculate_ps(
         )
 
     if calc_1d:
-        ps_1d, k, var_1d, nmodes_1d = get_power(
+        res = get_power(
             chunk,
             (
                 box_length.value,
                 box_length.value,
                 box_length.value * chunk.shape[-1] / box_side_shape,
             ),
-            bin_ave=bin_ave,
             bins=k_bins,
             log_bins=log_bins,
             k_weights=k_weights_1d,
             prefactor_fnc=prefactor_fnc,
             interpolation_method=interp,
             interp_points_generator=interp_points_generator,
-            return_sumweights=True,
             get_variance=get_variance,
             bins_upto_boxlen=True,
             deltax2=chunk2.to_value(chunk.unit) if chunk2 is not None else None,
         )
+        ps_1d = res.power
+        var_1d = res.variance
+        nmodes_1d = res.nsamples
+        k = res.bin_avg if bin_ave else res.bin_centres
 
         ps1d = SphericalPS(
             ps=ps_1d * ps_unit,

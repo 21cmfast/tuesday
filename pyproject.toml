@@ -32,14 +32,19 @@ classifiers = [
 
 dependencies = [
     "21cmfast>=4.1.0",
-    "21cmsense",
+    "21cmsense>=3.0.0",
     "astropy>=7.0.1",
     "attrs>=25.3.0",
     "numpy>=2",
-    "powerbox>=0.8.2",
+    "powerbox>=1.0.0",
     "scipy>=1.15.2",
 ]
 dynamic = ['version']
+
+[project.optional-dependencies]
+ska = [
+    "ska-ost-array-config>=5",
+]
 
 [dependency-groups]
 tests = [
@@ -147,6 +152,6 @@ property-decorators = [
 [tool.ruff.lint.mccabe]
 max-complexity = 21
 
-[tool.uv.sources]
-powerbox = { git = "https://github.com/steven-murray/powerbox", rev = "better-interp" }
-21cmsense = { git = "https://github.com/rasg-affiliates/21cmSense", rev = "fast-hist" }
+[[tool.uv.index]]
+name = "ska-nexus"
+url = "https://artefact.skao.int/repository/pypi-internal/simple"
