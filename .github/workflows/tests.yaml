@@ -55,9 +55,10 @@ jobs:
 
       - name: Upload coverage report
         if: matrix.os == 'ubuntu-latest' && success()
-        uses: codecov/codecov-action@v5.4.3
+        uses: codecov/codecov-action@v7
         with:
           files: "./coverage.xml"
           flags: unittests
           name: codecov-umbrella
+          token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
