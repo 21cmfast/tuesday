@@ -34,34 +34,31 @@ jobs:
           python-version: ${{ matrix.python-version }}
           channel-priority: true
 
+      # 21cmFAST is only distributed as an sdist, so its C dependencies must be
+      # available to build it. Python dependencies are all handled by uv.
       - name: Install Non-Python Dependencies
         run: |
-          conda install fftw gsl
+          conda install fftw gsl compilers pkg-config
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
 
       - name: Install the Package
-        run: pip install ".[dev]" --pre
-
-      - name: Install Poetry
         run: |
-          pipx install poetry
-          poetry --version
-
-      - name: Install ska-ost-array
-        run: |
-          git clone https://gitlab.com/ska-telescope/ost/ska-ost-array-config.git
-          cd ska-ost-array-config
-          poetry install
-          cd ..
+          uv sync --locked --all-extras --group tests --python "$CONDA_PREFIX/bin/python"
 
       - name: Run Tests
         run: |
-          coverage run -m pytest
+          uv run --no-sync coverage run -m pytest
 
       - name: Upload coverage report
         if: matrix.os == 'ubuntu-latest' && success()
-        uses: codecov/codecov-action@v5.4.3
+        uses: codecov/codecov-action@v7
         with:
           files: "./coverage.xml"
           flags: unittests
           name: codecov-umbrella
+          token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
