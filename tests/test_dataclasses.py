@@ -52,7 +52,7 @@ def test_ps_correct_units(unit, delta):
         * un.dimensionless_unscaled
         * unit**3,
         kperp=np.linspace(0, 10, 10) / unit,
-        kpar=np.linspace(0, 10, 10) / un.m,
+        kpar=np.linspace(0, 10, 10) / unit,
         is_deltasq=delta,
     )
     CylindricalPS(
@@ -63,7 +63,7 @@ def test_ps_correct_units(unit, delta):
         kpar=np.linspace(0, 10, 10) / unit,
         is_deltasq=delta,
     )
-    kedges = np.linspace(0, 1, 11) / un.m
+    kedges = np.linspace(0, 1, 11) / unit
     kcenters = SphericalPS(
         np.linspace(0, 10, 10) * un.dimensionless_unscaled
         if delta
@@ -74,7 +74,7 @@ def test_ps_correct_units(unit, delta):
 
     assert np.allclose(kcenters.value, (kedges.value[:-1] + kedges.value[1:]) / 2.0)
 
-    kedges = np.logspace(0, 1, 11) / un.m
+    kedges = np.logspace(0, 1, 11) / unit
     kcenters = SphericalPS(
         np.linspace(0, 10, 10) * un.mK**2
         if delta
@@ -140,3 +140,29 @@ def test_1d_ps_wrong_units(ps):
         SphericalPS(
             ps.ps.value * un.m**3, k=ps.k, is_deltasq=True
         )  # correct units but inconsistent with is_deltasq
+
+
+MPC_H = un.Mpc / littleh
+
+
+@pytest.mark.parametrize(
+    ("ps_unit", "kperp_unit", "kpar_unit", "is_deltasq", "match"),
+    [
+        # kperp and kpar disagree on littleh
+        (un.mK**2 * un.Mpc**3, 1 / MPC_H, 1 / un.Mpc, False, "same power of littleh"),
+        # k has littleh but the PS volume doesn't
+        (un.mK**2 * un.Mpc**3, 1 / MPC_H, 1 / MPC_H, False, r"littleh\*\*-3"),
+        # PS volume has littleh but k doesn't
+        (un.mK**2 * MPC_H**3, 1 / un.Mpc, 1 / un.Mpc, False, r"littleh\*\*0"),
+        # delta-squared PS should never have littleh
+        (un.mK**2 / littleh, 1 / MPC_H, 1 / MPC_H, True, r"littleh\*\*0"),
+    ],
+)
+def test_inconsistent_littleh(ps_unit, kperp_unit, kpar_unit, is_deltasq, match):
+    with pytest.raises(ValueError, match=match):
+        CylindricalPS(
+            np.ones((10, 10)) * ps_unit,
+            kperp=np.linspace(1, 10, 10) * kperp_unit,
+            kpar=np.linspace(1, 10, 10) * kpar_unit,
+            is_deltasq=is_deltasq,
+        )

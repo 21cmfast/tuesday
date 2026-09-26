@@ -84,6 +84,7 @@ import numpy as np
 from astropy.constants import c
 from astropy.cosmology import Planck18, z_at_value
 from astropy.cosmology import units as cu
+from astropy.cosmology.units import littleh
 from py21cmsense import Observation
 from py21cmsense import units as tp
 from py21cmsense._utils import grid_baselines
@@ -92,13 +93,18 @@ from scipy.signal import windows
 
 logger = logging.getLogger(__name__)
 
+# Quantities that may be given with or without littleh. Functions accepting these
+# convert them explicitly, using the relevant cosmology.
+Length = tp.Length | un.Quantity[un.Mpc / littleh]
+Wavenumber = un.Quantity["wavenumber"] | tp.Wavenumber
+
 
 @un.quantity_input
 def compute_thermal_rms_per_snapshot_vis(
     observation: Observation,
     freqs: tp.Frequency,
-    box_res: tp.Length,
-    box_slice_depth: tp.Length | tp.Frequency | None = None,
+    box_res: Length,
+    box_slice_depth: Length | tp.Frequency | None = None,
     antenna_effective_area: un.Quantity[un.m**2] | None = None,
     beam_area: un.Quantity[un.rad**2] | None = None,
 ) -> un.Quantity[un.mK]:
@@ -173,11 +179,11 @@ def compute_thermal_rms_per_snapshot_vis(
                 "You cannot provide both beam_area and antenna_effective_area."
                 " Proceding with beam_area."
             )
-        omega_beam = beam_area
-        if len(omega_beam) > 1 and len(omega_beam) != len(freqs):
+        if len(beam_area) > 1 and len(beam_area) != len(freqs):
             raise ValueError(
                 "Beam area must have length one or the same shape as freqs."
             )
+        omega_beam = beam_area * np.ones(len(freqs))
 
     elif antenna_effective_area is not None:
         antenna_effective_area = np.atleast_1d(antenna_effective_area)
@@ -198,6 +204,12 @@ def compute_thermal_rms_per_snapshot_vis(
     if box_slice_depth is None:
         box_slice_depth = box_res
 
+    # Work in Mpc throughout, so that inputs may be given with or without littleh.
+    h_equiv = cu.with_H0(observation.cosmo.H0)
+    box_res = box_res.to(un.Mpc, h_equiv)
+    if not box_slice_depth.unit.is_equivalent(un.Hz):
+        box_slice_depth = box_slice_depth.to(un.Mpc, h_equiv)
+
     sig_uv = np.zeros(len(freqs)) * un.mK
     for i, nu in enumerate(freqs):
         obs = observation.clone(frequency=nu)
@@ -205,18 +217,13 @@ def compute_thermal_rms_per_snapshot_vis(
         tsys = obs.Tsys
 
         # transverse comoving distance per radian
-        d = Planck18.comoving_distance(f2z(nu)).to(
-            box_res.unit,
-        )
+        d = Planck18.comoving_distance(f2z(nu)).to(un.Mpc)
+        omega_pix = (box_res / (d / un.rad)) ** 2
 
-        with un.set_enabled_equivalencies(
-            cu.with_H0(observation.cosmo.H0) + cu.dimensionless_redshift()
-        ):
-            omega_pix = (box_res / (d / un.rad)) ** 2
-
-            if box_slice_depth.unit.is_equivalent(un.Hz):
-                df = box_slice_depth
-            else:
+        if box_slice_depth.unit.is_equivalent(un.Hz):
+            df = box_slice_depth
+        else:
+            with un.set_enabled_equivalencies(cu.dimensionless_redshift()):
                 df = np.abs(
                     z2f(z_at_value(Planck18.comoving_distance, d + box_slice_depth / 2))
                     - z2f(
@@ -347,12 +354,12 @@ def compute_uv_sampling(
         np.fft.fftfreq(box_ncells, d=(box_length / box_ncells).value)
     ) * (2 * np.pi / box_length.unit)
 
-    kperp_to_u = 1 / dk_du(f2z(freqs)).to(
+    kperp_to_u = 1 / dk_du(f2z(freqs), cosmo=observation.cosmo).to(
         box_length.unit**-1, cu.with_H0(observation.cosmo.H0)
     )
 
     if not freq_dependent_uv_grid:
-        kperp_to_u = np.mean(kperp_to_u)
+        kperp_to_u = np.mean(kperp_to_u) * np.ones(len(freqs))
 
     # ugrid is potentially frequency dependent, so this is (Nu, Nz)
     ugrid_edges = np.outer(kperp, kperp_to_u).to(un.dimensionless_unscaled).value
@@ -746,13 +753,14 @@ def sample_from_rms_uvgrid(
 @un.quantity_input
 def apply_wedge_filter(
     uv_lightcones: tp.Temperature,
-    kperp_x: tp.Wavenumber,
-    kperp_y: tp.Wavenumber,
+    kperp_x: Wavenumber,
+    kperp_y: Wavenumber,
     lightcone_freqs: tp.Frequency,
     window_size: int | None = None,
     mode: Literal["rolling", "chunk"] = "chunk",
     wedge_slope: float = 1.0,
     buffer: tp.Time = 0.0 * un.ns,
+    cosmo=Planck18,
 ):
     """Apply a wedge filter to a lightcone in uv space.
 
@@ -819,20 +827,28 @@ def apply_wedge_filter(
         Slope of the wedge in (b, tau) space, by default 1.0 (horizon limit).
     buffer : astropy.units.Quantity, optional
         Additional buffer to add to the wedge in delay space, by default 0.0 ns.
+    cosmo : astropy.cosmology, optional
+        Cosmology used to convert kperp to baseline length, and to convert any littleh
+        in the units of kperp. By default Planck18.
     """
     _, nx, ny, nz = uv_lightcones.shape
 
-    if ny != nx // 2 + 1:
+    if ny not in (nx, nx // 2 + 1):
         raise ValueError(
-            "The shape of uv_lightcones is not correct. The second dimension should be "
-            "the non-negative v modes. If the first dimension has size Nx, the second "
-            f"dimension should have size Ny=ceil(Nx/2) + 1. Got {uv_lightcones.shape}."
+            "The shape of uv_lightcones is not correct. The second dimension should "
+            "be either the full v grid or the non-negative v modes. If the first "
+            "dimension has size Nx, the second should have size Nx or Nx//2 + 1. "
+            f"Got {uv_lightcones.shape}."
         )
 
     if mode not in ["rolling", "chunk"]:
         raise ValueError("mode must be either 'rolling' or 'chunk'.")
 
-    with_h = "hlittle" in kperp_x.unit.to_string()
+    # Convert to 1/Mpc so that kperp may be given with or without littleh.
+    h_equiv = cu.with_H0(cosmo.H0)
+    kperp_x = kperp_x.to(1 / un.Mpc, h_equiv)
+    kperp_y = kperp_y.to(1 / un.Mpc, h_equiv)
+    kperp_mag = np.add.outer(kperp_x**2, kperp_y**2) ** 0.5
 
     if window_size is None and mode == "chunk":
         window_size = nz
@@ -848,8 +864,7 @@ def apply_wedge_filter(
         this_dnu = np.mean(np.diff(freqs_chunk))
         tau = np.fft.fftfreq(uv_chunk.shape[-1], d=this_dnu.to(un.Hz).value) * un.s
 
-        kperp_mag = np.add.outer(kperp_x**2, kperp_y**2) ** 0.5
-        umag = kperp_mag / dk_du(f2z(f0), with_h=with_h)
+        umag = kperp_mag / dk_du(f2z(f0), cosmo=cosmo, with_h=False)
 
         # This wedge is exact for the central slice (except for the fact that the
         # frequencies are probably not exactly regular).
@@ -1027,7 +1042,7 @@ def observe_lightcone(
         return_in_uv=True,
     )
 
-    nu, nv = thermal_rms_uv.shape[1:3]
+    nu, nv = thermal_rms_uv.shape[:2]
 
     if remove_mean:
         # Don't subtract in-place or the user could get a nasty surprise.
@@ -1065,18 +1080,18 @@ def observe_lightcone(
                 wedge_slope=wedge_slope,
                 buffer=wedge_buffer,
                 mode=wedge_mode,
+                cosmo=cosmo,
             )
 
     if spatial_taper is not None:
-        _, nx, ny = lc_uv_nu.shape
-        window_fnc = taper2d(lightcone.shape[0], spatial_taper)[:, -ny:]
+        window_fnc = taper2d(nx, spatial_taper)[:, -nv:]
         window_fnc = np.fft.fftshift(
             window_fnc, axes=(0, 1) if full_plane else (0,)
         )  # shift the window to be in the right format for FFT
         lc_uv_nu *= window_fnc[None, ..., None]
 
     if full_plane:
-        noisy_lc_real = np.fft.ifft2(lc_uv_nu, axes=(1, 2))
+        noisy_lc_real = np.fft.ifft2(lc_uv_nu, axes=(1, 2)).real
     else:
         noisy_lc_real = np.fft.irfft2(lc_uv_nu, s=(nx, nx), axes=(1, 2))
 
@@ -1086,13 +1101,13 @@ def observe_lightcone(
 @un.quantity_input
 def apply_wedge_filter_coeval(
     box_uv_nu: tp.Temperature,
-    kperp_x: tp.Wavenumber,
-    kperp_y: tp.Wavenumber,
+    kperp_x: Wavenumber,
+    kperp_y: Wavenumber,
     redshift: float,
-    box_res: tp.Length,
+    box_res: Length,
     cosmo=Planck18,
     wedge_slope: float = 1.0,
-    wedge_buffer: tp.Time | tp.Wavenumber = 0.0 * un.ns,
+    wedge_buffer: tp.Time | Wavenumber = 0.0 * un.ns,
 ) -> un.mK:
     """
     Apply a wedge filter to a coeval cube in uv space.
@@ -1126,13 +1141,19 @@ def apply_wedge_filter_coeval(
         Coeval cube with the wedge filter applied, in real space, with the same shape as
         the input cube.
     """
+    # Convert to Mpc so that inputs may be given with or without littleh.
+    h_equiv = cu.with_H0(cosmo.H0)
+    box_res = box_res.to(un.Mpc, h_equiv)
+    kperp_x = kperp_x.to(1 / un.Mpc, h_equiv)
+    kperp_y = kperp_y.to(1 / un.Mpc, h_equiv)
+
     # First, fourier transform over the frequency dimension
     uvtau = np.fft.fft(box_uv_nu, axis=-1)
     kpar = np.fft.fftfreq(box_uv_nu.shape[-1], d=box_res)
-    tau = kpar / dk_deta(redshift, cosmo=cosmo)
+    tau = kpar / dk_deta(redshift, cosmo=cosmo, with_h=False)
     kperp_mag = np.add.outer(kperp_x**2, kperp_y**2) ** 0.5
 
-    umag = kperp_mag / dk_du(redshift, cosmo=cosmo)
+    umag = kperp_mag / dk_du(redshift, cosmo=cosmo, with_h=False)
 
     # This wedge is exact for the central slice (except for the fact that the
     # frequencies are probably not exactly regular).
@@ -1141,7 +1162,9 @@ def apply_wedge_filter_coeval(
 
     if not wedge_buffer.unit.is_equivalent(un.s):
         # Convert the buffer from kpar to tau if needed.
-        wedge_buffer = wedge_buffer / dk_deta(redshift, cosmo=cosmo)
+        wedge_buffer = wedge_buffer.to(1 / un.Mpc, h_equiv) / dk_deta(
+            redshift, cosmo=cosmo, with_h=False
+        )
 
     mask = np.abs(tau)[None, None] < wedge[:, :, None] + wedge_buffer
 
@@ -1163,7 +1186,7 @@ def observe_coeval(
     min_nbls_per_uv_cell: int = 1,
     remove_wedge: bool = False,
     wedge_slope: float = 1.0,
-    wedge_buffer: tp.Time | tp.Wavenumber = 0.0 * un.ns,
+    wedge_buffer: tp.Time | Wavenumber = 0.0 * un.ns,
     remove_mean: bool = True,
     multiply_by_beam: bool = True,
 ) -> un.mK:
