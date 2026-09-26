@@ -110,11 +110,10 @@ def test_bad_1d_ps_units(ps1d):
 
 @pytest.mark.parametrize("unit", [un.Mpc, un.Mpc / littleh])
 def test_good_1d_ps_units(ps1d, unit):
-    good_ps = SphericalPS(
-        ps1d.ps.value * un.mK**2 * unit**3, k=ps1d.k, is_deltasq=False
-    )
+    k = ps1d.k.value / unit
+    good_ps = SphericalPS(ps1d.ps.value * un.mK**2 * unit**3, k=k, is_deltasq=False)
     plot_power_spectrum(good_ps)
-    good_ps = SphericalPS(ps1d.ps.value * unit**3, k=ps1d.k, is_deltasq=False)
+    good_ps = SphericalPS(ps1d.ps.value * unit**3, k=k, is_deltasq=False)
     plot_power_spectrum(good_ps)
 
 

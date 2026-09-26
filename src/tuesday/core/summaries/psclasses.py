@@ -4,7 +4,57 @@ from dataclasses import dataclass
 
 import astropy.units as un
 import numpy as np
-from astropy.cosmology.units import littleh
+
+from ..units import littleh_power, without_littleh
+
+
+def _validate_ps_units(
+    ps: un.Quantity, is_deltasq: bool, **wavenumbers: un.Quantity
+) -> None:
+    """Validate the units of a power spectrum and its wavenumbers.
+
+    Little-h is allowed in the units, but must be consistent: all wavenumbers must
+    carry the same power of little-h, and (unless the power spectrum is dimensionless
+    or delta-squared) the power spectrum must carry the corresponding inverse-cubed
+    power, e.g. ``k`` in ``littleh/Mpc`` requires ``ps`` in ``mK^2 Mpc^3/littleh^3``.
+    """
+    for name, k in wavenumbers.items():
+        if without_littleh(k.unit).physical_type != "wavenumber":
+            raise ValueError(
+                f"Unit of {name} must be a wavenumber, got {k.unit.physical_type}."
+            )
+
+    k_hpowers = {name: littleh_power(k.unit) for name, k in wavenumbers.items()}
+    if len(set(k_hpowers.values())) > 1:
+        raise ValueError(
+            f"All wavenumbers must have the same power of littleh, got {k_hpowers}."
+        )
+
+    ps_type = without_littleh(ps.unit).physical_type
+    if is_deltasq:
+        if ps_type not in [un.get_physical_type("temperature") ** 2, "dimensionless"]:
+            raise ValueError(
+                "Expected unit of delta PS to be temperature squared or"
+                f" dimensionless, but got {ps.unit.physical_type}."
+            )
+        expected_hpower = 0
+    else:
+        vol = un.get_physical_type("volume")
+        temp2xvol = un.get_physical_type("temperature") ** 2 * vol
+        if ps_type not in [temp2xvol, vol, "dimensionless"]:
+            raise ValueError(
+                "Expected unit of PS to be temperature squared times volume, "
+                f"or volume but got {ps.unit.physical_type}."
+            )
+        expected_hpower = (
+            0 if ps_type == "dimensionless" else -3 * next(iter(k_hpowers.values()))
+        )
+
+    if littleh_power(ps.unit) != expected_hpower:
+        raise ValueError(
+            f"The PS unit ({ps.unit}) has inconsistent littleh with the wavenumbers "
+            f"({k_hpowers}): expected littleh**{expected_hpower}."
+        )
 
 
 @dataclass(frozen=True)
@@ -53,41 +103,7 @@ class SphericalPS:
                 "k must either be the same shape as the k-"
                 "axis of the ps or larger by one if k is the bin edges."
             )
-        if self.k.unit.physical_type not in [
-            un.get_physical_type("wavenumber"),
-            un.get_physical_type("wavenumber") * littleh,
-        ]:
-            raise ValueError(
-                f"Unit of k must be a wavenumber, got {self.k.unit.physical_type}."
-            )
-        if self.is_deltasq:
-            if self.ps.unit.physical_type not in [
-                un.get_physical_type("temperature") ** 2,
-                "dimensionless",
-            ]:
-                raise ValueError(
-                    "Expected unit of delta PS to be temperature squared or"
-                    f" dimensionless, but got {self.ps.unit.physical_type}."
-                )
-        else:
-            if "littleh" in self.ps.unit.to_string():
-                temp2xvol = (
-                    un.get_physical_type("temperature") ** 2
-                    * un.get_physical_type("volume")
-                    / littleh**3
-                )
-                vol = un.get_physical_type("volume") / littleh**3
-
-            else:
-                temp2xvol = un.get_physical_type(
-                    "temperature"
-                ) ** 2 * un.get_physical_type("volume")
-                vol = un.get_physical_type("volume")
-            if self.ps.unit.physical_type not in [temp2xvol, vol, "dimensionless"]:
-                raise ValueError(
-                    "Expected unit of PS to be temperature squared times volume, "
-                    f"or volume but got {self.ps.unit.physical_type}."
-                )
+        _validate_ps_units(self.ps, self.is_deltasq, k=self.k)
 
         if self.variance is not None and self.variance.shape != self.ps.shape:
             raise ValueError(
@@ -184,50 +200,7 @@ class CylindricalPS:
                 "axis of the ps or larger by one if kpar is the "
                 f"bin edges. Instead got {self.kpar.shape[0]} and {self.ps.shape[1]}"
             )
-        if self.kperp.unit.physical_type not in [
-            un.get_physical_type("wavenumber"),
-            un.get_physical_type("wavenumber") * littleh,
-        ]:
-            raise ValueError(
-                "Unit of kperp must be a wavenumber, "
-                f"got {self.kperp.unit.physical_type}."
-            )
-        if self.kpar.unit.physical_type not in [
-            un.get_physical_type("wavenumber"),
-            un.get_physical_type("wavenumber") * littleh,
-        ]:
-            raise ValueError(
-                "Unit of kpar must be a wavenumber, "
-                f"got {self.kpar.unit.physical_type}."
-            )
-        if self.is_deltasq:
-            if self.ps.unit.physical_type not in [
-                un.get_physical_type("temperature") ** 2,
-                "dimensionless",
-            ]:
-                raise ValueError(
-                    "Expected unit of delta PS to be temperature squared or"
-                    f" dimensionless, but got {self.ps.unit.physical_type}."
-                )
-        else:
-            if "littleh" in self.ps.unit.to_string():
-                temp2xvol = (
-                    un.get_physical_type("temperature") ** 2
-                    * un.get_physical_type("volume")
-                    / littleh**3
-                )
-                vol = un.get_physical_type("volume") / littleh**3
-
-            else:
-                temp2xvol = un.get_physical_type(
-                    "temperature"
-                ) ** 2 * un.get_physical_type("volume")
-                vol = un.get_physical_type("volume")
-            if self.ps.unit.physical_type not in [temp2xvol, vol, "dimensionless"]:
-                raise ValueError(
-                    "Expected unit of PS to be temperature squared times volume, "
-                    f"or volume but got {self.ps.unit.physical_type}."
-                )
+        _validate_ps_units(self.ps, self.is_deltasq, kperp=self.kperp, kpar=self.kpar)
 
         if self.variance is not None and self.variance.shape != self.ps.shape:
             raise ValueError(

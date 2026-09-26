@@ -31,19 +31,23 @@ classifiers = [
 ]
 
 dependencies = [
-    "21cmsense>=2.0.0",
+    "21cmsense>=3.0.0",
     "astropy>=6.0",
     "attrs>=25.3.0",
-    "numpy>=2",
-    "powerbox>=0.9.0",
-    "scipy>=1.15.2",
     "deprecation",
+    "numpy>=2",
+    "powerbox>=1.0.0",
+    "scipy>=1.15.2",
 ]
 dynamic = ['version']
 
 [project.optional-dependencies]
-21cmfast = ['21cmFAST>=4.0.0b']
-
+21cmfast = [
+    "21cmFAST>=4.1.0",
+]
+ska = [
+    "ska-ost-array-config>=5",
+]
 
 [project.urls]
 Repository = "https://github.com/21cmfast/tuesday"
@@ -56,12 +60,17 @@ tests = [
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
 ]
-dev = [
-    {"include-group" = "tests"},
-    "prek>=0.3.13",
-]
 docs = [
     "sphinx>=9.0.4",
+    "tools21cm>=2.3.10",
+]
+dev = [
+    "ipykernel>=7.2.0",
+    "pip>=26.0.1",
+    "pre-commit>=4.2.0",
+    "prek>=0.4.4",
+    {include-group = "tests"},
+    {include-group = "docs"},
 ]
 
 
@@ -116,6 +125,11 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"docs/tutorials/lc_noise_compare_tools21cm.ipynb" = [
+    "T201", # print statements
+    "N",
+    "F",  # TODO: remove all these once this notebook is fixed.
+]
 "src/tuesday/__init__.py" = [
     "BLE001",  # deliberate broad except in version-detection fallback
 ]
@@ -124,13 +138,13 @@ ignore = [
     "DTZ",   # ignore datetime in tests
     "T",     # print statements
 ]
+"*.ipynb" = [
+    "T201", # print statements
+]
 "docs/conf.py" = [
     "A",  # conf.py can shadow builtins
     "ERA",
     "DTZ",
-]
-"docs/tutorials/*.ipynb" = [
-    "T201", # print statements
 ]
 
 [tool.ruff.lint.pydocstyle]
@@ -143,5 +157,6 @@ property-decorators = [
 [tool.ruff.lint.mccabe]
 max-complexity = 21
 
-[tool.uv.sources]
-21cmfast = { git = "https://github.com/21cmFAST/21cmFAST" }
+[[tool.uv.index]]
+name = "ska-nexus"
+url = "https://artefact.skao.int/repository/pypi-internal/simple"
