@@ -31,11 +31,16 @@ classifiers = [
 ]
 
 dependencies = [
-    "21cmsense>=2.0.0",
+    # 21cmSense 3.0 (Sep 2026) changed its API (from_ska now takes ska-ost-array-config
+    # template names; Observatory.baseline_coords_from_groups and
+    # GaussianBeam(frequency=...) were removed). Pin until tuesday is ported.
+    "21cmsense>=2.0.0,<3",
     "astropy>=6.0",
     "attrs>=25.3.0",
     "numpy>=2",
-    "powerbox>=0.9.0",
+    # powerbox 1.0 removed the `bin_ave` argument of get_power(), which tuesday's
+    # power-spectrum functions still pass. Pin until tuesday is ported.
+    "powerbox>=0.9.0,<1",
     "scipy>=1.15.2",
     "deprecation",
 ]
