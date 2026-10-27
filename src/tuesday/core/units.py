@@ -4,7 +4,7 @@ import astropy.units as un
 from astropy.cosmology.units import littleh
 
 
-def littleh_power(unit: un.UnitBase) -> float:
+def get_littleh_power(unit: un.UnitBase) -> float:
     """Get the power to which little-h appears in a unit.
 
     Little-h is an irreducible unit, so it survives decomposition, and its power can be
@@ -37,7 +37,7 @@ def without_littleh(unit: un.UnitBase) -> un.UnitBase:
     astropy.units.UnitBase
         The unit, with all factors of little-h divided out.
     """
-    return un.Unit(unit) / littleh ** littleh_power(unit)
+    return un.Unit(unit) / littleh ** get_littleh_power(unit)
 
 
 def validate(qt: un.Quantity, unit: str) -> None:

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import astropy.units as un
 import numpy as np
 
-from ..units import littleh_power, without_littleh
+from ..units import get_littleh_power, without_littleh
 
 
 def _validate_ps_units(
@@ -24,7 +24,7 @@ def _validate_ps_units(
                 f"Unit of {name} must be a wavenumber, got {k.unit.physical_type}."
             )
 
-    k_hpowers = {name: littleh_power(k.unit) for name, k in wavenumbers.items()}
+    k_hpowers = {name: get_littleh_power(k.unit) for name, k in wavenumbers.items()}
     if len(set(k_hpowers.values())) > 1:
         raise ValueError(
             f"All wavenumbers must have the same power of littleh, got {k_hpowers}."
@@ -50,7 +50,7 @@ def _validate_ps_units(
             0 if ps_type == "dimensionless" else -3 * next(iter(k_hpowers.values()))
         )
 
-    if littleh_power(ps.unit) != expected_hpower:
+    if get_littleh_power(ps.unit) != expected_hpower:
         raise ValueError(
             f"The PS unit ({ps.unit}) has inconsistent littleh with the wavenumbers "
             f"({k_hpowers}): expected littleh**{expected_hpower}."
