@@ -40,17 +40,19 @@ or::
 
     $ uv pip install tuesday-eor
 
-If you are developing ``tuesday``, we recommend using a virtual environment.
-You can create a new environment with ``uv``::
+To use the SKA layouts provided by ``ska-ost-array-config`` in the noise models,
+install the ``ska`` extra. This package is hosted on the SKA package index, so
+it must be given as an extra index::
 
-    $ uv venv --python=3.12 [env-name]
-    $ source .venv/bin/activate
-    $ uv pip install -e ".[dev]"
+    $ pip install "tuesday-eor[ska]" --extra-index-url https://artefact.skao.int/repository/pypi-internal/simple
 
-Then use::
-    $ deactivate
+If you are developing ``tuesday``, we recommend using ``uv``, which creates a
+virtual environment with all development dependencies (including the ``ska``
+extra) from the lockfile::
 
-to exit the virtual environment.
+    $ uv sync --all-extras
+
+Commands can then be run in the environment with ``uv run``, e.g. ``uv run pytest``.
 
 Documentation
 -------------

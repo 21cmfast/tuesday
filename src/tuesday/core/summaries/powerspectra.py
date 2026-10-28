@@ -79,15 +79,16 @@ def calculate_ps(
     calc_2d: bool | None = True,
     kperp_bins: int | np.ndarray | None = None,
     k_weights_2d: Callable | None = ignore_zero_ki,
-    log_bins: bool | None = True,
-    calc_1d: bool | None = False,
+    log_bins: bool = True,
+    calc_1d: bool = False,
     k_bins: int | None = None,
     k_weights_1d: Callable | None = ignore_zero_ki,
-    bin_ave: bool | None = True,
+    bin_ave: bool = True,
     interp: interp_type = None,
     prefactor_fnc: Callable | None = power2delta,
     interp_points_generator: Callable | None = None,
     get_variance: bool | None = False,
+    chunk2: un.Quantity | None = None,
 ) -> tuple[SphericalPS | None, CylindricalPS | None]:
     r"""Calculate power spectra from a lightcone or coeval box.
 
@@ -154,6 +155,14 @@ def calculate_ps(
     if not calc_1d and not calc_2d:
         raise ValueError("At least one of calc_1d or calc_2d must be True.")
 
+    if chunk2 is not None:
+        if not isinstance(chunk2, un.Quantity):
+            raise TypeError("chunk2 should be a Quantity.")
+        if not chunk2.unit.is_equivalent(chunk.unit):
+            raise ValueError("chunk2 should have the same units as chunk.")
+        if chunk2.shape != chunk.shape:
+            raise ValueError("chunk2 should have the same shape as chunk.")
+
     if not isinstance(chunk, un.Quantity):
         raise TypeError("chunk should be a Quantity.")
 
@@ -188,7 +197,7 @@ def calculate_ps(
     ps2d = None
     ps1d = None
     if calc_2d:
-        results = get_power(
+        res = get_power(
             chunk.value,
             (
                 box_length.value,
@@ -196,7 +205,6 @@ def calculate_ps(
                 box_length.value * chunk.shape[-1] / box_side_shape,
             ),
             res_ndim=2,
-            bin_ave=bin_ave,
             bins=kperp_bins,
             log_bins=log_bins,
             nthreads=1,
@@ -205,33 +213,36 @@ def calculate_ps(
             interpolation_method=interp,
             get_variance=get_variance,
             bins_upto_boxlen=True,
+            deltax2=chunk2.to_value(chunk.unit) if chunk2 is not None else None,
         )
-        ps_2d, kperp, lc_var_2d, nmodes, kpar = results
-
-        kpar = np.array(kpar).squeeze()
-        lc_ps_2d = ps_2d[..., kpar > 0]
+        ps_2d = res.power
+        variance = res.variance
+        nmodes = res.nsamples
+        kperp = res.bin_avg if bin_ave else res.bin_centres
+        kpar = np.array(res.k_unbinned).squeeze()
+        ps_2d = ps_2d[..., kpar > 0]
         if get_variance:
-            lc_var_2d = lc_var_2d[..., kpar > 0]
+            variance = variance[..., kpar > 0]
+
         kpar = kpar[kpar > 0]
         ps2d = CylindricalPS(
-            ps=lc_ps_2d * ps_unit,
-            kperp=kperp.squeeze() / box_length.unit,
+            ps=ps_2d * ps_unit,
+            kperp=kperp / box_length.unit,
             kpar=kpar / box_length.unit,
             redshift=chunk_redshift,
             n_modes=nmodes,
-            variance=lc_var_2d * ps_unit**2 if get_variance else None,
+            variance=variance * ps_unit**2 if get_variance else None,
             is_deltasq=prefactor_fnc is not None,
         )
 
     if calc_1d:
-        results = get_power(
+        res = get_power(
             chunk.value,
             (
                 box_length.value,
                 box_length.value,
                 box_length.value * chunk.shape[-1] / box_side_shape,
             ),
-            bin_ave=bin_ave,
             bins=k_bins,
             log_bins=log_bins,
             k_weights=k_weights_1d,
@@ -240,15 +251,19 @@ def calculate_ps(
             interp_points_generator=interp_points_generator,
             get_variance=get_variance,
             bins_upto_boxlen=True,
+            deltax2=chunk2.to_value(chunk.unit) if chunk2 is not None else None,
         )
-        lc_ps_1d, k, lc_var_1d, nmodes_1d = results
+        ps_1d = res.power
+        var_1d = res.variance
+        nmodes_1d = res.nsamples
+        k = res.bin_avg if bin_ave else res.bin_centres
 
         ps1d = SphericalPS(
-            ps=lc_ps_1d * ps_unit,
+            ps=ps_1d * ps_unit,
             k=k.squeeze() / box_length.unit,
             redshift=chunk_redshift,
             n_modes=nmodes_1d.squeeze(),
-            variance=lc_var_1d * ps_unit**2 if get_variance else None,
+            variance=var_1d * ps_unit**2 if get_variance else None,
             is_deltasq=prefactor_fnc is not None,
         )
 
@@ -260,6 +275,7 @@ def calculate_ps_lc(
     box_length: un.Quantity,
     lc_redshifts: np.ndarray,
     *,
+    lc2: un.Quantity | None = None,
     ps_redshifts: float | np.ndarray | None = None,
     chunk_indices: list | None = None,
     chunk_size: int | None = None,
@@ -391,7 +407,8 @@ def calculate_ps_lc(
 
             interp_points_generator = above_mu_min_angular_generator(mu=mu_min)
     else:
-        k_weights_1d = ignore_zero_ki
+        if k_weights_1d is None:
+            k_weights_1d = ignore_zero_ki
         if interp is not None:
             interp_points_generator = regular_angular_generator()
 
@@ -409,6 +426,7 @@ def calculate_ps_lc(
             chunk_z = lc_redshifts[(start + end) // 2]
         ps1d, ps2d = calculate_ps(
             chunk=chunk,
+            chunk2=lc2[..., start:end] if lc2 is not None else None,
             box_length=box_length,
             chunk_redshift=chunk_z,
             calc_2d=calc_2d,
@@ -439,6 +457,7 @@ def calculate_ps_coeval(
     box: un.Quantity,
     box_length: un.Quantity,
     *,
+    box2: un.Quantity | None = None,
     box_redshift: float | None = None,
     calc_2d: bool | None = True,
     kperp_bins: int | None = None,
@@ -574,6 +593,7 @@ def calculate_ps_coeval(
 
     ps1d, ps2d = calculate_ps(
         chunk=box,
+        chunk2=box2,
         box_length=box_length,
         chunk_redshift=box_redshift,
         calc_2d=calc_2d,
