@@ -187,7 +187,7 @@ def test_exceptions(tmp_path: Path):
     cache.PerturbedField[cache.inputs.node_redshifts[-1]].unlink()
     lightconer = AngularLightconer.like_rectilinear(
         simulation_options=cache.inputs.simulation_options,
-        max_redshift=10,
+        max_redshift=9.6,
         match_at_z=6.0,
         quantities=("density", "brightness_temp"),
     )

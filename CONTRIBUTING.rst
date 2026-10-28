@@ -85,7 +85,7 @@ How to set up your development environment
 
 Set up the dev environment::
 
-    $ pip install -e ".[dev]"
+    $ uv sync --all-extras
 
 
 How to test the project
