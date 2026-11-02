@@ -70,13 +70,16 @@ def gen_coeval(
         for cache_file in output_cache.list_datasets(redshift=z)
     }
 
-    halos = cache_obj["HaloCatalog"]
-    _, intensity = calculate_cii(halos, model, seed=seed)
+    halo_catalog = cache_obj["HaloCatalog"]
+    _, intensity = calculate_cii(halo_catalog, model, seed=seed)
 
-    box_len = halos.simulation_options.BOX_LEN
-    resolution = halos.simulation_options.HII_DIM
-    # Halo coordinates are in Mpc; convert them to cell units.
-    coordinates = halos.get("halo_coords") / (box_len / resolution)
+    box_len = halo_catalog.simulation_options.BOX_LEN
+    resolution = halo_catalog.simulation_options.HII_DIM
+    # Halo coordinates are in Mpc; convert them to cell units. Only the first
+    # n_halos entries are real halos, matching the output of calculate_cii.
+    coordinates = halo_catalog.get("halo_coords")[: halo_catalog.n_halos] / (
+        box_len / resolution
+    )
     cii_intensity, _ = np.histogramdd(
         coordinates,
         bins=resolution,

@@ -36,8 +36,9 @@ def mock_halos(monkeypatch) -> SimpleNamespace:
     )
     return SimpleNamespace(
         redshift=REDSHIFT,
-        inputs=None,
+        inputs=SimpleNamespace(astro_options=SimpleNamespace(USE_TS_FLUCT=True)),
         cosmo_params=SimpleNamespace(cosmo=Planck18),
+        n_halos=n_halos,
         get=lambda key: np.zeros(n_halos),
     )
 
@@ -45,6 +46,54 @@ def mock_halos(monkeypatch) -> SimpleNamespace:
 def test_unknown_model_raises():
     with pytest.raises(ValueError, match="Unknown \\[CII\\] model"):
         calculate_cii(None, "Silva15")
+
+
+@pytest.mark.parametrize("model", ["Vallini15", "Horlaville24"])
+def test_metallicity_models_need_ts_fluct(mock_halos, model: str):
+    # 21cmFAST only computes halo metallicities when USE_TS_FLUCT is on.
+    mock_halos.inputs.astro_options.USE_TS_FLUCT = False
+    with pytest.raises(ValueError, match="USE_TS_FLUCT"):
+        calculate_cii(mock_halos, model, seed=1)
+
+
+@pytest.mark.parametrize("model", ["deLooze14", "Lagache18", "Casavecchia24"])
+def test_sfr_models_without_ts_fluct(mock_halos, model: str):
+    mock_halos.inputs.astro_options.USE_TS_FLUCT = False
+    lum, _ = calculate_cii(mock_halos, model, seed=1)
+
+    assert np.all(lum > 0)
+
+
+def test_padding_is_trimmed(monkeypatch):
+    # 21cmFAST pads halo arrays with zeros beyond the n_halos real halos.
+    n_halos, n_padded = 1_000, 1_500
+    received = {}
+
+    def fake_convert(**kwargs):
+        received.update(kwargs)
+        n = len(kwargs["halo_masses"])
+        return {
+            "halo_mass": np.full(n, 1e11),
+            "halo_stars": np.full(n, 1e9),
+            "halo_sfr": np.full(n, 1.0 / un.yr.to(un.s)),
+            "metallicity": np.full(n, 0.2),
+        }
+
+    monkeypatch.setattr(cii_calculation, "convert_halo_properties", fake_convert)
+    halos = SimpleNamespace(
+        redshift=REDSHIFT,
+        inputs=SimpleNamespace(astro_options=SimpleNamespace(USE_TS_FLUCT=True)),
+        cosmo_params=SimpleNamespace(cosmo=Planck18),
+        n_halos=n_halos,
+        get=lambda key: np.zeros((n_padded, 3) if key == "halo_coords" else n_padded),
+    )
+    lum, intens = calculate_cii(halos, "Vallini15", seed=0)
+
+    for key in ("halo_masses", "star_rng", "sfr_rng", "xray_rng"):
+        assert len(received[key]) == n_halos
+    assert received["halo_coords"].shape == (n_halos, 3)
+    assert lum.shape == intens.shape == (n_halos,)
+    assert np.all(np.isfinite(intens))
 
 
 @pytest.mark.parametrize("model", CII_MODELS)

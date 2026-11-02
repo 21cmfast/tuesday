@@ -15,7 +15,7 @@ from astropy import units as un
 from astropy.cosmology import FLRW, z_at_value
 from py21cmfast import LightCone
 from py21cmfast.wrapper.cfuncs import convert_halo_properties
-from py21cmfast.wrapper.outputs import HaloCatalog, PerturbedHaloCatalog
+from py21cmfast.wrapper.outputs import HaloCatalog
 
 #: Rest-frame frequency of the [CII] 2P3/2 -> 2P1/2 fine-structure line.
 NU_CII_REST = 1900.5369 * un.GHz
@@ -144,9 +144,12 @@ _LOG_LCII: dict[str, Callable[..., np.ndarray]] = {
 #: Names of the available [CII] luminosity models.
 CII_MODELS = tuple(_LOG_LCII)
 
+#: Models that depend on the halo metallicity.
+METALLICITY_MODELS = ("Vallini15", "Horlaville24")
+
 
 def calculate_cii(
-    pt_halos: HaloCatalog | PerturbedHaloCatalog,
+    halo_catalog: HaloCatalog,
     model: str,
     seed: int | np.random.Generator | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -159,8 +162,9 @@ def calculate_cii(
 
     Parameters
     ----------
-    pt_halos : HaloCatalog or PerturbedHaloCatalog
-        Halo catalogue at a single redshift.
+    halo_catalog : HaloCatalog
+        Halo catalogue at a single redshift. Only its first ``n_halos`` entries
+        (the real halos, not the zero padding) are used.
     model : str
         The [CII] luminosity model, one of :data:`CII_MODELS`:
 
@@ -176,30 +180,45 @@ def calculate_cii(
     Returns
     -------
     luminosity : np.ndarray
-        [CII] luminosity of each halo, in Lsun.
+        [CII] luminosity of each of the ``n_halos`` halos, in Lsun.
     intensity : np.ndarray
         Velocity-integrated [CII] flux density of each halo, in Jy km/s.
 
     Raises
     ------
     ValueError
-        If ``model`` is not one of :data:`CII_MODELS`.
+        If ``model`` is not one of :data:`CII_MODELS`, or if it depends on the
+        metallicity (:data:`METALLICITY_MODELS`) but the simulation was run without
+        ``USE_TS_FLUCT``, in which case 21cmFAST does not compute halo
+        metallicities and returns zero.
     """
     if model not in _LOG_LCII:
         raise ValueError(
             f"Unknown [CII] model '{model}'. Available models are {list(CII_MODELS)}."
         )
+    if (
+        model in METALLICITY_MODELS
+        and not halo_catalog.inputs.astro_options.USE_TS_FLUCT
+    ):
+        raise ValueError(
+            f"The [CII] model '{model}' needs halo metallicities, which 21cmFAST "
+            "only computes when USE_TS_FLUCT=True. Rerun the simulation with "
+            "USE_TS_FLUCT=True, or use one of the SFR-only models: "
+            f"{[m for m in CII_MODELS if m not in METALLICITY_MODELS]}."
+        )
     rng = np.random.default_rng(seed)
 
-    redshift = pt_halos.redshift
+    redshift = halo_catalog.redshift
+    # 21cmFAST pads the halo arrays with zeros beyond the n_halos real halos.
+    n_halos = halo_catalog.n_halos
     halo_props = convert_halo_properties(
         redshift=redshift,
-        inputs=pt_halos.inputs,
-        halo_masses=pt_halos.get("halo_masses"),
-        halo_coords=pt_halos.get("halo_coords"),
-        star_rng=pt_halos.get("star_rng"),
-        sfr_rng=pt_halos.get("sfr_rng"),
-        xray_rng=pt_halos.get("xray_rng"),
+        inputs=halo_catalog.inputs,
+        halo_masses=halo_catalog.get("halo_masses")[:n_halos],
+        halo_coords=halo_catalog.get("halo_coords")[:n_halos],
+        star_rng=halo_catalog.get("star_rng")[:n_halos],
+        sfr_rng=halo_catalog.get("sfr_rng")[:n_halos],
+        xray_rng=halo_catalog.get("xray_rng")[:n_halos],
     )
     # 21cmFAST gives the SFR in Msun/s.
     sfr_yr = halo_props["halo_sfr"] * un.yr.to(un.s)
@@ -209,7 +228,7 @@ def calculate_cii(
     )
     luminosity = 10**log_lum
 
-    cosmo = pt_halos.cosmo_params.cosmo
+    cosmo = halo_catalog.cosmo_params.cosmo
     d_lum = cosmo.luminosity_distance(redshift).to_value(un.Mpc)
     nu_obs = NU_CII_REST.to_value(un.GHz) / (1 + redshift)
     intensity = luminosity / 1.04e-3 / d_lum**2 / nu_obs
