@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from astropy import constants as const
 from astropy import units as un
-from astropy.cosmology import Planck18, z_at_value
+from astropy.cosmology import FlatLambdaCDM, Planck18, z_at_value
 
 from tuesday.simulators.py21cmfast.postprocessing import cii_calculation
 from tuesday.simulators.py21cmfast.postprocessing.cii_calculation import (
@@ -17,6 +17,7 @@ from tuesday.simulators.py21cmfast.postprocessing.cii_calculation import (
 )
 
 REDSHIFT = 7.0
+OTHER_COSMO = FlatLambdaCDM(H0=60.0, Om0=0.4)
 
 
 @pytest.fixture
@@ -34,7 +35,10 @@ def mock_halos(monkeypatch) -> SimpleNamespace:
         cii_calculation, "convert_halo_properties", lambda **kwargs: props
     )
     return SimpleNamespace(
-        redshift=REDSHIFT, inputs=None, get=lambda key: np.zeros(n_halos)
+        redshift=REDSHIFT,
+        inputs=None,
+        cosmo_params=SimpleNamespace(cosmo=Planck18),
+        get=lambda key: np.zeros(n_halos),
     )
 
 
@@ -87,15 +91,27 @@ def test_intensity_from_luminosity(mock_halos):
     np.testing.assert_allclose(intens, lum / (1.04e-3 * d_lum**2 * nu_obs), rtol=1e-12)
 
 
-def make_intensity_lightcone(intensity: np.ndarray) -> SimpleNamespace:
+def test_intensity_uses_simulation_cosmology(mock_halos):
+    mock_halos.cosmo_params = SimpleNamespace(cosmo=OTHER_COSMO)
+    lum, intens = calculate_cii(mock_halos, "deLooze14", seed=0)
+
+    d_lum = OTHER_COSMO.luminosity_distance(REDSHIFT).to_value(un.Mpc)
+    nu_obs = NU_CII_REST.to_value(un.GHz) / (1 + REDSHIFT)
+    np.testing.assert_allclose(intens, lum / (1.04e-3 * d_lum**2 * nu_obs), rtol=1e-12)
+
+
+def make_intensity_lightcone(
+    intensity: np.ndarray, cosmo: FlatLambdaCDM = Planck18
+) -> SimpleNamespace:
     """Create a minimal stand-in for a LightCone carrying a [CII] intensity grid."""
     distances = np.linspace(8000.0, 8400.0, intensity.shape[-1]) * un.Mpc
-    redshifts = z_at_value(Planck18.comoving_distance, distances).value
+    redshifts = z_at_value(cosmo.comoving_distance, distances).value
     return SimpleNamespace(
         lightcone_redshifts=redshifts,
         lightcone_distances=distances,
         lightcones={"CII_IntensityBox": intensity},
         simulation_options=SimpleNamespace(BOX_LEN=40.0, HII_DIM=4),
+        cosmo_params=SimpleNamespace(cosmo=cosmo),
     )
 
 
@@ -105,11 +121,14 @@ def reference_bvoxel(lightcone: SimpleNamespace) -> np.ndarray:
     nu_cii = NU_CII_REST.to_value(un.GHz)
     cell_size = 10.0 * un.Mpc
     dcomv = lightcone.lightcone_distances
+    cosmo = lightcone.cosmo_params.cosmo
     solid_angle = (cell_size / dcomv) ** 2
     delta_nu = np.zeros(dcomv.shape)
+    # A tight tolerance: the default one gives errors of ~1e-6 in delta_nu.
+    tol = {"ztol": 1e-12, "maxfun": 10_000}
     for i in range(len(dcomv)):
-        z_front = z_at_value(Planck18.comoving_distance, dcomv[i] - cell_size / 2)
-        z_back = z_at_value(Planck18.comoving_distance, dcomv[i] + cell_size / 2)
+        z_front = z_at_value(cosmo.comoving_distance, dcomv[i] - cell_size / 2, **tol)
+        z_back = z_at_value(cosmo.comoving_distance, dcomv[i] + cell_size / 2, **tol)
         delta_nu[i] = nu_cii / (1 + z_front.value) - nu_cii / (1 + z_back.value)
     intensity = lightcone.lightcones["CII_IntensityBox"]
     return (
@@ -120,9 +139,10 @@ def reference_bvoxel(lightcone: SimpleNamespace) -> np.ndarray:
     )
 
 
-def test_bvoxel_matches_reference():
+@pytest.mark.parametrize("cosmo", [Planck18, OTHER_COSMO], ids=["Planck18", "other"])
+def test_bvoxel_matches_reference(cosmo: FlatLambdaCDM):
     rng = np.random.default_rng(0)
-    lightcone = make_intensity_lightcone(rng.uniform(0, 1, size=(4, 4, 6)))
+    lightcone = make_intensity_lightcone(rng.uniform(0, 1, size=(4, 4, 6)), cosmo)
 
     np.testing.assert_allclose(
         calculate_bvoxel(lightcone), reference_bvoxel(lightcone), rtol=1e-6
@@ -137,3 +157,21 @@ def test_bvoxel_is_linear_in_intensity():
 
     np.testing.assert_allclose(b3, 3 * b1, rtol=1e-12)
     assert np.all(b1 >= 0)
+
+
+def test_bvoxel_depends_on_cosmology():
+    intensity = np.ones((4, 4, 6))
+    b_planck = calculate_bvoxel(make_intensity_lightcone(intensity, Planck18))
+    b_other = calculate_bvoxel(make_intensity_lightcone(intensity, OTHER_COSMO))
+
+    assert not np.allclose(b_planck, b_other, rtol=1e-3)
+
+
+def test_bvoxel_angular_lightcone():
+    rng = np.random.default_rng(2)
+    intensity = rng.uniform(0, 1, size=(4, 4, 6))
+    b_3d = calculate_bvoxel(make_intensity_lightcone(intensity))
+    # Angular lightcones store fields as (pixel, slice).
+    b_2d = calculate_bvoxel(make_intensity_lightcone(intensity.reshape(16, 6)))
+
+    np.testing.assert_allclose(b_2d, b_3d.reshape(16, 6), rtol=1e-12)

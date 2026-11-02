@@ -12,13 +12,29 @@ from collections.abc import Callable
 import numpy as np
 from astropy import constants as const
 from astropy import units as un
-from astropy.cosmology import Planck18, z_at_value
+from astropy.cosmology import FLRW, z_at_value
 from py21cmfast import LightCone
 from py21cmfast.wrapper.cfuncs import convert_halo_properties
 from py21cmfast.wrapper.outputs import HaloCatalog, PerturbedHaloCatalog
 
 #: Rest-frame frequency of the [CII] 2P3/2 -> 2P1/2 fine-structure line.
 NU_CII_REST = 1900.5369 * un.GHz
+
+
+def _comoving_distance_to_redshift(
+    cosmo: FLRW, distances: un.Quantity[un.Mpc]
+) -> np.ndarray:
+    """Invert the comoving distance-redshift relation for an array of distances.
+
+    The relation is tabulated on a fine redshift grid and interpolated, which is much
+    faster than solving for each distance separately.
+    """
+    d_mpc = distances.to_value(un.Mpc)
+    z_lo = z_at_value(cosmo.comoving_distance, d_mpc.min() * un.Mpc).value
+    z_hi = z_at_value(cosmo.comoving_distance, d_mpc.max() * un.Mpc).value
+    z_grid = np.linspace(max(z_lo - 0.01, 0.0), z_hi + 0.01, 10_000)
+    d_grid = cosmo.comoving_distance(z_grid).to_value(un.Mpc)
+    return np.interp(d_mpc, d_grid, z_grid)
 
 
 def _mean_preserving_lognormal(
@@ -139,6 +155,7 @@ def calculate_cii(
     The velocity-integrated flux density follows from the luminosity as
     ``L [Lsun] = 1.04e-3 S dv [Jy km/s] nu_obs [GHz] D_L^2 [Mpc^2]``
     (Solomon & Vanden Bout 2005, ARA&A, 43, 677), with no lensing magnification.
+    The luminosity distance uses the cosmology of the simulation.
 
     Parameters
     ----------
@@ -192,7 +209,8 @@ def calculate_cii(
     )
     luminosity = 10**log_lum
 
-    d_lum = Planck18.luminosity_distance(redshift).to_value(un.Mpc)
+    cosmo = pt_halos.cosmo_params.cosmo
+    d_lum = cosmo.luminosity_distance(redshift).to_value(un.Mpc)
     nu_obs = NU_CII_REST.to_value(un.GHz) / (1 + redshift)
     intensity = luminosity / 1.04e-3 / d_lum**2 / nu_obs
 
@@ -204,6 +222,8 @@ def calculate_bvoxel(lightcone: LightCone) -> np.ndarray:
 
     Each cell's velocity-integrated flux density ``S dv`` is spread over the solid
     angle and frequency width of the cell: ``B = S dv nu_obs / (c dnu Omega)``.
+    The frequency width uses the cosmology of the simulation. Both rectilinear
+    (``(x, y, slice)``) and angular (``(pixel, slice)``) lightcones are supported.
 
     Parameters
     ----------
@@ -223,8 +243,9 @@ def calculate_bvoxel(lightcone: LightCone) -> np.ndarray:
     d_comv = lightcone.lightcone_distances
 
     solid_angle = (cell_size / d_comv) ** 2 * un.sr
-    z_front = z_at_value(Planck18.comoving_distance, d_comv - cell_size / 2).value
-    z_back = z_at_value(Planck18.comoving_distance, d_comv + cell_size / 2).value
+    cosmo = lightcone.cosmo_params.cosmo
+    z_front = _comoving_distance_to_redshift(cosmo, d_comv - cell_size / 2)
+    z_back = _comoving_distance_to_redshift(cosmo, d_comv + cell_size / 2)
     delta_nu = NU_CII_REST / (1 + z_front) - NU_CII_REST / (1 + z_back)
 
     conversion = nu_obs / (const.c * delta_nu * solid_angle)

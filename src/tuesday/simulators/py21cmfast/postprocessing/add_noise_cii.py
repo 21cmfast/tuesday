@@ -8,7 +8,9 @@ of the instrument, smoothed with the Gaussian instrument beam, and white noise w
 per-pixel rms of the survey is added.
 """
 
+import copy
 import logging
+import warnings
 from typing import Any
 
 import numpy as np
@@ -105,7 +107,17 @@ def calculate_noise(
     nu_obs : un.Quantity[un.GHz]
         Observed frequency.
     noise_template : LIMInstrument or str
-        The instrument, or the name of a built-in instrument template.
+        The instrument, or the name of a built-in instrument template (see
+        ``lim_instrument_templates/`` for every value and its reference):
+
+        - ``"ccatp"``: CCAT-prime / FYST EoR-Spec (CCAT-Prime Collaboration 2023,
+          arXiv:2107.10364; Horlaville et al. 2024, arXiv:2309.15733).
+        - ``"ccatp2"``: an extended CCAT-prime survey (Horlaville et al. 2024,
+          arXiv:2309.15733).
+        - ``"time"``: TIME (Chung et al. 2020, ApJ, 892, 51; Sun et al. 2021,
+          arXiv:2012.09160).
+        - ``"time2"``: an upgraded TIME survey (Sun et al. 2021, arXiv:2012.09160).
+        - ``"atlast"``: AtLAST, with the sensitivity computed by ``atlast_sc``.
 
     Returns
     -------
@@ -179,35 +191,49 @@ def add_cii_noise(
     """Mock-observe a [CII] lightcone with a line-intensity-mapping instrument.
 
     For each lightcone slice at observed frequency ``nu``, the [CII] surface
-    brightness is summed over the slices within one spectral channel
+    brightness is averaged over the slices within one spectral channel
     (``nu +/- nu / (2 R)``), smoothed with the Gaussian beam of the instrument, and
     Gaussian white noise with the rms from :func:`calculate_noise` is added.
+    Slices outside the frequency range of the instrument are set to NaN.
 
     Parameters
     ----------
     lc_obj : LightCone
-        Lightcone with a ``"CII_BrightnessDensity"`` field in Jy/sr, as produced by
-        :func:`~.cii_lightcone.gen_lc`.
+        Rectilinear lightcone with a ``"CII_BrightnessDensity"`` field in Jy/sr, as
+        produced by :func:`~.cii_lightcone.gen_lc`. It is not modified.
     noise_template : LIMInstrument or str
-        The instrument, or the name of a built-in instrument template.
+        The instrument, or the name of a built-in instrument template; see
+        :func:`calculate_noise` for the built-in templates.
     seed : int, optional
         Seed for the noise realisation. If None, a random seed is used.
 
     Returns
     -------
     LightCone
-        The input lightcone, with three new fields in Jy/sr, named after the
-        instrument: ``"noise_<name>"`` (the noise),  ``"Bcii_<name>"`` (the
-        beam-smoothed signal) and ``"Bcii_<name>_noise"`` (their sum).
+        A copy of ``lc_obj`` with three new fields in Jy/sr, named after the
+        instrument: ``"noise_<name>"`` (the noise), ``"Bcii_<name>"`` (the
+        beam-smoothed signal) and ``"Bcii_<name>_noise"`` (their sum). The other
+        fields are shared with ``lc_obj``.
 
     Raises
     ------
     ValueError
-        If ``noise_template`` is not the name of a built-in template.
+        If ``noise_template`` is not the name of a built-in template, or the
+        lightcone is not rectilinear.
+
+    Warns
+    -----
+    UserWarning
+        If some slices are outside the frequency range of the instrument.
     """
     instrument = _as_instrument(noise_template)
     nu_lc = NU_CII_REST / (1 + lc_obj.lightcone_redshifts)
     b_cii = lc_obj.lightcones["CII_BrightnessDensity"]
+    if b_cii.ndim != 3:
+        raise ValueError(
+            "add_cii_noise needs a rectilinear lightcone with (x, y, slice) fields; "
+            f"got a field with shape {b_cii.shape}."
+        )
     cell_size = (
         lc_obj.simulation_options.BOX_LEN / lc_obj.simulation_options.HII_DIM * un.Mpc
     )
@@ -216,9 +242,21 @@ def add_cii_noise(
     noise = np.zeros(b_cii.shape)
     b_conv = np.zeros(b_cii.shape)
 
+    in_band = (nu_lc >= instrument.min_frequency) & (nu_lc <= instrument.max_frequency)
+    if not in_band.all():
+        warnings.warn(
+            f"{np.sum(~in_band)} of {nu_lc.size} lightcone slices are outside the "
+            f"{instrument.min_frequency} - {instrument.max_frequency} band of "
+            f"'{instrument.name}'; they are set to NaN.",
+            stacklevel=2,
+        )
+    noise[..., ~in_band] = np.nan
+    b_conv[..., ~in_band] = np.nan
+
     logger.info("Adding %s noise (seed=%s)", instrument.name, seed)
 
-    for i, nu_obs in enumerate(nu_lc):
+    for i in np.flatnonzero(in_band):
+        nu_obs = nu_lc[i]
         noise_info = calculate_noise(nu_obs, instrument)
         rms = noise_info["RMS_sigma"].to_value(un.Jy / un.sr)
 
@@ -234,13 +272,16 @@ def add_cii_noise(
 
         half_bw = noise_info["bw_sens"] / 2
         in_channel = (nu_lc > nu_obs - half_bw) & (nu_lc < nu_obs + half_bw)
-        b_channel = b_cii[..., in_channel].sum(axis=-1)
+        b_channel = b_cii[..., in_channel].mean(axis=-1)
 
         noise[..., i] = rng.normal(loc=0.0, scale=1.0, size=b_channel.shape) * rms
         b_conv[..., i] = gaussian_filter(b_channel, sigma=beam_sigma_cells)
 
-    lc_obj.lightcones[f"noise_{instrument.name}"] = noise
-    lc_obj.lightcones[f"Bcii_{instrument.name}"] = b_conv
-    lc_obj.lightcones[f"Bcii_{instrument.name}_noise"] = b_conv + noise
-
-    return lc_obj
+    observed = copy.copy(lc_obj)
+    observed.lightcones = {
+        **lc_obj.lightcones,
+        f"noise_{instrument.name}": noise,
+        f"Bcii_{instrument.name}": b_conv,
+        f"Bcii_{instrument.name}_noise": b_conv + noise,
+    }
+    return observed

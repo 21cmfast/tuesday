@@ -354,3 +354,35 @@ def test_add_cii_noise_accepts_instrument():
 def test_add_cii_noise_bad_template():
     with pytest.raises(ValueError, match="Input a correct instrument template"):
         add_cii_noise(make_lightcone(), "ccat", seed=1)
+
+
+def test_add_cii_noise_does_not_mutate_input():
+    lc = make_lightcone()
+    original = lc.lightcones["CII_BrightnessDensity"]
+    out = add_cii_noise(lc, "ccatp", seed=1)
+
+    assert set(lc.lightcones) == {"CII_BrightnessDensity"}
+    assert out is not lc
+    assert out.lightcones["CII_BrightnessDensity"] is original
+
+
+def test_add_cii_noise_masks_out_of_band():
+    # CCAT-prime covers 210-420 GHz, i.e. [CII] at z < 8.05.
+    redshifts = np.linspace(7.8, 8.3, 30)
+    with pytest.warns(UserWarning, match="outside the 210.0 GHz - 420.0 GHz band"):
+        lc = add_cii_noise(make_lightcone(redshifts=redshifts), "ccatp", seed=1)
+
+    nu = NU_CII_REST / (1 + redshifts)
+    out_of_band = nu < 210 * un.GHz
+    assert out_of_band.any()
+    assert not out_of_band.all()
+    for key in ("noise_ccatp", "Bcii_ccatp", "Bcii_ccatp_noise"):
+        assert np.all(np.isnan(lc.lightcones[key][..., out_of_band]))
+        assert np.all(np.isfinite(lc.lightcones[key][..., ~out_of_band]))
+
+
+def test_add_cii_noise_rejects_angular_lightcone():
+    lc = make_lightcone()
+    lc.lightcones["CII_BrightnessDensity"] = lc.lightcones["CII_BrightnessDensity"][0]
+    with pytest.raises(ValueError, match="rectilinear"):
+        add_cii_noise(lc, "ccatp", seed=1)

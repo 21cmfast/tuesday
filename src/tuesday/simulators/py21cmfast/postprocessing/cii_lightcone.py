@@ -11,6 +11,7 @@ import logging
 from itertools import pairwise
 from pathlib import Path
 
+import attrs
 import numpy as np
 import py21cmfast as p21c
 from attrs import define, field
@@ -36,24 +37,6 @@ class CIICoeval(p21c.Coeval):
     """
 
     CII_IntensityBox: np.ndarray = field(default=None)
-
-
-@define(slots=False)
-class CIILightcone(p21c.LightCone):
-    """A 21cmFAST lightcone with [CII]-specific attributes.
-
-    Parameters
-    ----------
-    CII_BrightnessDensity : np.ndarray
-        [CII] surface brightness in each cell, in Jy/sr.
-    CII_observation : np.ndarray
-        Mock-observed [CII] surface brightness in each cell, in Jy/sr.
-    **kwargs
-        Arguments of :class:`py21cmfast.LightCone`.
-    """
-
-    CII_BrightnessDensity: np.ndarray = field(default=None)
-    CII_observation: np.ndarray = field(default=None)
 
 
 def gen_coeval(
@@ -151,17 +134,18 @@ def gen_lc(
     model: str,
     directory_path: str | Path,
     seed: int | np.random.Generator | None = None,
-) -> CIILightcone:
+) -> p21c.LightCone:
     """Build a [CII] surface-brightness lightcone from a 21cmFAST run.
+
+    Neither ``lc`` nor ``lcn`` is modified: the [CII] fields are added to a new
+    lightcone, which shares the other fields with ``lc``.
 
     Parameters
     ----------
     lc : py21cmfast.LightCone
-        The 21cmFAST lightcone of the run. A ``"CII_IntensityBox"`` field is added
-        to its ``lightcones``.
+        The 21cmFAST lightcone of the run.
     lcn : Lightconer
-        The lightconer used for the run. Its ``quantities`` are set to
-        ``["CII_IntensityBox", "brightness_temp"]``.
+        The lightconer used for the run, which sets the lightcone geometry.
     model : str
         The [CII] luminosity model; see :func:`~.cii_calculation.calculate_cii`.
     directory_path : str or Path
@@ -172,35 +156,27 @@ def gen_lc(
 
     Returns
     -------
-    CIILightcone
-        The lightcone, with ``"CII_IntensityBox"`` (Jy km/s per cell) and
-        ``"CII_BrightnessDensity"`` (Jy/sr) fields.
+    py21cmfast.LightCone
+        A copy of ``lc`` with two new fields in ``lightcones``:
+        ``"CII_IntensityBox"`` (Jy km/s per cell) and ``"CII_BrightnessDensity"``
+        (Jy/sr).
     """
-    lcn.quantities = ["CII_IntensityBox", "brightness_temp"]
-    # The lightconer only fills in quantities that already exist in the lightcone.
-    lc.lightcones["CII_IntensityBox"] = np.zeros(lc.lightcones["brightness_temp"].shape)
+    cii_lcn = attrs.evolve(lcn, quantities=("CII_IntensityBox",))
+    intensity = np.zeros(lc.lightcones["brightness_temp"].shape)
 
     coeval_list = gen_coeval_list(lc, model, directory_path, seed=seed)
     for coeval1, coeval2 in pairwise(coeval_list):
-        for scalar_field, lcidx, slice_data in lcn.make_lightcone_slices(
+        for scalar_field, lcidx, slice_data in cii_lcn.make_lightcone_slices(
             c1=coeval1, c2=coeval2
         ):
-            # The lightconer can return slices beyond the end of the lightcone.
-            if (
-                scalar_field in lc.lightcones
-                and lcidx < lc.lightcones[scalar_field].shape[-1]
-            ):
-                lc.lightcones[scalar_field][..., lcidx] = slice_data
+            # The lightconer can return no slice, or slices beyond the lightcone.
+            if scalar_field is not None and lcidx < intensity.shape[-1]:
+                intensity[..., lcidx] = slice_data
 
-    cii_lc = CIILightcone(
-        lightcone_distances=lc.lightcone_distances,
-        inputs=lc.inputs,
-        lightcones=lc.lightcones,
-        global_quantities=lc.global_quantities,
-        photon_nonconservation_data={},
+    cii_lc = attrs.evolve(
+        lc, lightcones={**lc.lightcones, "CII_IntensityBox": intensity}
     )
-
     logger.info("Calculating the [CII] surface brightness")
-    cii_lc.lightcones["CII_BrightnessDensity"] = calculate_bvoxel(lc)
+    cii_lc.lightcones["CII_BrightnessDensity"] = calculate_bvoxel(cii_lc)
 
     return cii_lc
