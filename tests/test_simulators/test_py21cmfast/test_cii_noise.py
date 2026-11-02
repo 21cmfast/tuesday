@@ -344,6 +344,15 @@ def test_add_cii_noise_beam_preserves_uniform_signal():
     assert np.all(smoothed > 0)
 
 
+@pytest.mark.parametrize("name", ["ccatp", "time"])
+def test_add_cii_noise_channel_is_averaged(name: str):
+    # Each channel holds many lightcone slices: they must be averaged, not summed,
+    # so a uniform surface brightness is unchanged by the channel integration.
+    lc = add_cii_noise(make_lightcone(brightness=2.0), name, seed=0)
+
+    np.testing.assert_allclose(lc.lightcones[f"Bcii_{name}"], 2.0, rtol=1e-10)
+
+
 def test_add_cii_noise_accepts_instrument():
     inst = LIMInstrument.from_template("ccatp", n_feeds=240)
     lc = add_cii_noise(make_lightcone(), inst, seed=1)
