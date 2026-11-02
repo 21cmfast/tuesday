@@ -1,307 +1,246 @@
-# this script is for adding the instrumental noise to the CII surface brightness density map
-# based on AtLAST
+"""Add instrumental noise to a [CII] surface-brightness lightcone.
+
+The instrument and survey are specified by a
+:class:`~.lim_instruments.LIMInstrument`, usually loaded from a template with
+:meth:`~.lim_instruments.LIMInstrument.from_template`.
+At each frequency of the lightcone, the signal is integrated over one spectral channel
+of the instrument, smoothed with the Gaussian instrument beam, and white noise with the
+per-pixel rms of the survey is added.
+"""
 
 import logging
+from typing import Any
 
-import astropy.constants as cst
-import astropy.units as u
 import numpy as np
-from astropy.io import fits
+from astropy import units as un
 from astropy.stats import gaussian_fwhm_to_sigma
+from py21cmfast import LightCone
 from scipy.ndimage import gaussian_filter
 
-logging.basicConfig(level=logging.INFO)
+from .cii_calculation import NU_CII_REST
+from .lim_instruments import LIMInstrument, beam_solid_angle
+
 logger = logging.getLogger(__name__)
 
 
-def calculate_tpix(nu_obs, Diam, surv_area, t_surv, N_feed):
+def _as_instrument(noise_template: LIMInstrument | str) -> LIMInstrument:
+    """Load an instrument template by name, or pass an instrument through."""
+    if isinstance(noise_template, LIMInstrument):
+        return noise_template
+    return LIMInstrument.from_template(noise_template)
 
-    # nu_cii = 1900.54 * u.GHz
-    # nu_obs = nu_cii/(1+z)
 
-    fwhm_beam = 1.22 * u.rad * cst.c / nu_obs / Diam
-    sigma_beam = fwhm_beam * gaussian_fwhm_to_sigma
-    beam_area = 2.0 * np.pi * sigma_beam**2
-    beam_area = beam_area.to(u.sr)
-    # print('Omega_beam',beam_area)
-    # print('fwhm_beam',fwhm_beam.to(u.deg))
+def calculate_tpix(
+    nu_obs: un.Quantity[un.GHz],
+    diameter: un.Quantity[un.m],
+    survey_area: un.Quantity[un.deg**2],
+    survey_time: un.Quantity[un.hour],
+    n_feeds: int,
+) -> un.Quantity[un.s]:
+    """Calculate the integration time per beam-sized pixel of a survey.
 
-    Omega_surv = surv_area
-    Omega_pix = beam_area
+    The survey time is shared evenly between the ``survey_area / beam_area`` pixels,
+    and each of the ``n_feeds`` feeds observes a different pixel at the same time, so
+    that ``t_pix = survey_time * n_feeds * beam_area / survey_area``.
 
-    t_vox = t_surv / (Omega_surv / Omega_pix)
-    # print('t_vox =',t_vox.to(u.s))
-    t_pix = t_vox * N_feed
-    # print('t_pix =',t_pix.to(u.s))
+    Parameters
+    ----------
+    nu_obs : un.Quantity[un.GHz]
+        Observed frequency, which sets the beam size.
+    diameter : un.Quantity[un.m]
+        Diameter of the primary dish.
+    survey_area : un.Quantity[un.deg**2]
+        Solid angle covered by the survey.
+    survey_time : un.Quantity[un.hour]
+        Total on-sky integration time of the survey.
+    n_feeds : int
+        Number of independent spatial feeds observing at once.
 
-    return t_pix.to(u.s)
+    Returns
+    -------
+    un.Quantity[un.s]
+        Integration time per pixel.
+    """
+    n_pixels = survey_area / beam_solid_angle(nu_obs, diameter)
+    return (survey_time * n_feeds / n_pixels).to(un.s)
+
+
+def _atlast_sensitivity(
+    nu_obs: un.Quantity[un.GHz],
+    bandwidth: un.Quantity[un.GHz],
+    t_pix: un.Quantity[un.s],
+) -> un.Quantity[un.Jy]:
+    """Compute the rms flux density per beam with the AtLAST sensitivity calculator."""
+    try:
+        from atlast_sc.calculator import Calculator
+    except ImportError as err:
+        raise ImportError(
+            "This instrument has no tabulated sensitivity. Computing it requires the "
+            "AtLAST sensitivity calculator: install the 'atlast_sc' package, or set "
+            "the 'sensitivity' parameter of the instrument."
+        ) from err
+
+    calculator = Calculator(
+        {
+            "t_int": {"value": t_pix.to_value(un.s), "unit": "s"},
+            "bandwidth": {"value": bandwidth.to_value(un.GHz), "unit": "GHz"},
+            "obs_freq": {"value": nu_obs.to_value(un.GHz), "unit": "GHz"},
+        }
+    )
+    return un.Quantity(calculator.calculate_sensitivity()).to(un.Jy)
 
 
 def calculate_noise(
-    nu_obs,
-    noise_temp=None,
-    noisefile=None,
-    R=None,
-    Diam=None,
-    f_min=None,
-    f_max=None,
-    val_sens=None,
-    N_feed=None,
-    t_surv=None,
-    surv_area=None,
-    t_pix=None,
-):
+    nu_obs: un.Quantity[un.GHz], noise_template: LIMInstrument | str
+) -> dict[str, Any]:
+    """Calculate the noise properties of an instrument at one observed frequency.
 
-    # for atlast we directly assume a survey chould give t_pix=1 hour
-    if noise_temp == "atlast":
-        N_feed = 1
-        t_surv = 3000 * u.hour
-        surv_area = 600 * u.deg**2
+    The sensitivity of the instrument is converted to an rms surface brightness per
+    beam-sized pixel. A noise-equivalent intensity (NEI) gives ``NEI / sqrt(t_pix)``,
+    a noise-equivalent flux density (NEFD) gives ``NEFD / beam_area / sqrt(t_pix)``,
+    and an rms flux density per beam gives ``rms / beam_area``.
 
-        if noisefile is not None:
-            with fits.open(noisefile) as f_in:
-                R = 1000
-                Diam = 50 * u.m
-                data = f_in[1].data
-                nu_sens = data["nu"] * u.GHz
-                # bw_sens = data['bandwidth'] * u.GHz
-                octiles = np.arange(1, 8) * 12.5
-                octile_sel = 0
-                list_sens = (
-                    [data[f"RMS_noise [octile {octile:.1f}]"] for octile in octiles][
-                        octile_sel
-                    ]
-                    * u.Jy
-                    * (u.hour**0.5)
-                )
-                t_pix = 1000 * u.hour  # in unit of Jy for 1h  #需要1000 hour来达到SNR=3
-                # fwhm_sens = data['FWHM_beam'] * u.deg
-                f_min = 125 * u.GHz
-                f_max = 500 * u.GHz
-                # use nu_lc to interpolate nu_sens(x) and obtain the corresponding noise curve
-                val_sens = np.interp(nu_obs, nu_sens, list_sens)
+    Parameters
+    ----------
+    nu_obs : un.Quantity[un.GHz]
+        Observed frequency.
+    noise_template : LIMInstrument or str
+        The instrument, or the name of a built-in instrument template.
 
-        elif val_sens is not None:
-            val_sens = val_sens
-        else:
-            t_pix = calculate_tpix(nu_obs, Diam, surv_area, t_surv, N_feed)
-            from atlast_sc.calculator import Calculator
+    Returns
+    -------
+    dict
+        The noise properties. The rms surface brightness per pixel, in Jy/sr, is
+        under ``"RMS_sigma"``; the other entries are the instrument parameters, the
+        channel bandwidth ``"bw_sens"``, the redshift range of [CII] in the band
+        (``"z_min"``, ``"z_max"``), the pixel integration time ``"t_pix"``, and the
+        beam ``"fwhm"`` and ``"beam_area"``.
 
-            input_data = {
-                "t_int": {"value": t_pix.value, "unit": f"{t_pix.unit}"},
-                "bandwidth": {"value": bw_sens, "unit": f"{bw_sens.unit}"},
-                "obs_freq": {"value": nu_sens, "unit": f"{nu_sens.unit}"},
-            }
-            calculator = Calculator(input_data)
-            val_sens = calculator.calculate_sensitivity()
+    Raises
+    ------
+    ValueError
+        If ``noise_template`` is not the name of a built-in template.
+    ImportError
+        If the instrument has no tabulated sensitivity and ``atlast_sc`` is not
+        installed.
+    """
+    instrument = _as_instrument(noise_template)
 
-    elif noise_temp == "time":
-        R = 120  # 1812.08135v2 for R=150
-        Diam = 12 * u.m  # 2012.09160v2
-        f_min = 183 * u.GHz
-        f_max = 326 * u.GHz
-        if nu_obs >= 230 * u.GHz:
-            bw_sens = 1.9 * u.GHz  # 1812.08135v2
-            val_sens = 11 * u.MJy * (u.s) ** 0.5 / u.sr  # NEI, 1812.08135v2
-        else:
-            bw_sens = 1.5 * u.GHz  # 1812.08135v2
-            val_sens = 5.2 * u.MJy * (u.s) ** 0.5 / u.sr  # NEI, 1812.08135v2
+    bandwidth = nu_obs / instrument.spectral_resolution
+    beam_area = instrument.beam_solid_angle(nu_obs)
 
-        N_feed = 32  # 1812.08135v2
-        t_surv = 1000 * u.hour  # 1812.08135v2
-        surv_area = 78 * u.arcmin * 0.5 * u.arcmin  # 1812.08135v2
-
-    elif noise_temp == "time2":
-        R = 120  # 2012.09160v2
-        Diam = 10 * u.m  # 2012.09160v2
-        f_min = 183 * u.GHz
-        f_max = 326 * u.GHz
-        if nu_obs >= 230 * u.GHz:
-            bw_sens = 1.9 * u.GHz
-            val_sens = 5 * u.MJy * (u.s) ** 0.5 / u.sr  # NEI, 2012.09160v2
-        else:
-            bw_sens = 1.5 * u.GHz
-            val_sens = 2.5 * u.MJy * (u.s) ** 0.5 / u.sr  # NEI, 2012.09160v2
-
-        N_feed = 32  # 2012.09160v2
-        t_surv = 3000 * u.hour  # 2012.09160v2
-        surv_area = 78 * u.arcmin * 0.5 * u.arcmin
-
-    elif noise_temp == "ccatp":
-        R = 100
-        Diam = 6 * u.m
-        f_min = 210 * u.GHz  # CCAT-prime Collaboration 2023
-        f_max = 420 * u.GHz  # CCAT-prime Collaboration 2023
-        val_sens = 72.5 * u.mJy * (u.s) ** 0.5  # NEFD (Jy s1/2 /beam), 2309.15733v3
-
-        N_feed = 120  # 5040/42                  #CCAT-prime Collaboration 2023
-        t_surv = 2000 * u.hour  # CCAT-prime Collaboration 2023
-        surv_area = 4 * u.deg**2  # CCAT-prime Collaboration 2023
-
-    elif noise_temp == "ccatp2":
-        R = 100
-        Diam = 6 * u.m
-        f_min = 210 * u.GHz
-        f_max = 420 * u.GHz
-        val_sens = 72.5 * u.mJy * (u.s) ** 0.5  # NEFD, 2309.15733v3
-
-        N_feed = 240
-        t_surv = 8000 * u.hour
-        surv_area = 8 * u.deg**2
-        t_pix = 38 * u.hour  # 2309.15733v3
-
+    if instrument.pixel_time is None:
+        t_pix = calculate_tpix(
+            nu_obs,
+            diameter=instrument.dish_diameter,
+            survey_area=instrument.survey_area,
+            survey_time=instrument.survey_time,
+            n_feeds=instrument.n_feeds,
+        )
     else:
-        print("Input a correct instrument template.")
+        t_pix = instrument.pixel_time.to(un.s)
 
-    nu_sens = nu_obs
-    bw_sens = nu_sens / R
-    NU_CII = 1900.54 * u.GHz
-    z_sens = NU_CII / nu_sens - 1
-    z_min, z_max = (f_max / nu_sens - 1), (f_min / nu_sens - 1)
+    sensitivity = instrument.sensitivity_at(nu_obs)
+    if sensitivity is None:
+        sensitivity = _atlast_sensitivity(nu_obs, bandwidth, t_pix)
 
-    fwhm_sens = (
-        1.22 * u.rad * cst.c * (1 / nu_sens).to(u.s, equivalencies=u.spectral()) / Diam
-    )
-    beam_sigma = fwhm_sens * gaussian_fwhm_to_sigma
-    beam_area = 2.0 * np.pi * beam_sigma**2  # solid angle for the instrument beam
-    beam_area = beam_area.to(u.sr)
-
-    if t_pix is None:
-        t_vox = t_surv / (surv_area / beam_area)
-        t_pix = (t_vox * N_feed).to(u.s)
+    if sensitivity.unit.is_equivalent(un.Jy * un.s**0.5 / un.sr):
+        rms = sensitivity / np.sqrt(t_pix)
+    elif sensitivity.unit.is_equivalent(un.Jy * un.s**0.5):
+        rms = sensitivity / beam_area / np.sqrt(t_pix)
     else:
-        t_pix = t_pix.to(u.s)
+        rms = sensitivity / beam_area
 
-    if u.sr in val_sens.unit.bases:
-        val_sens = val_sens.to(u.Jy * (u.s) ** 0.5 / u.sr)  # nei in unit Jy h^1/2 /sr
-        rms = val_sens / np.sqrt(t_pix)  # in unit Jy/sr
-    elif u.s in val_sens.unit.bases or u.hour in val_sens.unit.bases:
-        val_sens = val_sens.to(u.Jy * (u.s) ** 0.5)  # nefd in unit Jy h^1/2 /beam
-        rms = val_sens / beam_area / np.sqrt(t_pix)  # in unit Jy/sr
-    else:
-        val_sens = val_sens.to(u.Jy)  # in unit Jy /beam
-        rms = val_sens / beam_area  # in unit Jy/sr
-
-    noise_info = {
-        "diameter": Diam,
-        "frequency resolution": R,
-        "nu_sens": nu_sens,
-        "bw_sens": bw_sens,
-        "f_min": f_min,
-        "f_max": f_max,
-        "z_min": z_min,
-        "z_max": z_max,
-        "N_feed": N_feed,
-        "t_surv": t_surv,
-        "surv_area": surv_area,
+    return {
+        "diameter": instrument.dish_diameter,
+        "frequency resolution": instrument.spectral_resolution,
+        "nu_sens": nu_obs,
+        "bw_sens": bandwidth,
+        "f_min": instrument.min_frequency,
+        "f_max": instrument.max_frequency,
+        "z_min": (NU_CII_REST / instrument.max_frequency).to_value("") - 1,
+        "z_max": (NU_CII_REST / instrument.min_frequency).to_value("") - 1,
+        "N_feed": instrument.n_feeds,
+        "t_surv": instrument.survey_time,
+        "surv_area": instrument.survey_area,
         "t_pix": t_pix,
-        "fwhm": fwhm_sens,
+        "fwhm": instrument.beam_fwhm(nu_obs),
         "beam_area": beam_area,
-        "NEFD or NEI": val_sens,
-        "RMS_sigma": rms,
+        "NEFD or NEI": sensitivity,
+        "RMS_sigma": rms.to(un.Jy / un.sr),
     }
 
-    return noise_info
 
+def add_cii_noise(
+    lc_obj: LightCone,
+    noise_template: LIMInstrument | str,
+    seed: int | None = None,
+) -> LightCone:
+    """Mock-observe a [CII] lightcone with a line-intensity-mapping instrument.
 
-def add_cii_noise(lc_obj, noise_temp=None, noisefile=None):
-    NU_CII = 1900.54 * u.GHz
-    nu_lc = NU_CII / (1 + lc_obj.lightcone_redshifts)
-    B_cii = lc_obj.lightcones[
-        "CII_BrightnessDensity"
-    ]  # *u.Jy/u.sr   #B_cii should be in unit of Jy/sr
+    For each lightcone slice at observed frequency ``nu``, the [CII] surface
+    brightness is summed over the slices within one spectral channel
+    (``nu +/- nu / (2 R)``), smoothed with the Gaussian beam of the instrument, and
+    Gaussian white noise with the rms from :func:`calculate_noise` is added.
 
-    seed = np.random.randint(0, 2**16)
-    RState = np.random.RandomState(seed=seed)
+    Parameters
+    ----------
+    lc_obj : LightCone
+        Lightcone with a ``"CII_BrightnessDensity"`` field in Jy/sr, as produced by
+        :func:`~.cii_lightcone.gen_lc`.
+    noise_template : LIMInstrument or str
+        The instrument, or the name of a built-in instrument template.
+    seed : int, optional
+        Seed for the noise realisation. If None, a random seed is used.
 
-    noise = np.zeros(B_cii.shape)
-    B_real = np.zeros(B_cii.shape)
-    B_conv = np.zeros(B_cii.shape)
-    B_noise = np.zeros(B_cii.shape)
+    Returns
+    -------
+    LightCone
+        The input lightcone, with three new fields in Jy/sr, named after the
+        instrument: ``"noise_<name>"`` (the noise),  ``"Bcii_<name>"`` (the
+        beam-smoothed signal) and ``"Bcii_<name>_noise"`` (their sum).
 
-    # print(f'nu range in LC {f_min},{f_max}')
-    # print(f'noisefile covers redshifts {NU_CII/f_max-1},{NU_CII/f_min-1}')
-    print(f"adding {noise_temp} noise ...")
-
-    for i in range(nu_lc.size):
-        nu_sens = nu_lc[i]
-        noise_info = calculate_noise(
-            nu_obs=nu_sens, noise_temp=noise_temp, noisefile=noisefile
-        )
-
-        rms = noise_info["RMS_sigma"].to(u.Jy / u.sr)
-        fwhm_sens = noise_info["fwhm"]
-
-        z_sens = NU_CII / nu_sens - 1
-        # angular size of cell in bands
-        d_a_sens = lc_obj.cosmo_params.cosmo.angular_diameter_distance(z_sens)
-        ang_size_sim = (
-            (lc_obj.simulation_options.BOX_LEN / lc_obj.simulation_options.HII_DIM)
-            / (1 + z_sens)
-            * u.Mpc
-            / d_a_sens
-        ) * u.rad
-        # solid_ang_sim = ang_size_sens**2 #u.sr
-        # solid_ang_sim = 2 * np.pi * (1 - np.cos(ang_size_sim))  #solid angle for the simulation cell size
-
-        beam_sigma = fwhm_sens * gaussian_fwhm_to_sigma
-        beam_sigma_cell = (
-            (beam_sigma / ang_size_sim).to("").value
-        )  # beam_sigma per cell units
-        beam_area = 2.0 * np.pi * beam_sigma**2  # solid angle for the instrument beam
-        beam_area = beam_area.to(u.sr)
-
-        bw = noise_info["bw_sens"]
-        nu_min = nu_sens - bw / 2
-        nu_max = nu_sens + bw / 2
-
-        sel = (nu_lc > nu_min) & (nu_lc < nu_max)
-
-        B_real_2d = B_cii[..., sel].sum(axis=-1)
-        noise_2d = RState.normal(loc=0.0, scale=1.0, size=B_real_2d.shape) * rms.value
-        B_conv_2d = gaussian_filter(B_real_2d, sigma=beam_sigma_cell)
-        B_noise_2d = B_conv_2d + noise_2d
-
-        noise[..., i] = noise_2d  # noise
-        B_real[..., i] = B_real_2d  # after integration in f interval
-        B_conv[..., i] = B_conv_2d  # after beam filter
-        B_noise[..., i] = B_noise_2d  # after noise and beam filter
-
-    lc_obj.lightcones["noise_" + noise_temp] = noise
-    lc_obj.lightcones["Bcii_" + noise_temp] = B_conv
-    lc_obj.lightcones["Bcii_" + noise_temp + "_noise"] = B_noise
-
-    # print(f'nu {nu_sens.min():.2e} to {nu_sens.max():.2e}: sens mean {val_sens.mean()} fhwm mean {beam_sigma.mean()}')
-    return (
-        lc_obj  # noise, B_real, B_conv, B_noise, noise_info #output is in unit of Jy/sr
+    Raises
+    ------
+    ValueError
+        If ``noise_template`` is not the name of a built-in template.
+    """
+    instrument = _as_instrument(noise_template)
+    nu_lc = NU_CII_REST / (1 + lc_obj.lightcone_redshifts)
+    b_cii = lc_obj.lightcones["CII_BrightnessDensity"]
+    cell_size = (
+        lc_obj.simulation_options.BOX_LEN / lc_obj.simulation_options.HII_DIM * un.Mpc
     )
+    rng = np.random.default_rng(seed)
 
+    noise = np.zeros(b_cii.shape)
+    b_conv = np.zeros(b_cii.shape)
 
-def chunk_lc_field(lc, kind, redshift, subtract_mean=False):
+    logger.info("Adding %s noise (seed=%s)", instrument.name, seed)
 
-    ncells = lc.simulation_options.HII_DIM
-    boxlen = lc.simulation_options.BOX_LEN
-    cellsize = boxlen / ncells
-    z_lc = lc.lightcone_redshifts
-    field = lc.lightcones[kind]
-    dim = lc.shape
+    for i, nu_obs in enumerate(nu_lc):
+        noise_info = calculate_noise(nu_obs, instrument)
+        rms = noise_info["RMS_sigma"].to_value(un.Jy / un.sr)
 
-    # Remove mean of each frequency slice
-    if subtract_mean:
-        field = field - field.mean()
+        # Angle subtended by a (comoving) simulation cell at this redshift.
+        z_obs = (NU_CII_REST / nu_obs).to_value("") - 1
+        d_a = lc_obj.cosmo_params.cosmo.angular_diameter_distance(z_obs)
+        cell_angle = (cell_size / (1 + z_obs) / d_a).to(
+            un.rad, equivalencies=un.dimensionless_angles()
+        )
+        beam_sigma_cells = (
+            noise_info["fwhm"] * gaussian_fwhm_to_sigma / cell_angle
+        ).to_value("")
 
-    # 找红移序号
-    # find slices centred at desired redshifts
-    slice_idx = np.argmin(np.fabs(lc.lightcone_redshifts - redshift))
-    z_slice = lc.lightcone_redshifts[slice_idx]
+        half_bw = noise_info["bw_sens"] / 2
+        in_channel = (nu_lc > nu_obs - half_bw) & (nu_lc < nu_obs + half_bw)
+        b_channel = b_cii[..., in_channel].sum(axis=-1)
 
-    # if dim[0] is odd, the centre is on slice_idx
-    # if dim[0] is even, the centre is between slice_idx and slice_idx + 1
-    slmin = slice_idx - dim[0] // 2
-    slmax = slice_idx + dim[0] // 2 + dim[0] % 2
+        noise[..., i] = rng.normal(loc=0.0, scale=1.0, size=b_channel.shape) * rms
+        b_conv[..., i] = gaussian_filter(b_channel, sigma=beam_sigma_cells)
 
-    chunk_box = field[:, :, slmin:slmax]
-    boxlen = cellsize * np.array(chunk_box.shape)
-    # mean = field[:,:,slmin:slmax].mean()
+    lc_obj.lightcones[f"noise_{instrument.name}"] = noise
+    lc_obj.lightcones[f"Bcii_{instrument.name}"] = b_conv
+    lc_obj.lightcones[f"Bcii_{instrument.name}_noise"] = b_conv + noise
 
-    return chunk_box, boxlen
+    return lc_obj

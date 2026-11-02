@@ -1,0 +1,27 @@
+name: atlast
+description: >-
+  Atacama Large Aperture Submillimeter Telescope (AtLAST) wide-field [CII]
+  survey. No sensitivity is tabulated: it is computed at each frequency with the
+  AtLAST sensitivity calculator (the optional ``atlast_sc`` package).
+parameters:
+  spectral_resolution:
+    value: 1000
+  dish_diameter:
+    value: 50
+    unit: m
+  min_frequency:
+    value: 125
+    unit: GHz
+  max_frequency:
+    value: 500
+    unit: GHz
+  n_feeds:
+    value: 1
+  survey_time:
+    value: 3000
+    unit: h
+  survey_area:
+    value: 600
+    unit: deg2
+  sensitivity:
+    value: null

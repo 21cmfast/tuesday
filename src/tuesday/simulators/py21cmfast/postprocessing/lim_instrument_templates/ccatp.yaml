@@ -1,0 +1,35 @@
+name: ccatp
+description: >-
+  CCAT-prime / Fred Young Submillimeter Telescope (FYST) Prime-Cam EoR-Spec
+  [CII] intensity-mapping survey.
+parameters:
+  spectral_resolution:
+    value: 100
+  dish_diameter:
+    value: 6
+    unit: m
+  min_frequency:
+    value: 210
+    unit: GHz
+    reference: CCAT-Prime Collaboration 2023 (arXiv:2107.10364)
+  max_frequency:
+    value: 420
+    unit: GHz
+    reference: CCAT-Prime Collaboration 2023 (arXiv:2107.10364)
+  n_feeds:
+    # 5040 detectors / 42 spectral channels
+    value: 120
+    reference: CCAT-Prime Collaboration 2023 (arXiv:2107.10364)
+  survey_time:
+    value: 2000
+    unit: h
+    reference: CCAT-Prime Collaboration 2023 (arXiv:2107.10364)
+  survey_area:
+    value: 4
+    unit: deg2
+    reference: CCAT-Prime Collaboration 2023 (arXiv:2107.10364)
+  sensitivity:
+    # Noise-equivalent flux density (NEFD) per beam
+    value: 72.5
+    unit: mJy s(1/2)
+    reference: Horlaville et al. 2024 (arXiv:2309.15733)

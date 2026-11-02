@@ -1,0 +1,43 @@
+name: time
+description: >-
+  Tomographic Ionized-carbon Mapping Experiment (TIME) [CII] line-scan survey.
+parameters:
+  spectral_resolution:
+    # Chung et al. (2020) quote R = 150.
+    value: 120
+  dish_diameter:
+    value: 12
+    unit: m
+    reference: Sun et al. 2021 (arXiv:2012.09160)
+  min_frequency:
+    value: 183
+    unit: GHz
+  max_frequency:
+    value: 326
+    unit: GHz
+  n_feeds:
+    value: 32
+    reference: Chung et al. 2020, ApJ, 892, 51 (arXiv:1812.08135)
+  survey_time:
+    value: 1000
+    unit: h
+    reference: Chung et al. 2020, ApJ, 892, 51 (arXiv:1812.08135)
+  survey_area:
+    # 78 arcmin x 0.5 arcmin line scan
+    value: 39
+    unit: arcmin2
+    reference: Chung et al. 2020, ApJ, 892, 51 (arXiv:1812.08135)
+  sensitivity:
+    # Noise-equivalent intensity (NEI) at nu >= break_frequency
+    value: 11
+    unit: MJy s(1/2) / sr
+    reference: Chung et al. 2020, ApJ, 892, 51 (arXiv:1812.08135)
+  low_frequency_sensitivity:
+    # Noise-equivalent intensity (NEI) at nu < break_frequency
+    value: 5.2
+    unit: MJy s(1/2) / sr
+    reference: Chung et al. 2020, ApJ, 892, 51 (arXiv:1812.08135)
+  break_frequency:
+    value: 230
+    unit: GHz
+    reference: Chung et al. 2020, ApJ, 892, 51 (arXiv:1812.08135)
