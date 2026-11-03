@@ -117,7 +117,10 @@ def gen_coeval(
     _, intensity = calculate_cii(halo_catalog, model, seed=seed)
 
     # The HaloCatalog holds the Lagrangian halo positions. Move the halos to their
-    # Eulerian positions, as 21cmFAST does for the HaloBox.
+    # Eulerian positions, as 21cmFAST does for the HaloBox. perturb_halo_catalog
+    # reads every halo array but only loads the coordinates and masses from disk
+    # itself, and crashes if the others are not in memory, so load them all.
+    halo_catalog.load_all()
     perturbed = p21c.perturb_halo_catalog(
         initial_conditions=cache_obj["InitialConditions"],
         inputs=halo_catalog.inputs,

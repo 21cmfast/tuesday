@@ -235,6 +235,21 @@ def test_gen_coeval_grids_like_21cmfast(real_run, monkeypatch):
     )
 
 
+def test_gen_coeval_does_not_rely_on_calculate_cii_loading(real_run, monkeypatch):
+    # 21cmFAST's perturb_halo_catalog crashes (segfault) if the per-halo random
+    # numbers of the catalogue have not been read from disk, and only reads the
+    # coordinates and masses itself. gen_coeval must load the catalogue, rather
+    # than rely on calculate_cii having read it.
+    monkeypatch.setattr(
+        cii_lightcone,
+        "calculate_cii",
+        lambda halo_catalog, model, seed=None: (None, np.ones(halo_catalog.n_halos)),
+    )
+    coeval = gen_coeval(NODE_REDSHIFTS[0], "Lagache18", real_run.cache_dir)
+
+    assert np.isfinite(coeval.CII_IntensityBox).all()
+
+
 def test_gen_lc_on_real_cache(real_run):
     cii_lc = gen_lc(
         real_run.lightcone, real_run.lightconer, "Lagache18", real_run.cache_dir, seed=1
