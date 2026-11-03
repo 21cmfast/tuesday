@@ -4,9 +4,13 @@ For each node redshift of a 21cmFAST lightcone, the halo catalogue is read from 
 output cache, the [CII] emission of each halo is computed with
 :func:`~.cii_calculation.calculate_cii` and gridded into a coeval box at the Eulerian
 halo positions, in the same way as 21cmFAST grids the halo properties of its
-``HaloBox``. The boxes are
-then interpolated onto the lightcone with the same lightconer as the 21cmFAST run,
-and converted to a surface brightness with :func:`~.cii_calculation.calculate_bvoxel`.
+``HaloBox``. The boxes are then interpolated onto the lightcone with the same
+lightconer as the 21cmFAST run, and converted to a surface brightness with
+:func:`~.cii_calculation.calculate_bvoxel`.
+
+Only the ``HaloCatalog`` and ``InitialConditions`` of each node redshift need to be in
+the cache; the 21-cm outputs of the run (``PerturbedField``, ``IonizedBox``,
+``BrightnessTemp``) are not used.
 """
 
 import logging
@@ -26,19 +30,45 @@ from .cii_calculation import calculate_bvoxel, calculate_cii
 logger = logging.getLogger(__name__)
 
 
-@define(slots=False)
-class CIICoeval(p21c.Coeval):
-    """A 21cmFAST coeval box that also holds a gridded [CII] flux density.
+@define
+class CIICoeval:
+    """A coeval box of the gridded [CII] flux density at one redshift.
+
+    It has the attributes that
+    :meth:`~py21cmfast.lightconers.Lightconer.make_lightcone_slices` needs
+    (``redshift``, ``simulation_options``, ``cosmo_params`` and the field), so it can
+    be interpolated onto a lightcone like a :class:`py21cmfast.Coeval`, but it does
+    not need the 21-cm outputs of the run.
 
     Parameters
     ----------
+    redshift : float
+        Redshift of the box.
+    inputs : py21cmfast.InputParameters
+        Input parameters of the 21cmFAST run.
     CII_IntensityBox : np.ndarray
         Velocity-integrated [CII] flux density in each cell, in Jy km/s.
-    **kwargs
-        Arguments of :class:`py21cmfast.Coeval`.
+    initial_conditions : py21cmfast.InitialConditions, optional
+        Initial conditions of the run.
+    halobox : py21cmfast.HaloBox, optional
+        The 21cmFAST gridded halo properties at this redshift, if cached.
     """
 
-    CII_IntensityBox: np.ndarray = field(default=None)
+    redshift: float = field(converter=float)
+    inputs: p21c.InputParameters
+    CII_IntensityBox: np.ndarray
+    initial_conditions: p21c.InitialConditions | None = None
+    halobox: p21c.HaloBox | None = None
+
+    @property
+    def simulation_options(self) -> p21c.SimulationOptions:
+        """Simulation options of the run."""
+        return self.inputs.simulation_options
+
+    @property
+    def cosmo_params(self) -> p21c.CosmoParams:
+        """Cosmological parameters of the run."""
+        return self.inputs.cosmo_params
 
 
 def _cic_grid(positions: np.ndarray, weights: np.ndarray, n_cells: int) -> np.ndarray:
@@ -99,6 +129,11 @@ def gen_coeval(
     CIICoeval
         The coeval box, with ``CII_IntensityBox`` in Jy km/s per cell.
 
+    Raises
+    ------
+    ValueError
+        If the cache has no ``HaloCatalog`` or ``InitialConditions`` at ``z``.
+
     Notes
     -----
     The halos are moved from the Lagrangian positions of the ``HaloCatalog`` to
@@ -113,7 +148,17 @@ def gen_coeval(
         for cache_file in output_cache.list_datasets(redshift=z)
     }
 
+    missing = [
+        name for name in ("HaloCatalog", "InitialConditions") if name not in cache_obj
+    ]
+    if missing:
+        raise ValueError(
+            f"The [CII] box at z={z} needs the {' and '.join(missing)} of the run, "
+            f"which are not in the cache at {directory_path} (found "
+            f"{sorted(cache_obj) or 'nothing'})."
+        )
     halo_catalog = cache_obj["HaloCatalog"]
+    initial_conditions = cache_obj["InitialConditions"]
     _, intensity = calculate_cii(halo_catalog, model, seed=seed)
 
     # The HaloCatalog holds the Lagrangian halo positions. Move the halos to their
@@ -122,7 +167,7 @@ def gen_coeval(
     # itself, and crashes if the others are not in memory, so load them all.
     halo_catalog.load_all()
     perturbed = p21c.perturb_halo_catalog(
-        initial_conditions=cache_obj["InitialConditions"],
+        initial_conditions=initial_conditions,
         inputs=halo_catalog.inputs,
         halo_catalog=halo_catalog,
     )
@@ -139,12 +184,11 @@ def gen_coeval(
     cii_intensity = _cic_grid(positions, intensity, resolution)
 
     return CIICoeval(
-        initial_conditions=cache_obj["InitialConditions"],
-        perturbed_field=cache_obj["PerturbedField"],
-        ionized_box=cache_obj["IonizedBox"],
-        brightness_temperature=cache_obj["BrightnessTemp"],
-        halobox=cache_obj["HaloBox"],
+        redshift=z,
+        inputs=halo_catalog.inputs,
         CII_IntensityBox=cii_intensity,
+        initial_conditions=initial_conditions,
+        halobox=cache_obj.get("HaloBox"),
     )
 
 
@@ -183,7 +227,7 @@ def gen_coeval_list(
 
 
 def coevals_to_lightcone(
-    coeval_list: list[p21c.Coeval],
+    coeval_list: list[CIICoeval | p21c.Coeval],
     lcn: Lightconer,
     quantity: str,
     shape: tuple[int, ...],
@@ -196,8 +240,9 @@ def coevals_to_lightcone(
 
     Parameters
     ----------
-    coeval_list : list of py21cmfast.Coeval
-        Coeval boxes at consecutive node redshifts, each with the field ``quantity``.
+    coeval_list : list of CIICoeval or py21cmfast.Coeval
+        Coeval boxes at consecutive node redshifts, each with the field ``quantity``
+        and the attributes ``redshift``, ``simulation_options`` and ``cosmo_params``.
     lcn : Lightconer
         The lightconer that sets the lightcone geometry. Its ``quantities`` are
         ignored.
@@ -255,13 +300,21 @@ def gen_lc(
         A copy of ``lc`` with two new fields in ``lightcones``:
         ``"CII_IntensityBox"`` (Jy km/s per cell) and ``"CII_BrightnessDensity"``
         (Jy/sr).
+
+    Raises
+    ------
+    ValueError
+        If ``lcn`` does not have the same number of slices as ``lc``.
     """
+    shape = lcn.get_shape(lc.inputs.simulation_options)
+    if shape[-1] != len(lc.lightcone_distances):
+        raise ValueError(
+            f"The lightconer has {shape[-1]} slices but the lightcone has "
+            f"{len(lc.lightcone_distances)}: pass the lightconer used for the run."
+        )
     coeval_list = gen_coeval_list(lc, model, directory_path, seed=seed)
     intensity = coevals_to_lightcone(
-        coeval_list,
-        lcn,
-        quantity="CII_IntensityBox",
-        shape=lc.lightcones["brightness_temp"].shape,
+        coeval_list, lcn, quantity="CII_IntensityBox", shape=shape
     )
 
     cii_lc = attrs.evolve(

@@ -1,5 +1,7 @@
 """Tests of building a [CII] lightcone from coeval boxes."""
 
+import shutil
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -15,7 +17,6 @@ from tuesday.simulators.py21cmfast.postprocessing.cii_calculation import calcula
 from tuesday.simulators.py21cmfast.postprocessing.cii_lightcone import (
     coevals_to_lightcone,
     gen_coeval,
-    gen_coeval_list,
     gen_lc,
 )
 
@@ -163,11 +164,38 @@ def real_run(tmp_path_factory) -> SimpleNamespace:
     )
 
 
+def read_cached(cache_dir: Path, z: float, name: str):
+    """Read one cached 21cmFAST output at redshift ``z``."""
+    path = next(
+        f for f in OutputCache(cache_dir).list_datasets(redshift=z) if f.stem == name
+    )
+    return read_output_struct(path)
+
+
+def copy_cache_without(cache_dir: Path, destination: Path, *names: str) -> Path:
+    """Copy a 21cmFAST output cache, leaving out the outputs called ``names``."""
+    shutil.copytree(cache_dir, destination)
+    for name in names:
+        for path in destination.rglob(f"{name}.h5"):
+            path.unlink()
+    return destination
+
+
 def test_interpolation_matches_21cmfast_lightcone(real_run):
     # Interpolating the cached brightness-temperature boxes the way gen_lc
     # interpolates the [CII] boxes must reproduce the 21cmFAST lightcone.
     lc = real_run.lightcone
-    coevals = gen_coeval_list(lc, "Lagache18", real_run.cache_dir, seed=0)
+    coevals = [
+        SimpleNamespace(
+            redshift=z,
+            simulation_options=lc.inputs.simulation_options,
+            cosmo_params=lc.inputs.cosmo_params,
+            brightness_temp=read_cached(real_run.cache_dir, z, "BrightnessTemp").get(
+                "brightness_temp"
+            ),
+        )
+        for z in NODE_REDSHIFTS
+    ]
     brightness_temp = coevals_to_lightcone(
         coevals,
         real_run.lightconer,
@@ -184,13 +212,7 @@ def test_interpolation_matches_21cmfast_lightcone(real_run):
 def test_gen_coeval_conserves_flux(real_run):
     z = NODE_REDSHIFTS[1]
     coeval = gen_coeval(z, "Lagache18", real_run.cache_dir, seed=5)
-    halos = read_output_struct(
-        next(
-            f
-            for f in OutputCache(real_run.cache_dir).list_datasets(redshift=z)
-            if f.stem == "HaloCatalog"
-        )
-    )
+    halos = read_cached(real_run.cache_dir, z, "HaloCatalog")
     _, intensity = calculate_cii(halos, "Lagache18", seed=5)
 
     assert coeval.CII_IntensityBox.shape == (10, 10, 10)
@@ -260,3 +282,30 @@ def test_gen_lc_on_real_cache(real_run):
     assert np.all(np.isfinite(brightness))
     # Every slice receives [CII] emission from the halos.
     assert np.all(brightness.sum(axis=(0, 1)) > 0)
+
+
+def test_gen_lc_without_21cm_outputs(real_run, tmp_path):
+    # Only the halo catalogue and the initial conditions are needed for [CII]: the
+    # 21-cm outputs of the run are not read.
+    cache = copy_cache_without(
+        real_run.cache_dir,
+        tmp_path / "cache",
+        "PerturbedField",
+        "IonizedBox",
+        "BrightnessTemp",
+        "HaloBox",
+    )
+    args = (real_run.lightcone, real_run.lightconer, "Lagache18")
+    reduced = gen_lc(*args, cache, seed=2)
+    full = gen_lc(*args, real_run.cache_dir, seed=2)
+
+    for key in ("CII_IntensityBox", "CII_BrightnessDensity"):
+        np.testing.assert_array_equal(reduced.lightcones[key], full.lightcones[key])
+
+
+@pytest.mark.parametrize("missing", ["HaloCatalog", "InitialConditions"])
+def test_gen_coeval_needs_halos_and_initial_conditions(real_run, tmp_path, missing):
+    cache = copy_cache_without(real_run.cache_dir, tmp_path / "cache", missing)
+
+    with pytest.raises(ValueError, match=missing):
+        gen_coeval(NODE_REDSHIFTS[0], "Lagache18", cache, seed=0)
