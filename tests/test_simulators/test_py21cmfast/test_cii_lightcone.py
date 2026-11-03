@@ -6,9 +6,18 @@ import numpy as np
 import py21cmfast as p21c
 import pytest
 from py21cmfast.drivers.lightcone import LightCone
+from py21cmfast.io.caching import OutputCache
+from py21cmfast.io.h5 import read_output_struct
+from py21cmfast.wrapper.cfuncs import convert_halo_properties
 
 from tuesday.simulators.py21cmfast.postprocessing import cii_lightcone
-from tuesday.simulators.py21cmfast.postprocessing.cii_lightcone import gen_lc
+from tuesday.simulators.py21cmfast.postprocessing.cii_calculation import calculate_cii
+from tuesday.simulators.py21cmfast.postprocessing.cii_lightcone import (
+    coevals_to_lightcone,
+    gen_coeval,
+    gen_coeval_list,
+    gen_lc,
+)
 
 NODE_REDSHIFTS = [7.0, 6.5, 6.0]
 
@@ -108,3 +117,131 @@ def test_gen_lc_calls_are_independent(run):
 
 def test_cii_lightcone_class_removed():
     assert not hasattr(cii_lightcone, "CIILightcone")
+
+
+# --- A real (tiny) 21cmFAST run -----------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def real_run(tmp_path_factory) -> SimpleNamespace:
+    """Run a tiny 21cmFAST lightcone and keep its output cache.
+
+    The 21-cm velocity-gradient correction is switched off, so that the
+    brightness-temperature lightcone is a plain interpolation of the cached coeval
+    boxes.
+    """
+    cache_dir = tmp_path_factory.mktemp("cache")
+    inputs = p21c.InputParameters.from_template(
+        ["latest-discrete", "size-tiny"],
+        random_seed=1,
+        node_redshifts=NODE_REDSHIFTS,
+        USE_TS_FLUCT=False,
+        INHOMO_RECO=False,
+    ).evolve_input_structs(
+        BOX_LEN=30,
+        HII_DIM=10,
+        DIM=None,
+        HIRES_TO_LOWRES_FACTOR=2,
+        PERTURB_ALGORITHM="LINEAR",
+    )
+    lightconer = p21c.RectilinearLightconer.between_redshifts(
+        min_redshift=6.1,
+        max_redshift=6.9,
+        resolution=inputs.simulation_options.cell_size,
+        quantities=("brightness_temp",),
+    )
+    lightcone = p21c.run_lightcone(
+        lightconer=lightconer,
+        inputs=inputs,
+        cache=OutputCache(cache_dir),
+        write=True,
+        progressbar=False,
+        include_dvdr_in_tau21=False,
+    )
+    return SimpleNamespace(
+        cache_dir=cache_dir, lightconer=lightconer, lightcone=lightcone
+    )
+
+
+def test_interpolation_matches_21cmfast_lightcone(real_run):
+    # Interpolating the cached brightness-temperature boxes the way gen_lc
+    # interpolates the [CII] boxes must reproduce the 21cmFAST lightcone.
+    lc = real_run.lightcone
+    coevals = gen_coeval_list(lc, "Lagache18", real_run.cache_dir, seed=0)
+    brightness_temp = coevals_to_lightcone(
+        coevals,
+        real_run.lightconer,
+        quantity="brightness_temp",
+        shape=lc.lightcones["brightness_temp"].shape,
+    )
+
+    # 21cmFAST stores lightcones in float32 (~1e-7 relative precision).
+    np.testing.assert_allclose(
+        brightness_temp, lc.lightcones["brightness_temp"], rtol=1e-5, atol=1e-5
+    )
+
+
+def test_gen_coeval_conserves_flux(real_run):
+    z = NODE_REDSHIFTS[1]
+    coeval = gen_coeval(z, "Lagache18", real_run.cache_dir, seed=5)
+    halos = read_output_struct(
+        next(
+            f
+            for f in OutputCache(real_run.cache_dir).list_datasets(redshift=z)
+            if f.stem == "HaloCatalog"
+        )
+    )
+    _, intensity = calculate_cii(halos, "Lagache18", seed=5)
+
+    assert coeval.CII_IntensityBox.shape == (10, 10, 10)
+    # Every halo lies inside the box, so gridding conserves the total flux.
+    np.testing.assert_allclose(
+        coeval.CII_IntensityBox.sum(), intensity.sum(), rtol=1e-10
+    )
+
+
+def test_gen_coeval_grids_like_21cmfast(real_run, monkeypatch):
+    # Grid each halo's SFR instead of its [CII] flux: gen_coeval must place the
+    # halos where 21cmFAST does, so the box must equal the cached HaloBox SFR,
+    # which 21cmFAST builds from the Eulerian halo positions with cloud-in-cell.
+    def halo_sfr(halo_catalog, model, seed=None):
+        n = halo_catalog.n_halos
+        props = convert_halo_properties(
+            redshift=halo_catalog.redshift,
+            inputs=halo_catalog.inputs,
+            **{
+                key: halo_catalog.get(key)[:n]
+                for key in (
+                    "halo_masses",
+                    "halo_coords",
+                    "star_rng",
+                    "sfr_rng",
+                    "xray_rng",
+                )
+            },
+        )
+        return None, props["halo_sfr"]
+
+    monkeypatch.setattr(cii_lightcone, "calculate_cii", halo_sfr)
+    coeval = gen_coeval(NODE_REDSHIFTS[1], "Lagache18", real_run.cache_dir)
+    cell_volume = (coeval.simulation_options.BOX_LEN / 10) ** 3
+
+    # The HaloBox is stored in float32.
+    np.testing.assert_allclose(
+        coeval.CII_IntensityBox / cell_volume,
+        coeval.halobox.get("halo_sfr"),
+        rtol=1e-5,
+        atol=1e-5 * coeval.halobox.get("halo_sfr").max(),
+    )
+
+
+def test_gen_lc_on_real_cache(real_run):
+    cii_lc = gen_lc(
+        real_run.lightcone, real_run.lightconer, "Lagache18", real_run.cache_dir, seed=1
+    )
+    brightness = cii_lc.lightcones["CII_BrightnessDensity"]
+
+    assert brightness.shape == real_run.lightcone.lightcones["brightness_temp"].shape
+    assert np.all(np.isfinite(brightness))
+    # Every slice receives [CII] emission from the halos.
+    assert np.all(brightness.sum(axis=(0, 1)) > 0)
