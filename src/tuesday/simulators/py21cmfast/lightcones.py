@@ -1,8 +1,9 @@
 """Generate lightcones from 21cmFAST output cache."""
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 from py21cmfast.drivers.lightcone import (
@@ -14,6 +15,7 @@ from py21cmfast.drivers.lightcone import (
 from py21cmfast.io import read_output_struct
 from py21cmfast.io.caching import RunCache
 from py21cmfast.lightconers import Lightconer
+from py21cmfast.wrapper.inputs import InputParameters
 
 
 def construct_lightcone_from_cache(
@@ -127,26 +129,49 @@ def construct_lightcone_from_cache(
     return lightcone
 
 
-def construct_lightcone_from_filelist(
-    filelist: Sequence[Path],
+def construct_lightcone_from_coevals(
+    coevals: Iterable[Any],
     lightconer: Lightconer,
+    inputs: InputParameters,
+    node_redshifts: Sequence[float] | None = None,
 ) -> LightCone:
-    """Construct a Lightcone from a list of OutputStruct files.
+    """Construct a Lightcone by interpolating a sequence of coeval boxes.
 
-    This function assumes that the list of files are 21cmFAST output structs, each
-    at a different redshift. These may be from a RunCache, but don't need to be.
+    Each pair of consecutive boxes is interpolated onto the lightcone with
+    :meth:`~py21cmfast.lightconers.Lightconer.make_lightcone_slices`, as in
+    :func:`py21cmfast.run_lightcone`. The boxes do not need to be 21cmFAST
+    :class:`~py21cmfast.Coeval` objects, nor to be stored on disk.
+
+    ``coevals`` is iterated once, and only the current and previous boxes are
+    referenced, so if it is a generator that builds each box when it is requested,
+    at most two boxes are in memory at a time.
 
     Parameters
     ----------
-    filelist
-        A list of paths to 21cmFAST output struct files.
+    coevals
+        The coeval boxes, in order of decreasing redshift. Each must have the
+        attributes ``redshift``, ``simulation_options`` and ``cosmo_params``, and
+        one attribute per quantity of ``lightconer``.
     lightconer
         The object used to generate lightcone slices.
+    inputs
+        The input parameters of the simulation.
+    node_redshifts
+        The redshifts of the boxes. Defaults to ``inputs.node_redshifts``.
+
+    Returns
+    -------
+    LightCone
+        The constructed (21cmFAST) lightcone object.
+
+    Raises
+    ------
+    ValueError
+        If the lightcone extends beyond the range of the node redshifts.
     """
-    boxes = [read_output_struct(fl) for fl in filelist]
-    inputs = boxes[0].inputs
-    boxes = sorted(boxes, key=lambda b: b.redshift, reverse=True)
-    node_redshifts = [b.redshift for b in boxes]
+    if node_redshifts is None:
+        node_redshifts = inputs.node_redshifts
+    node_redshifts = sorted(node_redshifts, reverse=True)
 
     lightconer.validate_options(inputs, apply_rsds=False, include_dvdr_in_tau21=False)
 
@@ -170,25 +195,56 @@ def construct_lightcone_from_filelist(
     )
 
     prev_box = None
-    for box in boxes:
-        # This hacks an OutputStruct to look like a Coeval, which has all the
-        # boxes defined directly as attributes. Later versions
-        # of 21cmFAST will not require this.
-        _box = SimpleNamespace()
-        _box.__dict__.update(box.__dict__)
-        _box.simulation_options = box.inputs.simulation_options
-        _box.cosmo_params = box.inputs.cosmo_params
-        for q in lightconer.quantities:
-            setattr(_box, q, box.get(q))
-
+    for box in coevals:
         # Get lightcone slices
         if prev_box is not None:
             for quantity, idx, this_lc in lightconer.make_lightcone_slices(
-                _box, prev_box
+                box, prev_box
             ):
                 if this_lc is not None:
                     lightcone.lightcones[quantity][..., idx] = this_lc
 
-        prev_box = _box
+        prev_box = box
 
     return lightcone
+
+
+def construct_lightcone_from_filelist(
+    filelist: Sequence[Path],
+    lightconer: Lightconer,
+) -> LightCone:
+    """Construct a Lightcone from a list of OutputStruct files.
+
+    This function assumes that the list of files are 21cmFAST output structs, each
+    at a different redshift. These may be from a RunCache, but don't need to be.
+
+    Parameters
+    ----------
+    filelist
+        A list of paths to 21cmFAST output struct files.
+    lightconer
+        The object used to generate lightcone slices.
+    """
+    boxes = [read_output_struct(fl) for fl in filelist]
+    inputs = boxes[0].inputs
+    boxes = sorted(boxes, key=lambda b: b.redshift, reverse=True)
+
+    def as_coevals() -> Iterator[SimpleNamespace]:
+        for box in boxes:
+            # This hacks an OutputStruct to look like a Coeval, which has all the
+            # boxes defined directly as attributes. Later versions
+            # of 21cmFAST will not require this.
+            _box = SimpleNamespace()
+            _box.__dict__.update(box.__dict__)
+            _box.simulation_options = box.inputs.simulation_options
+            _box.cosmo_params = box.inputs.cosmo_params
+            for q in lightconer.quantities:
+                setattr(_box, q, box.get(q))
+            yield _box
+
+    return construct_lightcone_from_coevals(
+        as_coevals(),
+        lightconer,
+        inputs,
+        node_redshifts=[b.redshift for b in boxes],
+    )

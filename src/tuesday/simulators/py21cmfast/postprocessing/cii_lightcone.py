@@ -14,7 +14,7 @@ the cache; the 21-cm outputs of the run (``PerturbedField``, ``IonizedBox``,
 """
 
 import logging
-from itertools import pairwise
+from collections.abc import Iterator
 from pathlib import Path
 
 import attrs
@@ -25,6 +25,7 @@ from py21cmfast.io.caching import OutputCache
 from py21cmfast.io.h5 import read_output_struct
 from py21cmfast.lightconers import Lightconer
 
+from ..lightcones import construct_lightcone_from_coevals
 from .cii_calculation import calculate_bvoxel, calculate_cii
 
 logger = logging.getLogger(__name__)
@@ -226,48 +227,6 @@ def gen_coeval_list(
     return coeval_list
 
 
-def coevals_to_lightcone(
-    coeval_list: list[CIICoeval | p21c.Coeval],
-    lcn: Lightconer,
-    quantity: str,
-    shape: tuple[int, ...],
-) -> np.ndarray:
-    """Interpolate one field of a sequence of coeval boxes onto a lightcone.
-
-    Each pair of consecutive boxes is interpolated with
-    :meth:`~py21cmfast.lightconers.Lightconer.make_lightcone_slices`, as in
-    :func:`py21cmfast.run_lightcone`.
-
-    Parameters
-    ----------
-    coeval_list : list of CIICoeval or py21cmfast.Coeval
-        Coeval boxes at consecutive node redshifts, each with the field ``quantity``
-        and the attributes ``redshift``, ``simulation_options`` and ``cosmo_params``.
-    lcn : Lightconer
-        The lightconer that sets the lightcone geometry. Its ``quantities`` are
-        ignored.
-    quantity : str
-        Name of the coeval field to interpolate.
-    shape : tuple of int
-        Shape of the lightcone field.
-
-    Returns
-    -------
-    np.ndarray
-        The field on the lightcone.
-    """
-    field_lcn = attrs.evolve(lcn, quantities=(quantity,))
-    lightcone_field = np.zeros(shape)
-    for coeval1, coeval2 in pairwise(coeval_list):
-        for scalar_field, lcidx, slice_data in field_lcn.make_lightcone_slices(
-            c1=coeval1, c2=coeval2
-        ):
-            # The lightconer can return no slice, or slices beyond the lightcone.
-            if scalar_field is not None and lcidx < shape[-1]:
-                lightcone_field[..., lcidx] = slice_data
-    return lightcone_field
-
-
 def gen_lc(
     lc: p21c.LightCone,
     lcn: Lightconer,
@@ -281,11 +240,11 @@ def gen_lc(
     lightcone, which shares the other fields with ``lc``.
 
     The [CII] coeval boxes are built with :func:`gen_coeval` one node redshift at a
-    time, and each box is interpolated onto the lightcone with the previous one as
-    soon as it is built, so that only two boxes are in memory at any time. The
-    result is the same as interpolating the boxes of :func:`gen_coeval_list` with
-    :func:`coevals_to_lightcone`: a single generator seeded with ``seed`` is shared
-    by all redshifts.
+    time and interpolated onto the lightcone with
+    :func:`~tuesday.simulators.py21cmfast.lightcones.construct_lightcone_from_coevals`
+    as soon as they are built, so that only two boxes are in memory at any time.
+    The result is the same as interpolating the boxes of :func:`gen_coeval_list`:
+    a single generator seeded with ``seed`` is shared by all redshifts.
 
     Parameters
     ----------
@@ -311,7 +270,8 @@ def gen_lc(
     Raises
     ------
     ValueError
-        If ``lcn`` does not have the same number of slices as ``lc``.
+        If ``lcn`` does not have the same number of slices as ``lc``, or extends
+        beyond the node redshifts of the run.
     """
     shape = lcn.get_shape(lc.inputs.simulation_options)
     if shape[-1] != len(lc.lightcone_distances):
@@ -319,27 +279,23 @@ def gen_lc(
             f"The lightconer has {shape[-1]} slices but the lightcone has "
             f"{len(lc.lightcone_distances)}: pass the lightconer used for the run."
         )
-    field_lcn = attrs.evolve(lcn, quantities=("CII_IntensityBox",))
-    intensity = np.zeros(shape)
     rng = np.random.default_rng(seed)
 
-    previous = None
-    for z in lc.inputs.node_redshifts:
-        logger.info("Building the [CII] coeval box at z=%.3f", z)
-        current = gen_coeval(z, model, directory_path, seed=rng)
-        # Only the gridded [CII] field is interpolated; drop the initial conditions
-        # and halo box read from the cache so that they can be freed.
-        current.initial_conditions = None
-        current.halobox = None
-        if previous is not None:
-            for scalar_field, lcidx, slice_data in field_lcn.make_lightcone_slices(
-                c1=previous, c2=current
-            ):
-                # The lightconer can return no slice, or slices beyond the lightcone.
-                if scalar_field is not None and lcidx < shape[-1]:
-                    intensity[..., lcidx] = slice_data
-        previous = current
-    del previous, current
+    def cii_coevals() -> Iterator[CIICoeval]:
+        for z in lc.inputs.node_redshifts:
+            logger.info("Building the [CII] coeval box at z=%.3f", z)
+            coeval = gen_coeval(z, model, directory_path, seed=rng)
+            # Only the gridded [CII] field is interpolated; drop the initial
+            # conditions and halo box read from the cache so that they can be freed.
+            coeval.initial_conditions = None
+            coeval.halobox = None
+            yield coeval
+
+    intensity = construct_lightcone_from_coevals(
+        cii_coevals(),
+        attrs.evolve(lcn, quantities=("CII_IntensityBox",)),
+        lc.inputs,
+    ).lightcones["CII_IntensityBox"]
 
     cii_lc = attrs.evolve(
         lc, lightcones={**lc.lightcones, "CII_IntensityBox": intensity}

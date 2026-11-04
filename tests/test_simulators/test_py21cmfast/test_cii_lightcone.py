@@ -6,6 +6,7 @@ import weakref
 from pathlib import Path
 from types import SimpleNamespace
 
+import attrs
 import numpy as np
 import py21cmfast as p21c
 import pytest
@@ -14,10 +15,10 @@ from py21cmfast.io.caching import OutputCache
 from py21cmfast.io.h5 import read_output_struct
 from py21cmfast.wrapper.cfuncs import convert_halo_properties
 
+from tuesday.simulators.py21cmfast.lightcones import construct_lightcone_from_coevals
 from tuesday.simulators.py21cmfast.postprocessing import cii_lightcone
 from tuesday.simulators.py21cmfast.postprocessing.cii_calculation import calculate_cii
 from tuesday.simulators.py21cmfast.postprocessing.cii_lightcone import (
-    coevals_to_lightcone,
     gen_coeval,
     gen_coeval_list,
     gen_lc,
@@ -228,12 +229,9 @@ def test_interpolation_matches_21cmfast_lightcone(real_run):
         )
         for z in NODE_REDSHIFTS
     ]
-    brightness_temp = coevals_to_lightcone(
-        coevals,
-        real_run.lightconer,
-        quantity="brightness_temp",
-        shape=lc.lightcones["brightness_temp"].shape,
-    )
+    brightness_temp = construct_lightcone_from_coevals(
+        coevals, real_run.lightconer, lc.inputs
+    ).lightcones["brightness_temp"]
 
     # 21cmFAST stores lightcones in float32 (~1e-7 relative precision).
     np.testing.assert_allclose(
@@ -325,12 +323,11 @@ def test_gen_lc_matches_coeval_list(real_run):
     coevals = gen_coeval_list(
         real_run.lightcone, "Lagache18", real_run.cache_dir, seed=5
     )
-    expected = coevals_to_lightcone(
+    expected = construct_lightcone_from_coevals(
         coevals,
-        real_run.lightconer,
-        "CII_IntensityBox",
-        shape=cii_lc.lightcones["CII_IntensityBox"].shape,
-    )
+        attrs.evolve(real_run.lightconer, quantities=("CII_IntensityBox",)),
+        real_run.lightcone.inputs,
+    ).lightcones["CII_IntensityBox"]
 
     np.testing.assert_array_equal(cii_lc.lightcones["CII_IntensityBox"], expected)
 
