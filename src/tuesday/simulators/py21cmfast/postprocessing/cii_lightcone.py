@@ -280,6 +280,13 @@ def gen_lc(
     Neither ``lc`` nor ``lcn`` is modified: the [CII] fields are added to a new
     lightcone, which shares the other fields with ``lc``.
 
+    The [CII] coeval boxes are built with :func:`gen_coeval` one node redshift at a
+    time, and each box is interpolated onto the lightcone with the previous one as
+    soon as it is built, so that only two boxes are in memory at any time. The
+    result is the same as interpolating the boxes of :func:`gen_coeval_list` with
+    :func:`coevals_to_lightcone`: a single generator seeded with ``seed`` is shared
+    by all redshifts.
+
     Parameters
     ----------
     lc : py21cmfast.LightCone
@@ -291,8 +298,8 @@ def gen_lc(
     directory_path : str or Path
         Directory of the 21cmFAST output cache.
     seed : int or np.random.Generator, optional
-        Seed or generator for the scatter of the [CII] model. If None, a random
-        seed is used.
+        Seed or generator for the scatter of the [CII] model, shared by all
+        redshifts. If None, a random seed is used.
 
     Returns
     -------
@@ -312,10 +319,27 @@ def gen_lc(
             f"The lightconer has {shape[-1]} slices but the lightcone has "
             f"{len(lc.lightcone_distances)}: pass the lightconer used for the run."
         )
-    coeval_list = gen_coeval_list(lc, model, directory_path, seed=seed)
-    intensity = coevals_to_lightcone(
-        coeval_list, lcn, quantity="CII_IntensityBox", shape=shape
-    )
+    field_lcn = attrs.evolve(lcn, quantities=("CII_IntensityBox",))
+    intensity = np.zeros(shape)
+    rng = np.random.default_rng(seed)
+
+    previous = None
+    for z in lc.inputs.node_redshifts:
+        logger.info("Building the [CII] coeval box at z=%.3f", z)
+        current = gen_coeval(z, model, directory_path, seed=rng)
+        # Only the gridded [CII] field is interpolated; drop the initial conditions
+        # and halo box read from the cache so that they can be freed.
+        current.initial_conditions = None
+        current.halobox = None
+        if previous is not None:
+            for scalar_field, lcidx, slice_data in field_lcn.make_lightcone_slices(
+                c1=previous, c2=current
+            ):
+                # The lightconer can return no slice, or slices beyond the lightcone.
+                if scalar_field is not None and lcidx < shape[-1]:
+                    intensity[..., lcidx] = slice_data
+        previous = current
+    del previous, current
 
     cii_lc = attrs.evolve(
         lc, lightcones={**lc.lightcones, "CII_IntensityBox": intensity}

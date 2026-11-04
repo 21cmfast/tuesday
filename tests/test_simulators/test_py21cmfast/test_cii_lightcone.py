@@ -1,6 +1,8 @@
 """Tests of building a [CII] lightcone from coeval boxes."""
 
+import gc
 import shutil
+import weakref
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,6 +19,7 @@ from tuesday.simulators.py21cmfast.postprocessing.cii_calculation import calcula
 from tuesday.simulators.py21cmfast.postprocessing.cii_lightcone import (
     coevals_to_lightcone,
     gen_coeval,
+    gen_coeval_list,
     gen_lc,
 )
 
@@ -46,30 +49,42 @@ def make_run() -> tuple[p21c.InputParameters, p21c.RectilinearLightconer, LightC
     return inputs, lightconer, lightcone
 
 
+class FakeCoeval(SimpleNamespace):
+    """A stand-in for a [CII] coeval box that can be weakly referenced."""
+
+    __slots__ = ("__weakref__",)
+    __hash__ = object.__hash__
+
+
 @pytest.fixture
 def run(monkeypatch) -> SimpleNamespace:
     """A small run whose cache reading is replaced by uniform [CII] coeval boxes.
 
     Each box has an intensity equal to its redshift (times ``scale``), so the
-    interpolated lightcone lies between the node values. The seed passed by
-    ``gen_lc`` is recorded in ``calls``.
+    interpolated lightcone lies between the node values. The seeds passed to
+    ``gen_coeval`` are recorded in ``calls["seeds"]``, and the number of boxes still
+    in memory when each box is built in ``calls["alive"]``.
     """
     inputs, lightconer, lightcone = make_run()
-    calls = {"seed": None, "scale": 1.0}
+    calls = {"seeds": [], "scale": 1.0, "alive": []}
+    boxes = weakref.WeakSet()
 
-    def fake_gen_coeval_list(lc, model, directory_path, seed=None):
-        calls["seed"] = seed
-        return [
-            SimpleNamespace(
-                redshift=z,
-                cosmo_params=inputs.cosmo_params,
-                simulation_options=inputs.simulation_options,
-                CII_IntensityBox=np.full((10, 10, 10), calls["scale"] * z),
-            )
-            for z in lc.inputs.node_redshifts
-        ]
+    def fake_gen_coeval(z, model, directory_path, seed=None):
+        gc.collect()
+        calls["alive"].append(len(boxes))
+        calls["seeds"].append(seed)
+        coeval = FakeCoeval(
+            redshift=z,
+            cosmo_params=inputs.cosmo_params,
+            simulation_options=inputs.simulation_options,
+            CII_IntensityBox=np.full((10, 10, 10), calls["scale"] * z),
+            initial_conditions=object(),
+            halobox=object(),
+        )
+        boxes.add(coeval)
+        return coeval
 
-    monkeypatch.setattr(cii_lightcone, "gen_coeval_list", fake_gen_coeval_list)
+    monkeypatch.setattr(cii_lightcone, "gen_coeval", fake_gen_coeval)
     return SimpleNamespace(lightconer=lightconer, lightcone=lightcone, calls=calls)
 
 
@@ -83,7 +98,24 @@ def test_gen_lc_output(run):
     assert np.all(intensity >= min(NODE_REDSHIFTS))
     assert np.all(intensity <= max(NODE_REDSHIFTS))
     assert np.all(cii_lc.lightcones["CII_BrightnessDensity"] > 0)
-    assert run.calls["seed"] == 3
+
+
+def test_gen_lc_shares_one_generator(run):
+    # One generator, seeded once, is shared by all redshifts as in gen_coeval_list.
+    gen_lc(run.lightcone, run.lightconer, "Lagache18", "unused", seed=3)
+
+    seeds = run.calls["seeds"]
+    assert len(seeds) == len(NODE_REDSHIFTS)
+    assert isinstance(seeds[0], np.random.Generator)
+    assert all(seed is seeds[0] for seed in seeds)
+
+
+def test_gen_lc_keeps_two_coevals_in_memory(run):
+    # Each box is interpolated with the previous one as soon as it is built, so at
+    # most the previous box is still alive when the next one is built.
+    gen_lc(run.lightcone, run.lightconer, "Lagache18", "unused")
+
+    assert run.calls["alive"] == [0, 1, 1]
 
 
 def test_gen_lc_keeps_other_fields(run):
@@ -282,6 +314,25 @@ def test_gen_lc_on_real_cache(real_run):
     assert np.all(np.isfinite(brightness))
     # Every slice receives [CII] emission from the halos.
     assert np.all(brightness.sum(axis=(0, 1)) > 0)
+
+
+def test_gen_lc_matches_coeval_list(real_run):
+    # Interpolating the boxes one by one gives the same lightcone as building all
+    # of them first with gen_coeval_list.
+    cii_lc = gen_lc(
+        real_run.lightcone, real_run.lightconer, "Lagache18", real_run.cache_dir, seed=5
+    )
+    coevals = gen_coeval_list(
+        real_run.lightcone, "Lagache18", real_run.cache_dir, seed=5
+    )
+    expected = coevals_to_lightcone(
+        coevals,
+        real_run.lightconer,
+        "CII_IntensityBox",
+        shape=cii_lc.lightcones["CII_IntensityBox"].shape,
+    )
+
+    np.testing.assert_array_equal(cii_lc.lightcones["CII_IntensityBox"], expected)
 
 
 def test_gen_lc_without_21cm_outputs(real_run, tmp_path):
