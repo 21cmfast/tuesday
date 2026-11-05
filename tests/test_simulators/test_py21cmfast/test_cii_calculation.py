@@ -119,7 +119,7 @@ def test_bvoxel_matches_core(shape: tuple[int, ...]):
     lightcone = SimpleNamespace(
         lightcone_redshifts=z_at_value(Planck18.comoving_distance, distances).value,
         lightcone_distances=distances,
-        lightcones={"CII_IntensityBox": intensity},
+        lightcones={"cii_intensity": intensity},
         simulation_options=SimpleNamespace(BOX_LEN=40.0, HII_DIM=4),
         cosmo_params=SimpleNamespace(cosmo=OTHER_COSMO),
     )

@@ -119,7 +119,7 @@ def calculate_bvoxel(lightcone: LightCone) -> np.ndarray:
     Parameters
     ----------
     lightcone : LightCone
-        Lightcone with a ``"CII_IntensityBox"`` field in Jy km/s per cell.
+        Lightcone with a ``"cii_intensity"`` field in Jy km/s per cell.
 
     Returns
     -------
@@ -130,7 +130,7 @@ def calculate_bvoxel(lightcone: LightCone) -> np.ndarray:
         lightcone.simulation_options.BOX_LEN / lightcone.simulation_options.HII_DIM
     ) * un.Mpc
     brightness = cii_surface_brightness(
-        lightcone.lightcones["CII_IntensityBox"] * FLUX_UNIT,
+        lightcone.lightcones["cii_intensity"] * FLUX_UNIT,
         distances=lightcone.lightcone_distances,
         cell_size=cell_size,
         cosmo=lightcone.cosmo_params.cosmo,

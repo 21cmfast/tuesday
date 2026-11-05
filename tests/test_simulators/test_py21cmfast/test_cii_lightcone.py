@@ -78,7 +78,7 @@ def run(monkeypatch) -> SimpleNamespace:
             redshift=z,
             cosmo_params=inputs.cosmo_params,
             simulation_options=inputs.simulation_options,
-            CII_IntensityBox=np.full((10, 10, 10), calls["scale"] * z),
+            cii_intensity=np.full((10, 10, 10), calls["scale"] * z),
             initial_conditions=object(),
             halobox=object(),
         )
@@ -93,12 +93,12 @@ def test_gen_lc_output(run):
     cii_lc = gen_lc(run.lightcone, run.lightconer, "Lagache18", "unused", seed=3)
 
     assert isinstance(cii_lc, LightCone)
-    intensity = cii_lc.lightcones["CII_IntensityBox"]
+    intensity = cii_lc.lightcones["cii_intensity"]
     assert intensity.shape == run.lightcone.lightcones["brightness_temp"].shape
     # Interpolated between the node values, and no slice left empty.
     assert np.all(intensity >= min(NODE_REDSHIFTS))
     assert np.all(intensity <= max(NODE_REDSHIFTS))
-    assert np.all(cii_lc.lightcones["CII_BrightnessDensity"] > 0)
+    assert np.all(cii_lc.lightcones["cii_brightness"] > 0)
 
 
 def test_gen_lc_shares_one_generator(run):
@@ -138,14 +138,14 @@ def test_gen_lc_does_not_mutate_inputs(run):
 
 def test_gen_lc_calls_are_independent(run):
     first = gen_lc(run.lightcone, run.lightconer, "Lagache18", "unused")
-    first_intensity = first.lightcones["CII_IntensityBox"].copy()
+    first_intensity = first.lightcones["cii_intensity"].copy()
 
     run.calls["scale"] = 2.0
     second = gen_lc(run.lightcone, run.lightconer, "deLooze14", "unused")
 
-    np.testing.assert_array_equal(first.lightcones["CII_IntensityBox"], first_intensity)
+    np.testing.assert_array_equal(first.lightcones["cii_intensity"], first_intensity)
     np.testing.assert_allclose(
-        second.lightcones["CII_IntensityBox"], 2 * first_intensity, rtol=1e-12
+        second.lightcones["cii_intensity"], 2 * first_intensity, rtol=1e-12
     )
 
 
@@ -245,11 +245,9 @@ def test_gen_coeval_conserves_flux(real_run):
     halos = read_cached(real_run.cache_dir, z, "HaloCatalog")
     _, intensity = calculate_cii(halos, "Lagache18", seed=5)
 
-    assert coeval.CII_IntensityBox.shape == (10, 10, 10)
+    assert coeval.cii_intensity.shape == (10, 10, 10)
     # Every halo lies inside the box, so gridding conserves the total flux.
-    np.testing.assert_allclose(
-        coeval.CII_IntensityBox.sum(), intensity.sum(), rtol=1e-10
-    )
+    np.testing.assert_allclose(coeval.cii_intensity.sum(), intensity.sum(), rtol=1e-10)
 
 
 def test_gen_coeval_grids_like_21cmfast(real_run, monkeypatch):
@@ -280,7 +278,7 @@ def test_gen_coeval_grids_like_21cmfast(real_run, monkeypatch):
 
     # The HaloBox is stored in float32.
     np.testing.assert_allclose(
-        coeval.CII_IntensityBox / cell_volume,
+        coeval.cii_intensity / cell_volume,
         coeval.halobox.get("halo_sfr"),
         rtol=1e-5,
         atol=1e-5 * coeval.halobox.get("halo_sfr").max(),
@@ -299,14 +297,14 @@ def test_gen_coeval_does_not_rely_on_calculate_cii_loading(real_run, monkeypatch
     )
     coeval = gen_coeval(NODE_REDSHIFTS[0], "Lagache18", real_run.cache_dir)
 
-    assert np.isfinite(coeval.CII_IntensityBox).all()
+    assert np.isfinite(coeval.cii_intensity).all()
 
 
 def test_gen_lc_on_real_cache(real_run):
     cii_lc = gen_lc(
         real_run.lightcone, real_run.lightconer, "Lagache18", real_run.cache_dir, seed=1
     )
-    brightness = cii_lc.lightcones["CII_BrightnessDensity"]
+    brightness = cii_lc.lightcones["cii_brightness"]
 
     assert brightness.shape == real_run.lightcone.lightcones["brightness_temp"].shape
     assert np.all(np.isfinite(brightness))
@@ -325,11 +323,11 @@ def test_gen_lc_matches_coeval_list(real_run):
     )
     expected = construct_lightcone_from_coevals(
         coevals,
-        attrs.evolve(real_run.lightconer, quantities=("CII_IntensityBox",)),
+        attrs.evolve(real_run.lightconer, quantities=("cii_intensity",)),
         real_run.lightcone.inputs,
-    ).lightcones["CII_IntensityBox"]
+    ).lightcones["cii_intensity"]
 
-    np.testing.assert_array_equal(cii_lc.lightcones["CII_IntensityBox"], expected)
+    np.testing.assert_array_equal(cii_lc.lightcones["cii_intensity"], expected)
 
 
 def test_gen_lc_without_21cm_outputs(real_run, tmp_path):
@@ -347,7 +345,7 @@ def test_gen_lc_without_21cm_outputs(real_run, tmp_path):
     reduced = gen_lc(*args, cache, seed=2)
     full = gen_lc(*args, real_run.cache_dir, seed=2)
 
-    for key in ("CII_IntensityBox", "CII_BrightnessDensity"):
+    for key in ("cii_intensity", "cii_brightness"):
         np.testing.assert_array_equal(reduced.lightcones[key], full.lightcones[key])
 
 

@@ -47,7 +47,7 @@ class CIICoeval:
         Redshift of the box.
     inputs : py21cmfast.InputParameters
         Input parameters of the 21cmFAST run.
-    CII_IntensityBox : np.ndarray
+    cii_intensity : np.ndarray
         Velocity-integrated [CII] flux density in each cell, in Jy km/s.
     initial_conditions : py21cmfast.InitialConditions, optional
         Initial conditions of the run.
@@ -57,7 +57,7 @@ class CIICoeval:
 
     redshift: float = field(converter=float)
     inputs: p21c.InputParameters
-    CII_IntensityBox: np.ndarray
+    cii_intensity: np.ndarray
     initial_conditions: p21c.InitialConditions | None = None
     halobox: p21c.HaloBox | None = None
 
@@ -128,7 +128,7 @@ def gen_coeval(
     Returns
     -------
     CIICoeval
-        The coeval box, with ``CII_IntensityBox`` in Jy km/s per cell.
+        The coeval box, with ``cii_intensity`` in Jy km/s per cell.
 
     Raises
     ------
@@ -187,7 +187,7 @@ def gen_coeval(
     return CIICoeval(
         redshift=z,
         inputs=halo_catalog.inputs,
-        CII_IntensityBox=cii_intensity,
+        cii_intensity=cii_intensity,
         initial_conditions=initial_conditions,
         halobox=cache_obj.get("HaloBox"),
     )
@@ -264,7 +264,7 @@ def gen_lc(
     -------
     py21cmfast.LightCone
         A copy of ``lc`` with two new fields in ``lightcones``:
-        ``"CII_IntensityBox"`` (Jy km/s per cell) and ``"CII_BrightnessDensity"``
+        ``"cii_intensity"`` (Jy km/s per cell) and ``"cii_brightness"``
         (Jy/sr).
 
     Raises
@@ -293,14 +293,12 @@ def gen_lc(
 
     intensity = construct_lightcone_from_coevals(
         cii_coevals(),
-        attrs.evolve(lcn, quantities=("CII_IntensityBox",)),
+        attrs.evolve(lcn, quantities=("cii_intensity",)),
         lc.inputs,
-    ).lightcones["CII_IntensityBox"]
+    ).lightcones["cii_intensity"]
 
-    cii_lc = attrs.evolve(
-        lc, lightcones={**lc.lightcones, "CII_IntensityBox": intensity}
-    )
+    cii_lc = attrs.evolve(lc, lightcones={**lc.lightcones, "cii_intensity": intensity})
     logger.info("Calculating the [CII] surface brightness")
-    cii_lc.lightcones["CII_BrightnessDensity"] = calculate_bvoxel(cii_lc)
+    cii_lc.lightcones["cii_brightness"] = calculate_bvoxel(cii_lc)
 
     return cii_lc
