@@ -16,28 +16,14 @@ from collections.abc import Callable
 import numpy as np
 from astropy import constants as const
 from astropy import units as un
-from astropy.cosmology import FLRW, z_at_value
+from astropy.cosmology import FLRW
+
+from ..cosmology import comoving_distance_to_redshift
 
 #: Rest-frame frequency of the [CII] 2P3/2 -> 2P1/2 fine-structure line.
 NU_CII_REST = 1900.5369 * un.GHz
 
 FLUX_UNIT = un.Jy * un.km / un.s
-
-
-def _comoving_distance_to_redshift(
-    cosmo: FLRW, distances: un.Quantity[un.Mpc]
-) -> np.ndarray:
-    """Invert the comoving distance-redshift relation for an array of distances.
-
-    The relation is tabulated on a fine redshift grid and interpolated, which is much
-    faster than solving for each distance separately.
-    """
-    d_mpc = distances.to_value(un.Mpc)
-    z_lo = z_at_value(cosmo.comoving_distance, d_mpc.min() * un.Mpc).value
-    z_hi = z_at_value(cosmo.comoving_distance, d_mpc.max() * un.Mpc).value
-    z_grid = np.linspace(max(z_lo - 0.01, 0.0), z_hi + 0.01, 10_000)
-    d_grid = cosmo.comoving_distance(z_grid).to_value(un.Mpc)
-    return np.interp(d_mpc, d_grid, z_grid)
 
 
 def _mean_preserving_lognormal(
@@ -280,11 +266,11 @@ def cii_surface_brightness(
     un.Quantity[un.Jy / un.sr]
         [CII] surface brightness of each cell.
     """
-    redshifts = _comoving_distance_to_redshift(cosmo, distances)
+    redshifts = comoving_distance_to_redshift(distances, cosmo)
     nu_obs = NU_CII_REST / (1 + redshifts)
     solid_angle = (cell_size / distances) ** 2 * un.sr
-    z_front = _comoving_distance_to_redshift(cosmo, distances - cell_size / 2)
-    z_back = _comoving_distance_to_redshift(cosmo, distances + cell_size / 2)
+    z_front = comoving_distance_to_redshift(distances - cell_size / 2, cosmo)
+    z_back = comoving_distance_to_redshift(distances + cell_size / 2, cosmo)
     delta_nu = NU_CII_REST / (1 + z_front) - NU_CII_REST / (1 + z_back)
 
     conversion = nu_obs / (const.c * delta_nu * solid_angle)

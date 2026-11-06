@@ -20,9 +20,9 @@ from typing import Any, Self
 import attrs
 import numpy as np
 import yaml
-from astropy import constants as const
 from astropy import units as un
 from astropy.stats import gaussian_fwhm_to_sigma
+from py21cmsense.beam import GaussianBeam
 
 TEMPLATE_DIR = Path(__file__).parent / "lim_instrument_templates"
 
@@ -72,11 +72,19 @@ def beam_fwhm(
     Returns
     -------
     un.Quantity[un.rad]
-        Beam FWHM, taken as 1.22 lambda / D.
+        Beam FWHM, taken as 1.22 lambda / D, from
+        :meth:`py21cmsense.beam.GaussianBeam.first_null`.
+
+    Notes
+    -----
+    For a uniformly illuminated circular aperture, 1.22 lambda / D is the first null
+    of the Airy pattern, and the FWHM is about 1.03 lambda / D. The illumination of
+    real dishes is tapered, which broadens the main beam, and [CII] intensity-mapping
+    forecasts take 1.22 lambda / D as the FWHM (e.g. Chung et al. 2020,
+    arXiv:1812.08135; CONCERTO Collaboration 2020, arXiv:2007.14246). This is close to
+    the beam FWHMs quoted for CCAT-prime and measured for CONCERTO.
     """
-    return (1.22 * const.c / nu_obs / diameter).to(
-        un.rad, equivalencies=un.dimensionless_angles()
-    )
+    return GaussianBeam(dish_size=diameter).first_null(nu_obs).to(un.rad)
 
 
 def beam_solid_angle(

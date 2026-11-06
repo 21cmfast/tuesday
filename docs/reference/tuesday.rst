@@ -5,6 +5,14 @@ tuesday
 
     from tuesday import *
 
+Cosmology
+---------
+.. autosummary::
+    :toctree: _autosummary
+    :template: module.rst
+
+    tuesday.core.cosmology
+
 Plotting
 --------
 .. autosummary::
