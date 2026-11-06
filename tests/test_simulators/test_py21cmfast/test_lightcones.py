@@ -1,8 +1,12 @@
 """Tests of the functions to create lightcones from output cache."""
 
+import gc
+import weakref
 from pathlib import Path
+from types import SimpleNamespace
 
 import attrs
+import numpy as np
 import pytest
 from astropy import units as un
 from py21cmfast import AngularLightconer, InputParameters, RectilinearLightconer
@@ -13,6 +17,7 @@ from py21cmfast.wrapper import outputs
 
 from tuesday.simulators.py21cmfast.lightcones import (
     construct_lightcone_from_cache,
+    construct_lightcone_from_coevals,
     construct_lightcone_from_filelist,
 )
 
@@ -194,3 +199,100 @@ def test_exceptions(tmp_path: Path):
 
     with pytest.raises(ValueError, match="The cache specified is not complete!"):
         construct_lightcone_from_cache(cache, lightconer)
+
+
+class CoevalLike(SimpleNamespace):
+    """A minimal coeval box that can be weakly referenced."""
+
+    __slots__ = ("__weakref__",)
+    __hash__ = object.__hash__
+
+
+def density_coevals(cache: RunCache, alive: list | None = None):
+    """Yield the cached density boxes as coeval-like objects, by decreasing redshift.
+
+    If ``alive`` is given, the number of boxes still in memory when each box is
+    created is appended to it.
+    """
+    boxes = weakref.WeakSet()
+    for z in sorted(cache.inputs.node_redshifts, reverse=True):
+        if alive is not None:
+            gc.collect()
+            alive.append(len(boxes))
+        box = h5.read_output_struct(cache.PerturbedField[z])
+        coeval = CoevalLike(
+            redshift=box.redshift,
+            simulation_options=box.inputs.simulation_options,
+            cosmo_params=box.inputs.cosmo_params,
+            density=box.get("density"),
+        )
+        boxes.add(coeval)
+        yield coeval
+
+
+@pytest.mark.parametrize("kind", ["rectilinear", "angular"])
+def test_construct_lightcone_from_coevals_matches_filelist(tmp_path: Path, kind: str):
+    cache = create_mock_cache_output(tmp_path / "cache")
+    options = cache.inputs.simulation_options
+    if kind == "rectilinear":
+        lightconer = RectilinearLightconer.between_redshifts(
+            min_redshift=6.5,
+            max_redshift=9.5,
+            resolution=options.BOX_LEN * un.Mpc / options.HII_DIM,
+            quantities=("density",),
+        )
+    else:
+        lightconer = AngularLightconer.like_rectilinear(
+            simulation_options=options,
+            max_redshift=9.5,
+            match_at_z=6.5,
+            quantities=("density",),
+        )
+    filelist = [
+        cache.PerturbedField[z]
+        for z in sorted(cache.inputs.node_redshifts, reverse=True)
+    ]
+
+    from_files = construct_lightcone_from_filelist(filelist, lightconer)
+    from_coevals = construct_lightcone_from_coevals(
+        density_coevals(cache), lightconer, cache.inputs
+    )
+
+    assert isinstance(from_coevals, LightCone)
+    np.testing.assert_array_equal(
+        from_coevals.lightcones["density"], from_files.lightcones["density"]
+    )
+
+
+def test_construct_lightcone_from_coevals_keeps_two_in_memory(tmp_path: Path):
+    # Each box is interpolated with the previous one as soon as it is produced, so
+    # at most the previous box is still alive when the next one is created.
+    cache = create_mock_cache_output(tmp_path / "cache")
+    options = cache.inputs.simulation_options
+    lightconer = RectilinearLightconer.between_redshifts(
+        min_redshift=6.5,
+        max_redshift=9.5,
+        resolution=options.BOX_LEN * un.Mpc / options.HII_DIM,
+        quantities=("density",),
+    )
+    alive = []
+    construct_lightcone_from_coevals(
+        density_coevals(cache, alive), lightconer, cache.inputs
+    )
+
+    assert alive == [0, 1, 1, 1, 1]
+
+
+def test_construct_lightcone_from_coevals_checks_redshift_range(tmp_path: Path):
+    cache = create_mock_cache_output(tmp_path / "cache")
+    options = cache.inputs.simulation_options
+    lightconer = RectilinearLightconer.between_redshifts(
+        min_redshift=6.5,
+        max_redshift=11.0,
+        resolution=options.BOX_LEN * un.Mpc / options.HII_DIM,
+        quantities=("density",),
+    )
+    with pytest.raises(ValueError, match="not compatible"):
+        construct_lightcone_from_coevals(
+            density_coevals(cache), lightconer, cache.inputs
+        )

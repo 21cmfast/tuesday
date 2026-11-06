@@ -1,0 +1,42 @@
+name: time2
+description: >-
+  An upgraded TIME [CII] line-scan survey with a 10 m dish, lower noise and a
+  longer survey time.
+parameters:
+  spectral_resolution:
+    value: 120
+    reference: Sun et al. 2021 (arXiv:2012.09160)
+  dish_diameter:
+    value: 10
+    unit: m
+    reference: Sun et al. 2021 (arXiv:2012.09160)
+  min_frequency:
+    value: 183
+    unit: GHz
+  max_frequency:
+    value: 326
+    unit: GHz
+  n_feeds:
+    value: 32
+    reference: Sun et al. 2021 (arXiv:2012.09160)
+  survey_time:
+    value: 3000
+    unit: h
+    reference: Sun et al. 2021 (arXiv:2012.09160)
+  survey_area:
+    # 78 arcmin x 0.5 arcmin line scan
+    value: 39
+    unit: arcmin2
+  sensitivity:
+    # Noise-equivalent intensity (NEI) at nu >= break_frequency
+    value: 5
+    unit: MJy s(1/2) / sr
+    reference: Sun et al. 2021 (arXiv:2012.09160)
+  low_frequency_sensitivity:
+    # Noise-equivalent intensity (NEI) at nu < break_frequency
+    value: 2.5
+    unit: MJy s(1/2) / sr
+    reference: Sun et al. 2021 (arXiv:2012.09160)
+  break_frequency:
+    value: 230
+    unit: GHz

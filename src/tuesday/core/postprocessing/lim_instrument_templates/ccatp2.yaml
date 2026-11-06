@@ -1,0 +1,33 @@
+name: ccatp2
+description: >-
+  An extended CCAT-prime / FYST EoR-Spec survey with twice the feeds and survey
+  area, and four times the survey time, of the ``ccatp`` template.
+parameters:
+  spectral_resolution:
+    value: 100
+  dish_diameter:
+    value: 6
+    unit: m
+  min_frequency:
+    value: 210
+    unit: GHz
+  max_frequency:
+    value: 420
+    unit: GHz
+  n_feeds:
+    value: 240
+  survey_time:
+    value: 8000
+    unit: h
+  survey_area:
+    value: 8
+    unit: deg2
+  sensitivity:
+    # Noise-equivalent flux density (NEFD) per beam
+    value: 72.5
+    unit: mJy s(1/2)
+    reference: Horlaville et al. 2024 (arXiv:2309.15733)
+  pixel_time:
+    value: 38
+    unit: h
+    reference: Horlaville et al. 2024 (arXiv:2309.15733)
