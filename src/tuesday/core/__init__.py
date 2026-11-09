@@ -34,13 +34,14 @@ __all__ = [
     "plot_power_spectrum",
     "plot_redshift_slice",
     "plotting",
+    "redshift_interpolator",
     "sample_from_rms_uvgrid",
     "summaries",
     "taper2d",
     "validate",
 ]
 from . import cosmology, instrument_models, plotting, summaries
-from .cosmology import comoving_distance_to_redshift
+from .cosmology import comoving_distance_to_redshift, redshift_interpolator
 from .instrument_models.noise import (
     apply_beam,
     compute_beam,
