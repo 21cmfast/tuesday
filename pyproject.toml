@@ -36,6 +36,7 @@ dependencies = [
     "astropy-healpix>=1.0",
     "attrs>=25.3.0",
     "deprecation",
+    "h5py>=3.8",
     "numpy>=2",
     "powerbox>=1.0.0",
     "scipy>=1.15.2",

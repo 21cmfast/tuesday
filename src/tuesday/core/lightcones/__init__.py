@@ -2,7 +2,9 @@
 
 __all__ = [
     "CELLS_PER_SAMPLE",
+    "LightconeStore",
     "average_subsamples",
+    "default_chunks",
     "degrade",
     "disc_pixels",
     "interpolate_then_sample",
@@ -45,3 +47,4 @@ from .slices import (
     samples_first,
     shell_slice,
 )
+from .store import LightconeStore, default_chunks
