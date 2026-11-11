@@ -63,8 +63,18 @@ def test_sample_then_interpolate_equals_interpolate_then_sample(
 def test_nonlinear_needs_linear_false(boxes, directions):
     """Treating mean_max as linear when sampling first gives a different slice."""
     expected = interpolate_then_sample(mean_max, *boxes, directions, 11.3, **KW)
-    wrong = sample_then_interpolate(mean_max, *boxes, directions, 11.3, **KW)
+    wrong = sample_then_interpolate(
+        mean_max, *boxes, directions, 11.3, linear=True, **KW
+    )
     assert not np.allclose(wrong, expected)
+
+
+def test_linear_has_no_default(boxes, directions):
+    """Callers must say whether the interpolation is linear."""
+    with pytest.raises(TypeError, match="linear"):
+        sample_then_interpolate(linear, *boxes, directions, 11.3)
+    with pytest.raises(TypeError, match="linear"):
+        shell_slice(linear, *boxes, directions, 11.3)
 
 
 def test_samples_first():
