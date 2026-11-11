@@ -265,3 +265,11 @@ def test_healpix_lightconer_without_redshifts():
     )
     assert lightconer.longitude.size == 4 * 48
     assert lightconer.n_pixels == 48
+    # min_redshift=None (e.g. an unset optional argument) also goes to the constructor
+    same = healpix_lightconer(
+        2,
+        subsample_level=1,
+        min_redshift=None,
+        lc_distances=np.array([100.0, 101.0]) * un.Mpc,
+    )
+    assert same == lightconer

@@ -305,7 +305,7 @@ def healpix_lightconer(
     Other Parameters
     ----------------
     kw
-        If ``min_redshift`` is given, all other parameters are passed to
+        If ``min_redshift`` is given (and not None), all other parameters are passed to
         :meth:`~py21cmfast.lightconers.Lightconer.between_redshifts` (e.g.
         ``min_redshift``, ``max_redshift``, ``resolution``, ``origin``,
         ``quantities``, ``threads``), otherwise to
@@ -336,6 +336,7 @@ def healpix_lightconer(
         "longitude": longitude.to_value(units.rad).ravel(),
         "n_subsamples": 4**subsample_level,
     }
-    if "min_redshift" in kw:
+    if kw.get("min_redshift") is not None:
         return FastAngularLightconer.between_redshifts(**directions, **kw)
+    kw.pop("min_redshift", None)
     return FastAngularLightconer(**directions, **kw)

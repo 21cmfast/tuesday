@@ -43,6 +43,8 @@ def pixel_side(nside: int) -> un.Quantity[un.rad]:
     un.Quantity[un.rad]
         The side of each pixel.
     """
+    if nside < 1:
+        raise ValueError("nside must be positive")
     return np.sqrt(np.pi / 3) / nside * un.rad
 
 
@@ -162,7 +164,7 @@ def subpixel_lonlat(
     Parameters
     ----------
     nside
-        The Nside of the grid.
+        The Nside of the grid, a power of 2 (astropy-healpix supports no other).
     order
         The ordering of the pixels, "ring" or "nested".
     subsample_level
@@ -212,7 +214,7 @@ def disc_pixels(
     Parameters
     ----------
     nside
-        The Nside of the grid.
+        The Nside of the grid, a power of 2 (astropy-healpix supports no other).
     longitude, latitude
         The centre of the patch.
     radius

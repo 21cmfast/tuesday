@@ -21,6 +21,9 @@ def test_pixel_side():
     for nside in (1, 64):
         side = pixel_side(nside).to_value(un.rad)
         np.testing.assert_allclose(side**2, 4 * np.pi / (12 * nside**2), rtol=1e-14)
+    for nside in (0, -4):
+        with pytest.raises(ValueError, match="nside must be positive"):
+            pixel_side(nside)
 
 
 def test_nside_for_cell_size():
@@ -83,6 +86,9 @@ def test_subpixel_lonlat_pixels():
         subpixel_lonlat(8, order="RING")
     with pytest.raises(ValueError, match="non-negative"):
         subpixel_lonlat(8, subsample_level=-1)
+    # astropy-healpix supports only powers of 2, also in ring order
+    with pytest.raises(ValueError, match="power of two"):
+        subpixel_lonlat(6, order="ring")
 
 
 @pytest.mark.parametrize("order", ["ring", "nested"])
