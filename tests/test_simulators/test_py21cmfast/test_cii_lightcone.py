@@ -275,14 +275,14 @@ def halo_part(cache_dir: Path, z: float, field: str) -> np.ndarray:
     no_halos = read_output_struct(run.HaloCatalog[z])
     no_halos.load_all()
     no_halos.set("halo_masses", np.zeros_like(no_halos.get("halo_masses")))
-    previous = (
-        {
-            "previous_spin_temp": read_output_struct(run.TsBox[nodes[i - 1]]),
-            "previous_ionize_box": read_output_struct(run.IonizedBox[nodes[i - 1]]),
-        }
-        if run.TsBox
-        else {}
-    )
+    # The boxes of the previous node redshift, as 21cmFAST's redshift loop passes them.
+    previous = {}
+    if i > 0:
+        previous["previous_ionize_box"] = read_output_struct(
+            run.IonizedBox[nodes[i - 1]]
+        )
+        if run.TsBox:
+            previous["previous_spin_temp"] = read_output_struct(run.TsBox[nodes[i - 1]])
     below_sampler = p21c.compute_emissivity_fields(
         redshift=z,
         inputs=inputs,
@@ -453,3 +453,71 @@ def test_gen_coeval_needs_the_previous_boxes(feedback_run, tmp_path, missing):
 
     with pytest.raises(ValueError, match=missing):
         gen_coeval(feedback_run.nodes[2], "Lagache18", cache, seed=0)
+
+
+# --- A (tiny) run with reionization feedback, without minihalos ---------------------
+
+
+@pytest.fixture(scope="module")
+def photoheating_run(tmp_path_factory) -> SimpleNamespace:
+    """Run a tiny coeval with reionization feedback but no minihalos or Ts (~10 s).
+
+    The cache then has no TsBox, and the halo properties depend on the IonizedBox of
+    the previous node redshift. Z_HEAT_MAX is the first node redshift: 21cmFAST
+    4.3.1 crashes (segfault) with reionization feedback at a first node below it.
+    """
+    cache_dir = tmp_path_factory.mktemp("photoheating_cache")
+    inputs = p21c.InputParameters.from_template(
+        ["latest-discrete", "size-tiny"],
+        random_seed=4,
+        node_redshifts=NODE_REDSHIFTS,
+        USE_TS_FLUCT=False,
+        RECOMB_MODEL="none",
+        USE_REIONIZATION_PHOTOHEATING_FEEDBACK=True,
+    ).evolve_input_structs(
+        BOX_LEN=30,
+        HII_DIM=10,
+        DIM=None,
+        HIRES_TO_LOWRES_FACTOR=2,
+        PERTURB_ALGORITHM="LINEAR",
+        Z_HEAT_MAX=NODE_REDSHIFTS[0],
+    )
+    assert not inputs.astro_options.USE_MCGS
+    p21c.run_coeval(
+        out_redshifts=[NODE_REDSHIFTS[-1]],
+        inputs=inputs,
+        cache=OutputCache(cache_dir),
+        write=True,
+        progressbar=False,
+    )
+    return SimpleNamespace(cache_dir=cache_dir, inputs=inputs)
+
+
+@pytest.mark.parametrize("node", [1, 2])
+def test_gen_coeval_with_reionization_feedback_only(
+    photoheating_run, monkeypatch, node
+):
+    # Reionization feedback without minihalos needs only the previous IonizedBox:
+    # gen_coeval must not ask for a TsBox, which such a run does not have, and must
+    # give the halos the properties of the run.
+    run = RunCache.from_inputs(
+        photoheating_run.inputs, OutputCache(photoheating_run.cache_dir)
+    )
+    assert not run.TsBox
+    z = NODE_REDSHIFTS[node]
+    gridded = grid_halo_property(monkeypatch, photoheating_run.cache_dir, z, "n_ion")
+    expected = halo_part(photoheating_run.cache_dir, z, "n_ion")
+
+    assert expected.max() > 0
+    np.testing.assert_allclose(gridded, expected, rtol=1e-5, atol=1e-5 * expected.max())
+
+
+def test_gen_coeval_with_reionization_feedback_needs_the_ionized_box(
+    photoheating_run, tmp_path
+):
+    cache = copy_cache_without(
+        photoheating_run.cache_dir, tmp_path / "cache", "IonizedBox"
+    )
+
+    with pytest.raises(ValueError, match="IonizedBox"):
+        gen_coeval(NODE_REDSHIFTS[2], "Lagache18", cache, seed=0)
