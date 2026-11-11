@@ -6,12 +6,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
-from py21cmfast.drivers.lightcone import (
-    AngularLightcone,
-    LightCone,
-    do_rsds,
-    setup_lightcone_instance,
-)
+from py21cmfast.drivers.lightcone import LightCone, setup_lightcone_instance
 from py21cmfast.io import read_output_struct
 from py21cmfast.io.caching import RunCache
 from py21cmfast.lightconers import Lightconer
@@ -41,6 +36,18 @@ def construct_lightcone_from_cache(
         The object used to generate lightcone slices.
     global_quantities
         A list of global quantities to extract.
+    apply_rsds
+        Whether to add a ``<quantity>_with_rsds`` field with redshift-space
+        distortions for every quantity, as :func:`py21cmfast.run_lightcone` does.
+        The lightconer is extended to the distances the RSDs need, and the result is
+        trimmed back to the requested distances.
+    include_dvdr_in_tau21
+        Whether to apply the velocity-gradient (dv/dr) correction to
+        ``brightness_temp``, as :func:`py21cmfast.run_lightcone` does by default.
+        The ``los_velocity`` (and, with ``USE_TS_FLUCT``, ``tau_21``) lightcones it
+        needs are added to the output.
+    n_rsd_subcells
+        The number of sub-cells per cell used to apply the RSDs.
 
     Returns
     -------
@@ -58,7 +65,11 @@ def construct_lightcone_from_cache(
     inputs = cache.inputs
     node_redshifts = sorted(cache.BrightnessTemp.keys(), reverse=True)
 
-    lightconer.validate_options(
+    # The requested distances, before validate_options extends them for RSDs.
+    lc_distances = lightconer.lc_distances.copy()
+    # validate_options returns the lightconer to use: it adds the los_velocity and
+    # tau_21 quantities that the dv/dr correction and the RSDs need.
+    lightconer = lightconer.validate_options(
         cache.inputs, apply_rsds=apply_rsds, include_dvdr_in_tau21=include_dvdr_in_tau21
     )
 
@@ -91,11 +102,11 @@ def construct_lightcone_from_cache(
         for quantity in global_quantities:
             if quantity == "log10_mturn_acg":
                 lightcone.global_quantities[quantity][iz] = (
-                    coeval.ionized_box.log10_Mturnover_ave
+                    coeval.ionized_box.log10_mturn_ave_acg
                 )
             elif quantity == "log10_mturn_mcg":
                 lightcone.global_quantities[quantity][iz] = (
-                    coeval.ionized_box.log10_Mturnover_MINI_ave
+                    coeval.ionized_box.log10_mturn_ave_mcg
                 )
             else:
                 lightcone.global_quantities[quantity][iz] = np.mean(
@@ -112,21 +123,19 @@ def construct_lightcone_from_cache(
 
         prev_coeval = coeval
 
-        # last redshift things
-        if iz == len(node_redshifts) - 1 and (
-            isinstance(lightcone, AngularLightcone) and apply_rsds
-        ):
-            field_with_rsds = do_rsds(
-                field=lightcone.lightcones["brightness_temp"],
-                los_velocity=lightcone.lightcones["los_velocity"],
-                redshifts=lightcone.lightcone_redshifts,
-                inputs=inputs,
-                periodic=False,
-                n_rsd_subcells=n_rsd_subcells,
-            )
-            lightcone.lightcones["brightness_temp_with_rsds"] = field_with_rsds
-
-    return lightcone
+    # Apply the dv/dr correction and RSDs, and trim the RSD buffer, with the method
+    # that run_lightcone calls at its last node (private in 21cmFAST 4.3).
+    return lightcone._finalize_lightcone_at_last_redshift(
+        include_dvdr_in_tau21=include_dvdr_in_tau21,
+        apply_rsds=apply_rsds,
+        n_rsd_subcells=n_rsd_subcells,
+        inputs=inputs,
+        lightconer=lightconer,
+        lc_distances=lc_distances,
+        lowz_buffer_pixels=0,
+        highz_buffer_pixels=0,
+        lightcone_filename=None,
+    )
 
 
 def construct_lightcone_from_coevals(
