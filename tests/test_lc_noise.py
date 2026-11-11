@@ -3,7 +3,7 @@
 import astropy.units as un
 import numpy as np
 import pytest
-from astropy.cosmology import Planck18
+from astropy.cosmology import Planck18, z_at_value
 from astropy.cosmology import units as cu
 from astropy.cosmology.units import littleh
 from py21cmsense import Observation, Observatory
@@ -317,6 +317,25 @@ class TestThermalRmsPerSnapshotVis:
         )
         assert rms.shape == (2,)
         assert np.all(rms > 0)
+
+    def test_slice_depth_in_frequency(self, small_obs):
+        """A comoving slice depth gives the frequency width of the slice."""
+        freqs = [150.0, 120.0, 80.0] * un.MHz
+        depth = 20 * un.Mpc
+        rms = compute_thermal_rms_per_snapshot_vis(
+            small_obs, freqs=freqs, box_res=depth, box_slice_depth=depth
+        )
+        for i, nu in enumerate(freqs):
+            d = Planck18.comoving_distance(f2z(nu))
+            z_lo, z_hi = (
+                z_at_value(Planck18.comoving_distance, d + s * depth / 2, ztol=1e-12)
+                for s in (-1, 1)
+            )
+            df = np.abs(z2f(z_hi.value) - z2f(z_lo.value))
+            expected = compute_thermal_rms_per_snapshot_vis(
+                small_obs, freqs=nu, box_res=depth, box_slice_depth=df
+            )
+            np.testing.assert_allclose(rms[i], expected[0], rtol=1e-8)
 
     @pytest.mark.parametrize("box_slice_depth", [None, 15 * un.Mpc])
     def test_littleh_consistent(self, small_obs, box_slice_depth):

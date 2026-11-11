@@ -5,6 +5,14 @@ tuesday
 
     from tuesday import *
 
+Cosmology
+---------
+.. autosummary::
+    :toctree: _autosummary
+    :template: module.rst
+
+    tuesday.core.cosmology
+
 Plotting
 --------
 .. autosummary::
@@ -28,3 +36,11 @@ Instrument noise simulation
     :template: module.rst
 
     tuesday.core.instrument_models
+
+Post-processing
+---------------
+.. autosummary::
+    :toctree: _autosummary
+    :template: module.rst
+
+    tuesday.core.postprocessing

@@ -11,11 +11,13 @@ __all__ = [
     "coeval2slice_x",
     "coeval2slice_y",
     "coeval2slice_z",
+    "comoving_distance_to_redshift",
     "compute_beam",
     "compute_thermal_rms_per_snapshot_vis",
     "compute_thermal_rms_uvgrid",
     "compute_uv_sampling",
     "convert_half_to_full_uv_plane",
+    "cosmology",
     "cylindrical_to_spherical",
     "horizon_limit",
     "instrument_models",
@@ -32,12 +34,14 @@ __all__ = [
     "plot_power_spectrum",
     "plot_redshift_slice",
     "plotting",
+    "redshift_interpolator",
     "sample_from_rms_uvgrid",
     "summaries",
     "taper2d",
     "validate",
 ]
-from . import instrument_models, plotting, summaries
+from . import cosmology, instrument_models, plotting, summaries
+from .cosmology import comoving_distance_to_redshift, redshift_interpolator
 from .instrument_models.noise import (
     apply_beam,
     compute_beam,

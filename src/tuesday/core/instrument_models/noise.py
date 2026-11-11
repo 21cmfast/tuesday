@@ -82,7 +82,7 @@ from typing import Literal
 import astropy.units as un
 import numpy as np
 from astropy.constants import c
-from astropy.cosmology import Planck18, z_at_value
+from astropy.cosmology import Planck18
 from astropy.cosmology import units as cu
 from astropy.cosmology.units import littleh
 from py21cmsense import Observation
@@ -90,6 +90,8 @@ from py21cmsense import units as tp
 from py21cmsense._utils import grid_baselines
 from py21cmsense.conversions import dk_deta, dk_du, f2z, z2f
 from scipy.signal import windows
+
+from ..cosmology import comoving_distance_to_redshift
 
 logger = logging.getLogger(__name__)
 
@@ -210,6 +212,20 @@ def compute_thermal_rms_per_snapshot_vis(
     if not box_slice_depth.unit.is_equivalent(un.Hz):
         box_slice_depth = box_slice_depth.to(un.Mpc, h_equiv)
 
+    # Comoving distance to each frequency, and frequency depth of each slice.
+    distances = Planck18.comoving_distance(f2z(freqs)).to(un.Mpc)
+    if box_slice_depth.unit.is_equivalent(un.Hz):
+        slice_widths = box_slice_depth * np.ones(len(freqs))
+    else:
+        slice_widths = np.abs(
+            z2f(
+                comoving_distance_to_redshift(distances + box_slice_depth / 2, Planck18)
+            )
+            - z2f(
+                comoving_distance_to_redshift(distances - box_slice_depth / 2, Planck18)
+            )
+        )
+
     sig_uv = np.zeros(len(freqs)) * un.mK
     for i, nu in enumerate(freqs):
         obs = observation.clone(frequency=nu)
@@ -217,19 +233,9 @@ def compute_thermal_rms_per_snapshot_vis(
         tsys = obs.Tsys
 
         # transverse comoving distance per radian
-        d = Planck18.comoving_distance(f2z(nu)).to(un.Mpc)
+        d = distances[i]
         omega_pix = (box_res / (d / un.rad)) ** 2
-
-        if box_slice_depth.unit.is_equivalent(un.Hz):
-            df = box_slice_depth
-        else:
-            with un.set_enabled_equivalencies(cu.dimensionless_redshift()):
-                df = np.abs(
-                    z2f(z_at_value(Planck18.comoving_distance, d + box_slice_depth / 2))
-                    - z2f(
-                        z_at_value(Planck18.comoving_distance, d - box_slice_depth / 2)
-                    )
-                )
+        df = slice_widths[i]
 
         npolarizations = 2  # assume dual polarization
         sqrt = np.sqrt(npolarizations * df * obs.integration_time).to(
