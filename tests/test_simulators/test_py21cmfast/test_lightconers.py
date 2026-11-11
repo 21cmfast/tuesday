@@ -9,6 +9,7 @@ from py21cmfast import AngularLightconer, InputParameters, run_lightcone
 from py21cmfast.io.caching import OutputCache, RunCache
 from scipy.spatial.transform import Rotation
 
+from tuesday.core import lightcones
 from tuesday.core.lightcones import CELLS_PER_SAMPLE
 from tuesday.simulators.py21cmfast.lightconers import FastAngularLightconer
 from tuesday.simulators.py21cmfast.lightcones import construct_lightcone_from_cache
@@ -73,6 +74,20 @@ def run(tmp_path_factory) -> SimpleNamespace:
     return SimpleNamespace(inputs=inputs, cache=cache, lightcone=lightcone)
 
 
+def _record_ways(monkeypatch) -> list[str]:
+    """Record which way each slice is made: "sample" first or "interpolate" first."""
+    called = []
+    for name in ("sample_then_interpolate", "interpolate_then_sample"):
+        original = getattr(lightcones.slices, name)
+
+        def spy(*args, _name=name, _original=original, **kw):
+            called.append(_name.split("_")[0])
+            return _original(*args, **kw)
+
+        monkeypatch.setattr(lightcones.slices, name, spy)
+    return called
+
+
 def _assert_lightcones_close(result, reference, quantities, rtol=1e-6):
     for q in quantities:
         got = np.asarray(result.lightcones[q], dtype=float)
@@ -107,8 +122,13 @@ ROTATION = Rotation.from_euler("zyx", [0.3, 0.2, 0.1])
         (False, ROTATION, True),
     ],
 )
-def test_matches_stock(run, tile_first, rotation, dvdr_and_rsds):
-    """Sampling first or not, the lightcones equal 21cmFAST's, with dv/dr and RSDs."""
+def test_matches_stock(run, monkeypatch, tile_first, rotation, dvdr_and_rsds):
+    """Sampling first or not, the lightcones equal 21cmFAST's, with dv/dr and RSDs.
+
+    Every slice is made the way tile_first asks for, or, with tile_first=None, the
+    way samples_first picks: sampling first, since the 10^3 boxes have more than 16
+    cells for each of the 48 directions.
+    """
     kw = _lightconer_kwargs(run.inputs, rotation=rotation)
     directions = _ring(48, latitude=-0.3)
     options = {
@@ -119,6 +139,7 @@ def test_matches_stock(run, tile_first, rotation, dvdr_and_rsds):
     reference = construct_lightcone_from_cache(
         run.cache, AngularLightconer.between_redshifts(**directions, **kw), **options
     )
+    ways = _record_ways(monkeypatch)
     result = construct_lightcone_from_cache(
         run.cache,
         FastAngularLightconer.between_redshifts(
@@ -126,6 +147,8 @@ def test_matches_stock(run, tile_first, rotation, dvdr_and_rsds):
         ),
         **options,
     )
+    assert ways
+    assert set(ways) == {"interpolate" if tile_first is False else "sample"}
     quantities = list(reference.lightcones)
     assert sorted(result.lightcones) == sorted(quantities)
     _assert_lightcones_close(result, reference, quantities)
