@@ -9,8 +9,11 @@ from py21cmfast import AngularLightconer, InputParameters, run_lightcone
 from py21cmfast.io.caching import OutputCache, RunCache
 from scipy.spatial.transform import Rotation
 
-from tuesday.core.lightcones import CELLS_PER_SAMPLE
-from tuesday.simulators.py21cmfast.lightconers import FastAngularLightconer
+from tuesday.core.lightcones import CELLS_PER_SAMPLE, disc_pixels, subpixel_lonlat
+from tuesday.simulators.py21cmfast.lightconers import (
+    FastAngularLightconer,
+    healpix_lightconer,
+)
 from tuesday.simulators.py21cmfast.lightcones import construct_lightcone_from_cache
 
 QUANTITIES = ("brightness_temp", "density", "z_reion", "los_velocity")
@@ -211,3 +214,54 @@ def test_validation():
         FastAngularLightconer(**_ring(10), threads=0, lc_distances=distances)
     with pytest.raises(ValueError, match="chunk_size must be at least 1"):
         FastAngularLightconer(**_ring(10), chunk_size=0, lc_distances=distances)
+
+
+@pytest.mark.parametrize("order", ["ring", "nested"])
+def test_healpix_matches_stock(run, order):
+    """A HEALPix lightcone holds the field at the pixel centres, in pixel order."""
+    lon, lat = subpixel_lonlat(4, order=order)
+    kw = _lightconer_kwargs(run.inputs)
+    reference = construct_lightcone_from_cache(
+        run.cache,
+        AngularLightconer.between_redshifts(
+            latitude=lat[0].value, longitude=lon[0].value, **kw
+        ),
+    )
+    lightconer = healpix_lightconer(4, order=order, tile_first=True, **kw)
+    assert lightconer.n_pixels == 192
+    result = construct_lightcone_from_cache(run.cache, lightconer)
+    _assert_lightcones_close(result, reference, QUANTITIES)
+
+
+def test_healpix_patch_with_subpixels(run):
+    """A patch of pixels, each the mean over its four sub-pixels."""
+    pixels = disc_pixels(8, 1.0 * un.rad, 0.3 * un.rad, 25 * un.deg)
+    lon, lat = subpixel_lonlat(8, subsample_level=1, pixels=pixels)
+    kw = _lightconer_kwargs(run.inputs)
+    reference = construct_lightcone_from_cache(
+        run.cache,
+        AngularLightconer.between_redshifts(
+            latitude=lat.value.ravel(), longitude=lon.value.ravel(), **kw
+        ),
+    )
+    for q in reference.lightcones:
+        values = np.asarray(reference.lightcones[q])
+        reference.lightcones[q] = values.reshape(4, pixels.size, -1).mean(axis=0)
+
+    lightconer = healpix_lightconer(8, pixels=pixels, subsample_level=1, **kw)
+    assert lightconer.n_subsamples == 4
+    result = construct_lightcone_from_cache(run.cache, lightconer)
+    assert result.lightcones["density"].shape == (
+        pixels.size,
+        len(lightconer.lc_redshifts),
+    )
+    _assert_lightcones_close(result, reference, QUANTITIES)
+
+
+def test_healpix_lightconer_without_redshifts():
+    """Without min_redshift, the parameters go to the constructor."""
+    lightconer = healpix_lightconer(
+        2, subsample_level=1, lc_distances=np.array([100.0, 101.0]) * un.Mpc
+    )
+    assert lightconer.longitude.size == 4 * 48
+    assert lightconer.n_pixels == 48
