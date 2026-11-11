@@ -121,9 +121,9 @@ def sample_then_interpolate(
     directions: np.ndarray,
     radius: float,
     *,
+    linear: bool,
     origin: Sequence[float] | np.ndarray | None = None,
     order: int = 1,
-    linear: bool = True,
     threads: int = 1,
     chunk_size: int = 2**20,
 ) -> np.ndarray:
@@ -153,7 +153,9 @@ def sample_then_interpolate(
     order
         The order of the interpolation on the shell, 0 or 1.
     linear
-        Whether ``interpolate`` is linear in the values of the boxes.
+        Whether ``interpolate`` is linear in the values of the boxes. It has no
+        default: sampling first with an interpolation wrongly declared linear gives a
+        different slice.
     threads
         The number of threads that sample the boxes.
     chunk_size
@@ -182,9 +184,9 @@ def shell_slice(
     directions: np.ndarray,
     radius: float,
     *,
+    linear: bool,
     origin: Sequence[float] | np.ndarray | None = None,
     order: int = 1,
-    linear: bool = True,
     sample_first: bool | None = None,
     threads: int = 1,
     chunk_size: int = 2**20,
@@ -213,7 +215,9 @@ def shell_slice(
     order
         The order of the interpolation on the shell, 0 or 1.
     linear
-        Whether ``interpolate`` is linear in the values of the boxes.
+        Whether ``interpolate`` is linear in the values of the boxes. It has no
+        default: sampling first with an interpolation wrongly declared linear gives a
+        different slice.
     sample_first
         True to sample first, False to interpolate first, None (the default) to
         choose the cheaper.
