@@ -7,6 +7,7 @@ import attrs
 import numpy as np
 import pytest
 from py21cmfast import AngularLightconer, InputParameters, RectilinearLightconer
+from py21cmfast.drivers.lightcone import AngularLightcone, LightCone
 from py21cmfast.io import h5
 from py21cmfast.io.caching import OutputCache, RunCache
 from py21cmfast.wrapper import outputs
@@ -15,19 +16,26 @@ from scipy.spatial.transform import Rotation
 from tuesday.core.lightcones import LightconeStore
 from tuesday.simulators.py21cmfast.lightconers import FastAngularLightconer
 from tuesday.simulators.py21cmfast.lightcones import (
+    DVDR,
     CachedFields,
     construct_lightcone_from_cache,
+    include_dvdr_on_disk,
     lightconer_metadata,
+    link_lightcone_file,
     make_lightcones_on_disk,
 )
 
 NODES = [10.0, 9.0, 8.0, 7.0, 6.0]
 
 
-def random_cache(cachedir: Path) -> RunCache:
+def random_cache(cachedir: Path, ts: bool = False) -> RunCache:
     """Write a cache of random boxes (no 21cmFAST run), for 5 node redshifts."""
     inputs = InputParameters.from_template(
-        "simple", random_seed=1, node_redshifts=NODES
+        "simple",
+        random_seed=1,
+        node_redshifts=NODES,
+        USE_TS_FLUCT=ts,
+        Z_HEAT_MAX=NODES[0],
     ).evolve_input_structs(BOX_LEN=48, HII_DIM=16, DIM=48, KEEP_3D_VELOCITIES=True)
     cache = RunCache.from_inputs(inputs, cache=OutputCache(cachedir))
     rng = np.random.default_rng(3)
@@ -276,3 +284,124 @@ def test_errors(cache, lightconers, tmp_path):
     with pytest.raises(ValueError, match="not compatible"):
         make_lightcones_on_disk({"far": far}, "density", cache, tmp_path)
     assert not any(tmp_path.iterdir())
+
+
+# --- The dv/dr correction and the 21cmFAST lightcone file -----------------------------
+
+
+@pytest.fixture(scope="module")
+def on_disk(tmp_path_factory):
+    """Make lightcones on disk of what the dv/dr correction needs, from random boxes.
+
+    They are made once for each value of USE_TS_FLUCT.
+    """
+    made = {}
+
+    def make(ts: bool):
+        if ts not in made:
+            tmp = tmp_path_factory.mktemp("dvdr")
+            cache = random_cache(tmp / "cache", ts=ts)
+            quantities = ["brightness_temp", "los_velocity"]
+            if ts:
+                quantities.append("tau_21")
+            lcs = lightconers(cache)
+            make_lightcones_on_disk(lcs, quantities, cache, tmp / "out")
+            made[ts] = cache, lcs, tmp / "out"
+        return made[ts]
+
+    return make
+
+
+@pytest.mark.parametrize("ts", [False, True], ids=["no_ts", "ts"])
+@pytest.mark.parametrize("name", ["rect", "angular", "healpix"])
+def test_include_dvdr_on_disk(on_disk, ts, name):
+    """The correction of run_lightcone, in blocks of lines of sight."""
+    cache, lcs, out = on_disk(ts)
+    reference = construct_lightcone_from_cache(
+        cache,
+        attrs.evolve(lcs[name], quantities=("brightness_temp",)),
+        include_dvdr_in_tau21=True,
+    )
+    # a few lines of sight at a time
+    path = include_dvdr_on_disk(out / name, cache.inputs, max_memory=1, clobber=True)
+    assert path == out / name / f"{DVDR}.h5"
+    assert not list((out / name).glob(".*.tmp"))
+    with LightconeStore.open(path) as store:
+        assert store.complete
+        assert store.quantity == DVDR
+        np.testing.assert_allclose(
+            store.lightcone[()], reference.lightcones["brightness_temp"], rtol=1e-6
+        )
+        with LightconeStore.open(out / name / "brightness_temp.h5") as plain:
+            assert not np.allclose(store.lightcone[()], plain.lightcone[()])
+
+    # a complete file is kept, unless clobbered
+    mtime = path.stat().st_mtime_ns
+    assert include_dvdr_on_disk(out / name, cache.inputs) == path
+    assert path.stat().st_mtime_ns == mtime
+
+
+def test_include_dvdr_on_disk_errors(cache, tmp_path):
+    """The stores must be complete, and the slices one cell apart."""
+    lightconer = lightconers(cache)["rect"]
+    make_lightcones_on_disk({"rect": lightconer}, "brightness_temp", cache, tmp_path)
+    with pytest.raises(ValueError, match=r"los_velocity\.h5"):
+        include_dvdr_on_disk(tmp_path / "rect", cache.inputs)
+
+    coarse = RectilinearLightconer.between_redshifts(
+        min_redshift=6.2,
+        max_redshift=9.8,
+        resolution=2 * cache.inputs.simulation_options.cell_size,
+    )
+    make_lightcones_on_disk(
+        {"coarse": coarse}, ["brightness_temp", "los_velocity"], cache, tmp_path
+    )
+    with pytest.raises(ValueError, match="one cell apart"):
+        include_dvdr_on_disk(tmp_path / "coarse", cache.inputs)
+
+
+@pytest.mark.parametrize("ts", [False, True], ids=["no_ts", "ts"])
+@pytest.mark.parametrize("name", ["rect", "healpix"])
+def test_link_lightcone_file(on_disk, tmp_path, monkeypatch, ts, name):
+    """21cmFAST reads the lightcones on disk through the links of one file."""
+    cache, lcs, out = on_disk(ts)
+    include_dvdr_on_disk(out / name, cache.inputs)
+    path = link_lightcone_file(out / name, cache.inputs)
+    assert path == out / f"{name}.h5"
+
+    # the links are relative to the file
+    monkeypatch.chdir(tmp_path)
+    kind = LightCone if name == "rect" else AngularLightcone
+    lightcone = kind.from_file(path)
+    expected = {"brightness_temp", "brightness_temp_no_dvdr", "los_velocity"}
+    assert set(lightcone.lightcones) == expected | ({"tau_21"} if ts else set())
+    stored = {
+        "brightness_temp": DVDR,
+        "brightness_temp_no_dvdr": "brightness_temp",
+        "los_velocity": "los_velocity",
+    }
+    for key, quantity in stored.items():
+        with LightconeStore.open(out / name / f"{quantity}.h5") as store:
+            np.testing.assert_array_equal(
+                lightcone.lightcones[key], store.lightcone[()]
+            )
+    np.testing.assert_allclose(
+        lightcone.lightcone_distances, lcs[name].lc_distances, rtol=1e-12
+    )
+    assert lightcone.inputs == cache.inputs
+    reference = construct_lightcone_from_cache(
+        cache,
+        attrs.evolve(lcs[name], quantities=("brightness_temp",)),
+        global_quantities=("brightness_temp",),
+    )
+    assert set(lightcone.global_quantities) == {"brightness_temp"} | (
+        {"tau_21"} if ts else set()
+    )
+    np.testing.assert_allclose(
+        lightcone.global_quantities["brightness_temp"],
+        reference.global_quantities["brightness_temp"],
+        rtol=1e-6,
+    )
+
+    with pytest.raises(ValueError, match="no complete lightcone"):
+        link_lightcone_file(tmp_path, cache.inputs)
