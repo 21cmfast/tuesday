@@ -2,21 +2,23 @@
 
 21cmFAST 4.3's :class:`py21cmfast.AngularLightconer` makes each slice of an angular
 lightcone by interpolating the two coeval boxes around the slice in redshift, cell by
-cell, and then sampling the interpolated box at the slice's directions. For a large
-box and few directions (e.g. a ring of directions through a 1500^3 box), almost all
-of that work is the interpolation of cells that are never sampled. Sampling each box
-at the slice's directions first and interpolating the samples gives the same slice,
-to rounding, at a cost set by the number of directions.
+cell, and then sampling the interpolated box at the slice's directions with cosmotile.
+For a large box and few directions (e.g. a ring of directions through a 1500^3 box),
+almost all of that work is the interpolation of cells that are never sampled.
+Sampling each box at the slice's directions first and interpolating the samples gives
+the same slice, to rounding, at a cost set by the number of directions.
 
 :class:`FastAngularLightconer` makes each slice in whichever of the two ways is
-cheaper, with :func:`tuesday.core.lightcones.shell_slice`
-(:func:`~tuesday.core.lightcones.sample_then_interpolate` or
-:func:`~tuesday.core.lightcones.interpolate_then_sample`), unless ``tile_first`` says
-which to use. The same is proposed for 21cmFAST itself (branch
-``perf/angular-lightcone-sample-first``, with the same ``tile_first`` parameter).
+cheaper (:func:`tuesday.core.lightcones.samples_first`), unless ``tile_first`` says
+which to use. Both ways sample the boxes with cosmotile's slice interpolator
+(:func:`cosmotile.make_lightcone_slice_interpolator`), as 21cmFAST does. The same is
+proposed for 21cmFAST itself (branch ``perf/angular-lightcone-sample-first``, with the
+same ``tile_first`` parameter).
 
 The lightconer can also average each pixel over several directions (sub-samples), so
-that pixels larger than the cells average the field instead of aliasing it.
+that pixels larger than the cells average the field instead of aliasing it. cosmotile
+(0.3 and later) does the average, and projects the velocity on each direction before
+it.
 
 The loop over slices and quantities, the redshift interpolation and the
 line-of-sight convention are 21cmFAST's own: the lightconer only changes the steps of
@@ -27,32 +29,48 @@ slice. It works with :func:`py21cmfast.run_lightcone` and with
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from functools import cached_property
+from collections.abc import Callable, Sequence
+from functools import partial
 
 import attrs
 import numpy as np
 from astropy import units
 from astropy.units import Quantity
-from cosmotile import transform_to_pixel_coords
+from cosmotile import (
+    make_lightcone_slice_interpolator,
+    make_lightcone_slice_vector_field,
+)
 from py21cmfast.lightconers import AngularLightconer
 from py21cmfast.wrapper.inputs import SimulationOptions
 
-from tuesday.core.lightcones import (
-    average_subsamples,
-    line_of_sight_component,
-    samples_first,
-    shell_slice,
-)
+from tuesday.core.lightcones import sample_then_interpolate, samples_first
 
 
 class _Deferred:
-    """A coeval box whose slice is made in ``redshift_interpolation``."""
+    """A coeval box whose slice is made by sampling it first."""
 
     __slots__ = ("box",)
 
     def __init__(self, box: np.ndarray):
         self.box = box
+
+
+class _Pair:
+    """Two coeval boxes and the interpolation between them, to be sampled first."""
+
+    __slots__ = ("box_a", "box_b", "interpolate", "linear")
+
+    def __init__(
+        self,
+        box_a: np.ndarray,
+        box_b: np.ndarray,
+        interpolate: Callable[[np.ndarray, np.ndarray], np.ndarray],
+        linear: bool,
+    ):
+        self.box_a = box_a
+        self.box_b = box_b
+        self.interpolate = interpolate
+        self.linear = linear
 
 
 def _plain(values: np.ndarray | Quantity) -> np.ndarray:
@@ -70,14 +88,15 @@ class FastAngularLightconer(AngularLightconer):
     Each slice is made from the two coeval boxes around it either by sampling the
     boxes at the slice's directions and interpolating the samples in redshift, or by
     interpolating the boxes and sampling the result. By default it takes the cheaper
-    way for the size of the boxes (:meth:`samples_first`).
+    way for the size of the boxes (:meth:`samples_first`). Both ways sample with
+    cosmotile's slice interpolator.
 
     Each pixel can be the mean over several directions (sub-samples). Then
     ``latitude`` and ``longitude`` hold ``n_subsamples * n_pixels`` directions,
     ordered sub-sample by sub-sample: the first ``n_pixels`` are the first direction
     of each pixel, and so on (``np.ravel`` of an array of shape
-    ``(n_subsamples, n_pixels)``). The line-of-sight velocity is projected on each
-    direction before the average.
+    ``(n_subsamples, n_pixels)``, which is what cosmotile takes). The line-of-sight
+    velocity is projected on each direction before the average.
 
     Parameters
     ----------
@@ -88,17 +107,11 @@ class FastAngularLightconer(AngularLightconer):
         interpolate them first, None (the default) to choose the cheaper for each slice
         (:meth:`samples_first`). It does not change the result, only the time taken.
         The name is that of 21cmFAST's proposed ``AngularLightconer.tile_first``.
-    threads
-        The number of threads that sample the boxes.
-    chunk_size
-        The number of directions sampled at a time, which sets the memory taken by
-        their coordinates.
 
     Notes
     -----
-    With ``interpolation_order`` 3 or 5, slices are made by 21cmFAST's own
-    ``AngularLightconer``, which interpolates the boxes first, since spline
-    interpolation pre-filters the whole box.
+    With ``interpolation_order`` 3 or 5, slices interpolate the boxes first, as in
+    21cmFAST, since spline interpolation pre-filters the whole box.
 
     With sub-samples, :func:`py21cmfast.run_lightcone` applies the velocity-gradient
     (dv/dr) correction and the RSDs to the averaged pixels, not to each sub-sample.
@@ -114,8 +127,6 @@ class FastAngularLightconer(AngularLightconer):
         default=None,
         validator=attrs.validators.optional(attrs.validators.instance_of(bool)),
     )
-    threads: int = attrs.field(default=1, converter=int, eq=False)
-    chunk_size: int = attrs.field(default=2**20, converter=int, eq=False)
 
     @n_subsamples.validator
     def _n_subsamples_validator(self, attribute, value):
@@ -126,16 +137,6 @@ class FastAngularLightconer(AngularLightconer):
                 f"the {self.longitude.size} directions cannot be split into "
                 f"{value} sub-samples per pixel"
             )
-
-    @threads.validator
-    def _threads_validator(self, attribute, value):
-        if value < 1:
-            raise ValueError("threads must be at least 1")
-
-    @chunk_size.validator
-    def _chunk_size_validator(self, attribute, value):
-        if value < 1:
-            raise ValueError("chunk_size must be at least 1")
 
     @property
     def n_pixels(self) -> int:
@@ -170,16 +171,36 @@ class FastAngularLightconer(AngularLightconer):
             n_cells, self.longitude.size, order=self.interpolation_order
         )
 
-    @cached_property
-    def _directions(self) -> np.ndarray:
-        """Unit vectors of the (rotated) directions, of shape ``(3, n)``."""
-        return transform_to_pixel_coords(
-            comoving_radius=1.0,
-            latitude=self.latitude,
-            longitude=self.longitude,
-            origin=None,
+    def slice_interpolator(self, lcd: Quantity) -> partial:
+        """Return cosmotile's interpolator onto the slice at a distance.
+
+        The interpolator of the last distance is kept, since 21cmFAST asks for it once
+        per quantity of each slice.
+
+        Parameters
+        ----------
+        lcd
+            The comoving distance of the slice, in pixels.
+
+        Returns
+        -------
+        partial
+            The interpolator (:func:`cosmotile.make_lightcone_slice_interpolator`).
+        """
+        cached = getattr(self, "_slice_interpolator", None)
+        if cached is not None and cached[0] == lcd:
+            return cached[1]
+        shape = (self.n_subsamples, self.n_pixels)
+        interpolator = make_lightcone_slice_interpolator(
+            latitude=self.latitude.reshape(shape),
+            longitude=self.longitude.reshape(shape),
+            distance_to_shell=lcd,
+            interpolation_order=self.interpolation_order,
+            origin=self.origin,
             rotation=self.rotation,
         )
+        self._slice_interpolator = (lcd, interpolator)
+        return interpolator
 
     # The four steps of 21cmFAST's Lightconer.make_lightcone_slices, for each slice.
 
@@ -188,10 +209,10 @@ class FastAngularLightconer(AngularLightconer):
     ) -> np.ndarray | _Deferred:
         """Select the part of a coeval box needed for a slice.
 
-        For ``interpolation_order`` 0 and 1, the box is passed on unchanged, to be
-        made into the slice in :meth:`redshift_interpolation`.
+        If the slice samples the boxes first (:meth:`samples_first`), the box is passed
+        on unchanged, to be sampled in :meth:`construct_lightcone`.
         """
-        if self.interpolation_order <= 1:
+        if self.samples_first(np.size(coeval)):
             return _Deferred(coeval)
         return super().coeval_subselect(lcd, coeval, coeval_res)
 
@@ -203,62 +224,62 @@ class FastAngularLightconer(AngularLightconer):
         dc_a: Quantity,
         dc_b: Quantity,
         kind: str = "mean",
-    ) -> np.ndarray:
-        """Interpolate two coeval boxes to the distance of a slice, on the slice.
+    ) -> np.ndarray | _Pair:
+        """Interpolate two coeval boxes to the distance of a slice.
 
-        For ``interpolation_order`` 0 and 1, this returns the slice itself, made by
-        :func:`tuesday.core.lightcones.shell_slice` with 21cmFAST's
-        :meth:`~py21cmfast.lightconers.Lightconer.redshift_interpolation`, either
-        sampling first or interpolating first (:meth:`samples_first`). The "mean_max"
-        interpolation (used for ``z_reion``) is not linear in the boxes, so when
-        sampling first with order 1 it is applied at the eight cells around each
-        direction before they are weighted, which gives the same result as sampling
-        the interpolated box.
+        If the slice samples the boxes first, the interpolation (21cmFAST's
+        :meth:`~py21cmfast.lightconers.Lightconer.redshift_interpolation`) is kept with
+        the two boxes, and applied to their samples in :meth:`construct_lightcone`.
         """
         if not isinstance(coeval_a, _Deferred):
             return super().redshift_interpolation(
                 dc, coeval_a, coeval_b, dc_a, dc_b, kind=kind
             )
-
         interpolate = super().redshift_interpolation
-        return shell_slice(
-            lambda a, b: _plain(interpolate(dc, a, b, dc_a, dc_b, kind=kind)),
-            coeval_a.box,
-            coeval_b.box,
-            self._directions,
-            Quantity(dc, units.pixel).value,
-            origin=Quantity(self.origin, units.pixel).value,
-            order=self.interpolation_order,
-            linear=kind == "mean",
-            sample_first=self.samples_first(np.size(coeval_a.box)),
-            threads=self.threads,
-            chunk_size=self.chunk_size,
-        )
 
-    def construct_lightcone(self, lcd: Quantity, box: np.ndarray) -> np.ndarray:
-        """Make a slice from its samples, or from an interpolated box.
+        def interpolate_samples(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+            return _plain(interpolate(dc, a, b, dc_a, dc_b, kind=kind))
 
-        Samples (1D) are averaged over the sub-samples of each pixel. A box (3D,
-        ``interpolation_order`` above 1) is first sampled by 21cmFAST.
+        return _Pair(coeval_a.box, coeval_b.box, interpolate_samples, kind == "mean")
+
+    def construct_lightcone(self, lcd: Quantity, box: np.ndarray | _Pair) -> np.ndarray:
+        """Make a slice from an interpolated box, or from two boxes, sampling first.
+
+        Two boxes are sampled with cosmotile and their samples interpolated
+        (:func:`tuesday.core.lightcones.sample_then_interpolate`). The "mean_max"
+        interpolation (used for ``z_reion``) is not linear in the boxes, so it is then
+        applied at the cells around each direction before they are weighted, which
+        gives the same result as sampling the interpolated box.
         """
-        if np.ndim(box) != 1:
-            box = super().construct_lightcone(lcd, box)
-        return average_subsamples(_plain(box), self.n_subsamples)
+        interpolator = self.slice_interpolator(lcd)
+        if isinstance(box, _Pair):
+            return sample_then_interpolate(
+                box.interpolate, box.box_a, box.box_b, interpolator, linear=box.linear
+            )
+        return _plain(interpolator(box))
 
     def construct_los_velocity_lightcone(
-        self, lcd: Quantity, velocities: Sequence[np.ndarray]
+        self, lcd: Quantity, velocities: Sequence[np.ndarray | _Pair]
     ) -> np.ndarray:
         """Make a slice of the line-of-sight velocity from the three components.
 
-        Samples (1D) are projected on the line of sight of each direction
-        (:func:`tuesday.core.lightcones.line_of_sight_component`). Boxes (3D,
-        ``interpolation_order`` above 1) are sampled and projected by 21cmFAST. The
-        result is then averaged over the sub-samples of each pixel.
+        cosmotile projects the velocity on the line of sight of each direction
+        (:func:`cosmotile.make_lightcone_slice_vector_field`). When sampling first,
+        this is done for each box, and the two projections are interpolated.
         """
-        if np.ndim(velocities[0]) == 1:
-            los = line_of_sight_component(
-                np.array([_plain(v) for v in velocities]), self._directions
+        interpolator = self.slice_interpolator(lcd)
+        if not isinstance(velocities[0], _Pair):
+            return _plain(
+                next(make_lightcone_slice_vector_field([velocities], interpolator))
             )
-        else:
-            los = super().construct_los_velocity_lightcone(lcd, velocities)
-        return average_subsamples(_plain(los), self.n_subsamples)
+        if not all(v.linear for v in velocities):
+            raise ValueError("the velocity can only be sampled first with kind 'mean'")
+        # cosmotile multiplies the samples by the coordinates, which are Quantities
+        los_a, los_b = make_lightcone_slice_vector_field(
+            [
+                [v.box_a << units.dimensionless_unscaled for v in velocities],
+                [v.box_b << units.dimensionless_unscaled for v in velocities],
+            ],
+            interpolator,
+        )
+        return velocities[0].interpolate(_plain(los_a), _plain(los_b))

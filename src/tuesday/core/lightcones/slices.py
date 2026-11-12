@@ -1,15 +1,17 @@
 """Make one slice of an angular lightcone from the two boxes around it.
 
 A slice of an angular lightcone lies at a distance between those of two simulation
-boxes (coevals). It is the field on a spherical shell of that radius, interpolated
-in redshift between the two boxes. This can be done in two ways that give the same
-result, to rounding:
+boxes (coevals). It is the field on a spherical shell of that radius, interpolated in
+redshift between the two boxes. The boxes are sampled on the shell by a slice
+interpolator of cosmotile (:func:`cosmotile.make_lightcone_slice_interpolator`),
+which tiles the box periodically and can average each pixel over several directions.
+A slice can be made in two ways that give the same result, to rounding:
 
 * :func:`interpolate_then_sample` interpolates the two boxes, cell by cell, and
   samples the interpolated box on the shell. This is what 21cmFAST 4.3 does. Its cost
   grows with the number of cells.
 * :func:`sample_then_interpolate` samples each box on the shell and interpolates the
-  samples. Its cost grows with the number of directions.
+  samples. Its cost grows with the number of points sampled.
 
 :func:`shell_slice` chooses the cheaper of the two (:func:`samples_first`), unless it
 is told which to use.
@@ -18,35 +20,60 @@ is told which to use.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from typing import Any
 
 import numpy as np
-
-from .sampling import sample_shell, sample_shell_cellwise
+from astropy import units
 
 #: Roughly how many cells of a box can be interpolated in redshift in the time it
-#: takes to sample a box in one direction (trilinear ``map_coordinates``). The two ways
-#: of making a slice cost the same at about 9-20 cells per direction (measured on one
-#: core for 128^3 and 256^3 boxes and 10^3-10^6 directions, for 21cmFAST's
+#: takes to sample a box at one point (trilinear ``map_coordinates``). The two ways of
+#: making a slice cost the same at about 9-20 cells per point (measured on one core
+#: for 128^3 and 256^3 boxes and 10^3-10^6 directions, for 21cmFAST's
 #: ``perf/angular-lightcone-sample-first``).
 CELLS_PER_SAMPLE = 16
 
+Interpolation = Callable[[np.ndarray, np.ndarray], np.ndarray]
 
-def samples_first(n_cells: int, n_directions: int, *, order: int = 1) -> bool:
+
+def _plain(values: Any) -> np.ndarray:
+    """Return an array or a Quantity (of pixels, or dimensionless) as a plain array."""
+    if isinstance(values, units.Quantity):
+        return values.value
+    return np.asarray(values)
+
+
+def n_samples(interpolator: Any) -> int:
+    """Return the number of points at which a slice interpolator samples a box.
+
+    Parameters
+    ----------
+    interpolator
+        A slice interpolator of cosmotile
+        (:func:`cosmotile.make_lightcone_slice_interpolator`).
+
+    Returns
+    -------
+    int
+        The number of points, sub-samples included.
+    """
+    return np.shape(interpolator.keywords["coordinates"])[-1]
+
+
+def samples_first(n_cells: int, n_samples: int, *, order: int = 1) -> bool:
     """Whether sampling the boxes first is cheaper than interpolating them first.
 
     Interpolating two boxes costs about one operation per cell, and sampling costs
-    about :data:`CELLS_PER_SAMPLE` (16) operations per direction. Sampling first is
-    cheaper when the boxes have more than :data:`CELLS_PER_SAMPLE` cells per
-    direction. For example, a 1500^3 box with a ring of 2^15 directions samples
-    first, while a 228^3 box with a HEALPix map of Nside 1024 (1.3e7 directions)
-    interpolates first.
+    about :data:`CELLS_PER_SAMPLE` (16) operations per point sampled. Sampling first is
+    cheaper when the boxes have more than :data:`CELLS_PER_SAMPLE` cells per point.
+    For example, a 1500^3 box with a ring of 2^15 directions samples first, while a
+    228^3 box with a HEALPix map of Nside 1024 (1.3e7 directions) interpolates first.
 
     Parameters
     ----------
     n_cells
         The number of cells of each box.
-    n_directions
-        The number of directions sampled (sub-samples included).
+    n_samples
+        The number of points sampled, sub-samples included (:func:`n_samples`).
     order
         The order of the interpolation on the shell. Only orders 0 and 1 can sample
         first.
@@ -58,20 +85,72 @@ def samples_first(n_cells: int, n_directions: int, *, order: int = 1) -> bool:
     """
     if order > 1:
         return False
-    return n_directions * CELLS_PER_SAMPLE < n_cells
+    return n_samples * CELLS_PER_SAMPLE < n_cells
+
+
+def sample_cellwise(
+    rule: Interpolation,
+    boxes: Sequence[np.ndarray],
+    coordinates: np.ndarray,
+    *,
+    weights: np.ndarray | None = None,
+) -> np.ndarray:
+    """Sample, trilinearly, a rule applied cell by cell to two periodic boxes.
+
+    This gives what sampling ``rule(*boxes)`` with ``map_coordinates`` (order 1,
+    ``mode="grid-wrap"``, as cosmotile samples) gives, but the rule is only evaluated
+    at the eight cells around each point. It is how a rule that is not linear in the
+    boxes, such as 21cmFAST's "mean_max" interpolation of the reionization redshift,
+    can be sampled first.
+
+    Parameters
+    ----------
+    rule
+        A function of the values of both boxes at the same cells (arrays of equal
+        shape), returning a value per cell.
+    boxes
+        The two 3D boxes, of the same shape.
+    coordinates
+        The coordinates of the points, in units of the cell size, of shape ``(3, n)``,
+        e.g. ``interpolator.keywords["coordinates"]`` of a cosmotile slice
+        interpolator.
+    weights
+        The weights of the sub-samples of each pixel, if the points are sub-samples
+        laid out sub-sample by sub-sample (``interpolator.keywords["weights"]``).
+
+    Returns
+    -------
+    np.ndarray
+        The value at each point, or each pixel's weighted mean over its sub-samples.
+    """
+    box_a, box_b = (np.asarray(b) for b in boxes)
+    if box_a.shape != box_b.shape or box_a.ndim != 3:
+        raise ValueError("the boxes must be 3D and of the same shape")
+    coordinates = _plain(coordinates).astype(float, copy=False)
+    shape = np.array(box_a.shape)[:, None]
+    floor = np.floor(coordinates)
+    frac = coordinates - floor
+    lower = floor.astype(np.int64) % shape
+    upper = (lower + 1) % shape
+
+    out = np.zeros(coordinates.shape[1])
+    for corner in np.ndindex(2, 2, 2):
+        index = tuple(upper[ax] if c else lower[ax] for ax, c in enumerate(corner))
+        weight = np.prod(
+            [frac[ax] if c else 1 - frac[ax] for ax, c in enumerate(corner)], axis=0
+        )
+        out += weight * _plain(rule(box_a[index], box_b[index]))
+    if weights is not None:
+        weights = np.asarray(weights, dtype=float)
+        out = (weights[:, None] * out.reshape(weights.size, -1)).sum(axis=0)
+    return out
 
 
 def interpolate_then_sample(
-    interpolate: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    interpolate: Interpolation,
     box_a: np.ndarray,
     box_b: np.ndarray,
-    directions: np.ndarray,
-    radius: float,
-    *,
-    origin: Sequence[float] | np.ndarray | None = None,
-    order: int = 1,
-    threads: int = 1,
-    chunk_size: int = 2**20,
+    interpolator: Callable[[np.ndarray], np.ndarray],
 ) -> np.ndarray:
     """Interpolate two boxes cell by cell, then sample the result on a shell.
 
@@ -83,59 +162,34 @@ def interpolate_then_sample(
         e.g. a linear interpolation in comoving distance.
     box_a, box_b
         The two 3D boxes around the slice, of the same shape.
-    directions
-        Unit vectors of the lines of sight, of shape ``(3, n)``.
-    radius
-        The radius of the shell, in units of the cell size.
-    origin
-        The position of the observer, in units of the cell size. The corner of the
-        box's (0, 0, 0) cell by default.
-    order
-        The order of the interpolation on the shell, 0 or 1.
-    threads
-        The number of threads that sample the box.
-    chunk_size
-        The number of directions sampled at a time.
+    interpolator
+        The slice interpolator of cosmotile for the shell
+        (:func:`cosmotile.make_lightcone_slice_interpolator`).
 
     Returns
     -------
     np.ndarray
-        The slice, of shape ``(n,)``.
+        The slice, one value per pixel.
     """
-    box = np.asarray(interpolate(box_a, box_b), dtype=float)
-    return sample_shell(
-        (box,),
-        directions,
-        radius,
-        origin=origin,
-        order=order,
-        threads=threads,
-        chunk_size=chunk_size,
-    )[0]
+    return _plain(interpolator(_plain(interpolate(box_a, box_b))))
 
 
 def sample_then_interpolate(
-    interpolate: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    interpolate: Interpolation,
     box_a: np.ndarray,
     box_b: np.ndarray,
-    directions: np.ndarray,
-    radius: float,
+    interpolator: Callable[[np.ndarray], np.ndarray],
     *,
     linear: bool,
-    origin: Sequence[float] | np.ndarray | None = None,
-    order: int = 1,
-    threads: int = 1,
-    chunk_size: int = 2**20,
 ) -> np.ndarray:
     """Sample two boxes on a shell, then interpolate the samples.
 
     This gives what :func:`interpolate_then_sample` gives. Sampling is linear in the
-    box, so for an interpolation that is linear in the values of the boxes it can be
-    applied to the samples. For one that is not (``linear=False``, e.g. a rule that
-    switches between the boxes cell by cell), it is applied at the eight cells around
-    each point before they are weighted (:func:`sample_shell_cellwise`). With
-    ``order=0`` each point takes one cell, so any interpolation can be applied to the
-    samples.
+    box, and so is the mean of each pixel over its sub-samples, so an interpolation
+    that is linear in the values of the boxes can be applied to the samples. One that
+    is not (``linear=False``, e.g. a rule that switches between the boxes cell by
+    cell) is applied at the cells around each point before they are weighted
+    (:func:`sample_cellwise`).
 
     Parameters
     ----------
@@ -143,53 +197,44 @@ def sample_then_interpolate(
         The interpolation between the boxes (see :func:`interpolate_then_sample`).
     box_a, box_b
         The two 3D boxes around the slice, of the same shape.
-    directions
-        Unit vectors of the lines of sight, of shape ``(3, n)``.
-    radius
-        The radius of the shell, in units of the cell size.
-    origin
-        The position of the observer, in units of the cell size. The corner of the
-        box's (0, 0, 0) cell by default.
-    order
-        The order of the interpolation on the shell, 0 or 1.
+    interpolator
+        The slice interpolator of cosmotile for the shell, of order 0 or 1.
     linear
-        Whether ``interpolate`` is linear in the values of the boxes. It has no
-        default: sampling first with an interpolation wrongly declared linear gives a
-        different slice.
-    threads
-        The number of threads that sample the boxes.
-    chunk_size
-        The number of directions sampled at a time.
+        Whether ``interpolate`` is linear in the values of the boxes.
 
     Returns
     -------
     np.ndarray
-        The slice, of shape ``(n,)``.
+        The slice, one value per pixel.
+
+    Raises
+    ------
+    ValueError
+        If the interpolator's order is above 1. Spline interpolation pre-filters the
+        whole box, so it interpolates first.
     """
-    kw = {"origin": origin, "threads": threads, "chunk_size": chunk_size}
-    if order == 1 and not linear:
-        return sample_shell_cellwise(
-            interpolate, (box_a, box_b), directions, radius, **kw
-        )
-    samples_a, samples_b = sample_shell(
-        (box_a, box_b), directions, radius, order=order, **kw
-    )
-    return np.asarray(interpolate(samples_a, samples_b), dtype=float)
+    order = interpolator.keywords["order"]
+    if order > 1:
+        raise ValueError("only interpolation orders 0 and 1 can sample first")
+    weights = interpolator.keywords.get("weights")
+    if linear or (order == 0 and weights is None):
+        # order 0 takes one cell per point, so any rule commutes with it
+        return _plain(interpolate(interpolator(box_a), interpolator(box_b)))
+    coordinates = _plain(interpolator.keywords["coordinates"])
+    if order == 0:
+        # the cell around each point, as map_coordinates rounds with order 0
+        coordinates = np.floor(coordinates + 0.5)
+    return sample_cellwise(interpolate, (box_a, box_b), coordinates, weights=weights)
 
 
 def shell_slice(
-    interpolate: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    interpolate: Interpolation,
     box_a: np.ndarray,
     box_b: np.ndarray,
-    directions: np.ndarray,
-    radius: float,
+    interpolator: Callable[[np.ndarray], np.ndarray],
     *,
     linear: bool,
-    origin: Sequence[float] | np.ndarray | None = None,
-    order: int = 1,
     sample_first: bool | None = None,
-    threads: int = 1,
-    chunk_size: int = 2**20,
 ) -> np.ndarray:
     """Make one slice of an angular lightcone from the two boxes around it.
 
@@ -205,44 +250,27 @@ def shell_slice(
         at the same cells, returning the interpolated values.
     box_a, box_b
         The two 3D boxes around the slice, of the same shape.
-    directions
-        Unit vectors of the lines of sight, of shape ``(3, n)``.
-    radius
-        The radius of the shell, in units of the cell size.
-    origin
-        The position of the observer, in units of the cell size. The corner of the
-        box's (0, 0, 0) cell by default.
-    order
-        The order of the interpolation on the shell, 0 or 1.
+    interpolator
+        The slice interpolator of cosmotile for the shell
+        (:func:`cosmotile.make_lightcone_slice_interpolator`).
     linear
-        Whether ``interpolate`` is linear in the values of the boxes. It has no
-        default: sampling first with an interpolation wrongly declared linear gives a
-        different slice.
+        Whether ``interpolate`` is linear in the values of the boxes.
     sample_first
         True to sample first, False to interpolate first, None (the default) to
-        choose the cheaper.
-    threads
-        The number of threads that sample the boxes.
-    chunk_size
-        The number of directions sampled at a time.
+        choose the cheaper. Orders above 1 always interpolate first.
 
     Returns
     -------
     np.ndarray
-        The slice, of shape ``(n,)``.
+        The slice, one value per pixel.
     """
+    order = interpolator.keywords["order"]
     if sample_first is None:
         sample_first = samples_first(
-            np.size(box_a), np.shape(directions)[-1], order=order
+            np.size(box_a), n_samples(interpolator), order=order
         )
-    kw = {
-        "origin": origin,
-        "order": order,
-        "threads": threads,
-        "chunk_size": chunk_size,
-    }
-    if sample_first:
+    if sample_first and order <= 1:
         return sample_then_interpolate(
-            interpolate, box_a, box_b, directions, radius, linear=linear, **kw
+            interpolate, box_a, box_b, interpolator, linear=linear
         )
-    return interpolate_then_sample(interpolate, box_a, box_b, directions, radius, **kw)
+    return interpolate_then_sample(interpolate, box_a, box_b, interpolator)
