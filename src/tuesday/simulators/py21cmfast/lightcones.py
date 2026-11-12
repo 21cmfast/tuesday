@@ -19,7 +19,7 @@ from py21cmfast.drivers.lightcone import LightCone, setup_lightcone_instance
 from py21cmfast.io import read_output_struct
 from py21cmfast.io.caching import RunCache
 from py21cmfast.lightconers import AngularLightconer, Lightconer
-from py21cmfast.rsds import include_dvdr_in_tau21
+from py21cmfast.rsds import apply_rsds, include_dvdr_in_tau21
 from py21cmfast.wrapper import outputs
 from py21cmfast.wrapper.inputs import InputParameters
 from scipy.spatial.transform import Rotation
@@ -735,6 +735,14 @@ DVDR = "brightness_temp_dvdr"
 #: (the inputs, the velocity gradient and the result, in float64).
 _DVDR_BYTES_PER_VALUE = 64
 
+#: About how many bytes 21cmFAST's RSDs use per value of the lightcone and per
+#: sub-cell (measured: 104 for ``rsds_shift``), and per value besides.
+_RSD_BYTES_PER_SUBCELL = 112
+_RSD_BYTES_PER_VALUE = 64
+
+#: The suffix of the lightcones with RSDs, as in 21cmFAST.
+WITH_RSDS = "_with_rsds"
+
 
 def _complete(path: Path) -> bool:
     """Whether a file is a complete lightcone store."""
@@ -750,6 +758,32 @@ def _complete(path: Path) -> bool:
 def _temporary_path(path: Path) -> Path:
     """Return the temporary path at which to write a file before renaming it."""
     return path.with_name(f".{path.name}.tmp")
+
+
+def _check_one_cell_apart(
+    distances: Quantity, inputs: InputParameters, directory: Path, what: str
+) -> None:
+    """Raise an error if the slices are not one cell apart, as ``what`` assumes."""
+    spacing = np.diff(distances)
+    if not np.allclose(spacing, inputs.simulation_options.cell_size, rtol=1e-6):
+        raise ValueError(
+            f"21cmFAST's {what} assumes slices one cell apart; the slices in "
+            f"{directory} are not"
+        )
+
+
+def _block_rows(store: LightconeStore, max_memory: float, per_value: float) -> int:
+    """Return how many rows of the first axis to process at a time.
+
+    The lines of sight of a block of rows take about ``per_value`` bytes per value,
+    and the block is a whole number of chunks if one chunk fits in ``max_memory``.
+    """
+    shape = store.shape
+    rows = max(1, int(max_memory // (per_value * np.prod(shape[1:]))))
+    chunk = store.lightcone.chunks[0]
+    if rows > chunk:
+        rows = rows // chunk * chunk
+    return rows
 
 
 def include_dvdr_on_disk(
@@ -810,18 +844,11 @@ def include_dvdr_on_disk(
     stores = [LightconeStore.open(p) for p in paths]
     try:
         temperature, velocity, *tau = stores
-        spacing = np.diff(temperature.distances)
-        if not np.allclose(spacing, inputs.simulation_options.cell_size, rtol=1e-6):
-            raise ValueError(
-                "21cmFAST's dv/dr correction assumes slices one cell apart; the slices "
-                f"in {directory} are not"
-            )
+        _check_one_cell_apart(
+            temperature.distances, inputs, directory, "dv/dr correction"
+        )
         shape = temperature.shape
-        # blocks of whole chunks, if a chunk fits in memory
-        rows = max(1, int(max_memory // (_DVDR_BYTES_PER_VALUE * np.prod(shape[1:]))))
-        chunk = temperature.lightcone.chunks[0]
-        if rows > chunk:
-            rows = rows // chunk * chunk
+        rows = _block_rows(temperature, max_memory, _DVDR_BYTES_PER_VALUE)
 
         tmp = _temporary_path(out)
         with LightconeStore.open_or_create(
@@ -854,8 +881,190 @@ def include_dvdr_on_disk(
     return out
 
 
+def rsd_lightconer(
+    lightconer: Lightconer, inputs: InputParameters, *, classy_output: Any = None
+) -> Lightconer:
+    """Return a lightconer extended to the distances that the RSDs need.
+
+    RSDs move the field along the line of sight, so the slices near the ends of a
+    lightcone take in the field from beyond them. :func:`py21cmfast.run_lightcone`
+    with ``apply_rsds=True`` therefore makes the lightcone on more distances, applies
+    the RSDs and trims the result to the requested distances. This returns the
+    lightconer of those distances (from
+    :meth:`~py21cmfast.lightconers.Lightconer.validate_options`, which estimates
+    them from the rms velocity given by CLASS), with the quantities of
+    ``lightconer``. Its slices are one cell apart.
+
+    Make the lightcones with this lightconer (:func:`make_lightcones_on_disk`),
+    including ``los_velocity``, then apply the RSDs (:func:`apply_rsds_on_disk`), and
+    give the distances of ``lightconer`` to :func:`link_lightcone_file`.
+
+    Parameters
+    ----------
+    lightconer
+        The lightconer of the requested distances.
+    inputs
+        The input parameters of the run.
+    classy_output
+        The output of CLASS for the run's cosmology
+        (:func:`py21cmfast.wrapper.classy_interface.run_classy`), if it has been run.
+
+    Returns
+    -------
+    Lightconer
+        The lightconer of the extended distances.
+
+    Raises
+    ------
+    ValueError
+        If the node redshifts do not extend far enough beyond the lightcone.
+    """
+    extended = lightconer.validate_options(
+        inputs,
+        include_dvdr_in_tau21=False,
+        apply_rsds=True,
+        classy_output=classy_output,
+    )
+    return attrs.evolve(extended, quantities=lightconer.quantities)
+
+
+def apply_rsds_on_disk(
+    directory: str | Path,
+    inputs: InputParameters,
+    quantities: str | Sequence[str],
+    *,
+    n_rsd_subcells: int = 4,
+    max_memory: float = 2e9,
+    clobber: bool = False,
+) -> dict[str, Path]:
+    """Apply 21cmFAST's RSDs to lightcones on disk.
+
+    This applies :func:`py21cmfast.rsds.apply_rsds` to the stores ``<quantity>.h5``
+    in ``directory``, with the store ``los_velocity.h5``, and writes
+    ``<quantity>_with_rsds.h5``. These are the ``<quantity>_with_rsds`` lightcones
+    of :func:`py21cmfast.run_lightcone` with ``apply_rsds=True``, before they are
+    trimmed to the requested distances. The stores should be made with
+    :func:`rsd_lightconer`, and :func:`link_lightcone_file` trims them when they are
+    read. For the brightness temperature with the dv/dr correction, as
+    :func:`py21cmfast.run_lightcone` makes it by default, give
+    ``"brightness_temp_dvdr"`` (:func:`include_dvdr_on_disk`).
+
+    The RSDs move the field along each line of sight, so they are applied in blocks
+    of lines of sight that fit in ``max_memory``. These are blocks of whole chunks if
+    ``max_memory`` allows it: with the default chunks of the stores and 4 sub-cells,
+    the lines of sight of one chunk need about 9 GB. Smaller blocks read each chunk
+    more than once. Each file is written under a temporary name and renamed when it
+    is complete.
+
+    Parameters
+    ----------
+    directory
+        The directory of the stores of one lightconer.
+    inputs
+        The input parameters of the run.
+    quantities
+        The quantities to apply the RSDs to.
+    n_rsd_subcells
+        The number of sub-cells into which each cell is divided to apply the RSDs.
+    max_memory
+        About how many bytes of memory to use. Each sub-cell takes about 110 bytes
+        per value of the lightcone.
+    clobber
+        Whether to make the lightcones with RSDs again if they exist.
+
+    Returns
+    -------
+    dict[str, Path]
+        The file of each lightcone with RSDs, by quantity.
+
+    Raises
+    ------
+    ValueError
+        If a store that is needed is missing or not complete, if the slices are not
+        one cell apart (which the RSDs assume), or if a lightcone with RSDs exists
+        with another ``n_rsd_subcells`` and ``clobber`` is False.
+    """
+    directory = Path(directory)
+    quantities = (quantities,) if isinstance(quantities, str) else tuple(quantities)
+    sources = {q: directory / f"{q}.h5" for q in quantities}
+    velocity_path = directory / "los_velocity.h5"
+    needed = [velocity_path, *sources.values()]
+    if missing := [p.name for p in needed if not _complete(p)]:
+        raise ValueError(f"{missing} in {directory} are missing or not complete")
+    out = {q: directory / f"{q}{WITH_RSDS}.h5" for q in quantities}
+    per_value = _RSD_BYTES_PER_SUBCELL * n_rsd_subcells + _RSD_BYTES_PER_VALUE
+
+    with LightconeStore.open(velocity_path) as velocity:
+        _check_one_cell_apart(velocity.distances, inputs, directory, "RSDs")
+        for q in quantities:
+            if _complete(out[q]) and not clobber:
+                with LightconeStore.open(out[q]) as done:
+                    made_with = done.metadata.get("n_rsd_subcells")
+                if made_with != n_rsd_subcells:
+                    raise ValueError(
+                        f"{out[q]} was made with n_rsd_subcells={made_with}; make it "
+                        "again (clobber=True) to change it"
+                    )
+                continue
+            tmp = _temporary_path(out[q])
+            with (
+                LightconeStore.open(sources[q]) as field,
+                LightconeStore.open_or_create(
+                    tmp,
+                    quantity=f"{q}{WITH_RSDS}",
+                    shape=field.shape,
+                    distances=field.distances,
+                    redshifts=field.redshifts,
+                    node_redshifts=field.node_redshifts,
+                    metadata=field.metadata | {"n_rsd_subcells": n_rsd_subcells},
+                    chunks=field.lightcone.chunks,
+                    clobber=True,
+                ) as result,
+            ):
+                if not np.allclose(field.distances, velocity.distances, rtol=1e-10):
+                    raise ValueError(f"{sources[q]} and {velocity_path} differ")
+                rows = _block_rows(field, max_memory, per_value)
+                n_slices = field.shape[-1]
+                for start in range(0, field.shape[0], rows):
+                    block = slice(start, start + rows)
+                    values = field.lightcone[block]
+                    # as lines of sight, which apply_rsds takes for any lightconer
+                    shifted = apply_rsds(
+                        field=values.reshape(-1, n_slices),
+                        los_velocity=velocity.lightcone[block].reshape(-1, n_slices),
+                        redshifts=field.redshifts,
+                        inputs=inputs,
+                        periodic=False,
+                        n_rsd_subcells=n_rsd_subcells,
+                    )
+                    result.lightcone[block] = np.reshape(
+                        np.asarray(shifted, dtype=np.float32), values.shape
+                    )
+                result.mark_done(range(result.done.size))
+            tmp.replace(out[q])
+    return out
+
+
+def _link_name(name: str, dvdr: bool) -> str:
+    """Return the name of a store in a 21cmFAST lightcone file.
+
+    With the dv/dr-corrected store, ``brightness_temp`` is the corrected one, as in
+    the output of :func:`py21cmfast.run_lightcone`, and the uncorrected one is
+    ``brightness_temp_no_dvdr`` (with RSDs, ``..._with_rsds``).
+    """
+    if dvdr and name.startswith(DVDR):
+        return "brightness_temp" + name.removeprefix(DVDR)
+    if dvdr and name in ("brightness_temp", f"brightness_temp{WITH_RSDS}"):
+        return "brightness_temp_no_dvdr" + name.removeprefix("brightness_temp")
+    return name
+
+
 def link_lightcone_file(
-    directory: str | Path, inputs: InputParameters, path: str | Path | None = None
+    directory: str | Path,
+    inputs: InputParameters,
+    path: str | Path | None = None,
+    *,
+    lc_distances: Quantity | None = None,
 ) -> Path:
     """Write a 21cmFAST lightcone file that links to the lightcones on disk.
 
@@ -866,9 +1075,10 @@ def link_lightcone_file(
     copied, and h5py can read parts of them. If the dv/dr-corrected lightcone
     (:func:`include_dvdr_on_disk`) is there, ``brightness_temp`` links to it and
     ``brightness_temp_no_dvdr`` to the lightcone without the correction, as in the
-    output of :func:`py21cmfast.run_lightcone`. The global quantities are the means
-    recorded in the stores, in the order of ``inputs.node_redshifts``, and NaN at the
-    node redshifts that were not read.
+    output of :func:`py21cmfast.run_lightcone`, and likewise for their RSDs
+    (:func:`apply_rsds_on_disk`). The global quantities are the means recorded in
+    the stores, in the order of ``inputs.node_redshifts``, and NaN at the node
+    redshifts that were not read.
 
     The file is written under a temporary name and renamed when it is complete.
 
@@ -880,6 +1090,11 @@ def link_lightcone_file(
         The input parameters of the run.
     path
         The file to write. ``<directory>.h5`` by default.
+    lc_distances
+        The requested distances, for lightcones made on more distances for the RSDs
+        (:func:`rsd_lightconer`). The slices outside their range are recorded as
+        buffers, which :meth:`py21cmfast.LightCone.from_file` leaves out, as for the
+        files of :func:`py21cmfast.run_lightcone`. By default, all slices are read.
 
     Returns
     -------
@@ -897,11 +1112,7 @@ def link_lightcone_file(
     stores = {p.stem: p for p in sorted(directory.glob("*.h5")) if _complete(p)}
     if not stores:
         raise ValueError(f"there is no complete lightcone in {directory}")
-    links = dict(stores)
-    if DVDR in links:
-        links["brightness_temp"] = links.pop(DVDR)
-        if "brightness_temp" in stores:
-            links["brightness_temp_no_dvdr"] = stores["brightness_temp"]
+    links = {_link_name(name, DVDR in stores): p for name, p in stores.items()}
 
     node_redshifts = np.asarray(inputs.node_redshifts, dtype=float)
     distances = None
@@ -914,9 +1125,17 @@ def link_lightcone_file(
                 raise ValueError(f"the lightcones in {directory} have other distances")
             means = store.global_mean
             stored = store.node_redshifts
-        if name != DVDR and np.isfinite(means).any():
+        # only the stores made from the cache record means
+        if np.isfinite(means).any():
             order = [int(np.argmin(np.abs(stored - z))) for z in node_redshifts]
             global_quantities[name] = means[order]
+
+    buffers = {}
+    if lc_distances is not None:
+        buffers = {
+            "lowz_buffer_pixels": int(np.sum(distances < lc_distances.min())),
+            "highz_buffer_pixels": int(np.sum(distances > lc_distances.max())),
+        }
 
     tmp = _temporary_path(path)
     LightCone(
@@ -926,7 +1145,7 @@ def link_lightcone_file(
         global_quantities=global_quantities,
         last_completed_node=len(node_redshifts) - 1,
         last_completed_lcidx=0,
-    ).save(tmp, clobber=True)
+    ).save(tmp, clobber=True, **buffers)
     with h5py.File(tmp, "a") as file:
         for name, target in sorted(links.items()):
             relative = os.path.relpath(target, path.parent)
