@@ -407,7 +407,7 @@ wheels = [
 
 [[package]]
 name = "cosmotile"
-version = "0.2.5"
+version = "0.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "astropy" },
@@ -416,7 +416,7 @@ dependencies = [
     { name = "numpy" },
     { name = "scipy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/31/25/392baee36a8902125e22c9c4875baca78b4b3b9a674eb4187cd5d21c8e20/cosmotile-0.2.5.tar.gz", hash = "sha256:76fb4dfb3b1151948f2df632050a234ae4240927f355bad6cecf546c3dafc714", size = 26390, upload-time = "2025-07-07T08:02:14.456Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8c/17/0dc67d38980970692d8c024a7df33d5b9382b70a5780831243ac6b0d53f2/cosmotile-0.3.0.tar.gz", hash = "sha256:b0a76ed894348e3d2049eb68689c3c7456890d7704a9c74f9ad5efecd6a24cff", size = 484314, upload-time = "2026-09-19T20:12:00.507Z" }
 
 [[package]]
 name = "coverage"
@@ -3229,6 +3229,7 @@ dependencies = [
     { name = "astropy" },
     { name = "astropy-healpix" },
     { name = "attrs" },
+    { name = "cosmotile" },
     { name = "deprecation" },
     { name = "h5py" },
     { name = "numpy" },
@@ -3273,6 +3274,7 @@ requires-dist = [
     { name = "astropy", specifier = ">=6.0" },
     { name = "astropy-healpix", specifier = ">=1.0" },
     { name = "attrs", specifier = ">=25.3.0" },
+    { name = "cosmotile", specifier = ">=0.3.0" },
     { name = "deprecation" },
     { name = "h5py", specifier = ">=3.8" },
     { name = "numpy", specifier = ">=2" },
