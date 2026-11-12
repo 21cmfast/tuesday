@@ -245,8 +245,7 @@ def test_lightconer_metadata(cache):
     assert hp["n_subsamples"] == 4
     assert hp["rotation"] == "None"
     assert "tile_first" not in hp
-    assert "threads" not in hp
-    faster = attrs.evolve(lcs["healpix"], tile_first=True, threads=4)
+    faster = attrs.evolve(lcs["healpix"], tile_first=True)
     assert same_metadata(lightconer_metadata(faster), hp)
     other = healpix_lightconer(
         nside=2,
