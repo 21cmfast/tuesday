@@ -20,6 +20,7 @@ __all__ = [
     "cosmology",
     "cylindrical_to_spherical",
     "eor_colormap",
+    "get_dark_mode",
     "horizon_limit",
     "instrument_models",
     "lc2slice_x",
@@ -39,6 +40,7 @@ __all__ = [
     "plotting",
     "redshift_interpolator",
     "sample_from_rms_uvgrid",
+    "set_dark_mode",
     "summaries",
     "taper2d",
     "validate",
@@ -79,6 +81,7 @@ from .plotting.sliceplots import (
     plot_pdf,
     plot_redshift_slice,
 )
+from .plotting.style import get_dark_mode, set_dark_mode
 from .summaries.powerspectra import (
     bin_kpar,
     calculate_ps,
