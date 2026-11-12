@@ -238,9 +238,11 @@ def plot_2d_power_spectrum(
     fontsize : float, optional
         Font size for the plot labels.
     vmin : float, optional
-        Minimum value for the color scale.
+        Minimum value for the color scale. By default, the 5th percentile, or the
+        lowest value with a log scale.
     vmax : float, optional
-        Maximum value for the color scale.
+        Maximum value for the color scale. By default, the 95th percentile, or the
+        highest value with a log scale.
     log : bool | list[bool], optional
         Whether to set the kperp, kpar, and PS axes to log scale: one bool for all,
         or a list of three.
@@ -271,20 +273,15 @@ def plot_2d_power_spectrum(
     if clabel is None:
         clabel = f"[{power_spectrum.unit:latex_inline}]"
         clabel = r"$\Delta^2_{21} \,$" + clabel if is_deltasq else r"$P(k) \,$" + clabel
-    cmap_kwargs = {}
-    if vmin is None:
-        if log[2]:
-            cmap_kwargs["vmin"] = np.nanpercentile(np.log10(power_spectrum.value), 5)
-        else:
-            cmap_kwargs["vmin"] = np.nanpercentile(power_spectrum.value, 5)
-    if vmax is None:
-        if log[2]:
-            cmap_kwargs["vmax"] = np.nanpercentile(np.log10(power_spectrum.value), 95)
-        else:
-            cmap_kwargs["vmax"] = np.nanpercentile(power_spectrum.value, 95)
     if log[2]:
-        cmap_kwargs = {}
-        cmap_kwargs["norm"] = LogNorm(vmin=vmin, vmax=vmax)
+        cmap_kwargs = {"norm": LogNorm(vmin=vmin, vmax=vmax)}
+    else:
+        cmap_kwargs = {
+            "vmin": np.nanpercentile(power_spectrum.value, 5) if vmin is None else vmin,
+            "vmax": np.nanpercentile(power_spectrum.value, 95)
+            if vmax is None
+            else vmax,
+        }
 
     if title is not None:
         ax.set_title(title, fontsize=fontsize)
@@ -305,7 +302,7 @@ def plot_2d_power_spectrum(
 
     ax.set_xlabel(xlabel, fontsize=fontsize)
     if cbar:
-        plt.colorbar(im, label=clabel)
+        plt.colorbar(im, ax=ax, label=clabel)
     if log[0]:
         ax.set_xscale("log")
     if log[1]:
