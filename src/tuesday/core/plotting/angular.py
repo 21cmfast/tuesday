@@ -6,7 +6,8 @@ comoving distance, so it has shape ``(N_pixels, N_slices)``.
 e.g. an arc of the equator, as a wedge of its true shape, and :func:`plot_healpix_map`
 shows one slice of a lightcone whose directions are the pixels of a HEALPix grid, for
 the full sky or a patch. By default both use the colour map of 21cmFAST's lightcone
-plots (:func:`eor_colormap`) on a dark background.
+plots (:func:`eor_colormap`); with ``dark_mode=True`` they also have its dark
+background.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from matplotlib.colors import Colormap, LinearSegmentedColormap, LogNorm
 from matplotlib.ticker import MaxNLocator
 
 from ..lightcones.healpix import _check_order, _check_pixels, pixel_side
+from .style import with_dark_mode
 
 #: The fraction of tuesday's "eor" colour map at which it is black.
 _EOR_BLACK = 0.86
@@ -129,20 +131,17 @@ def _colour_scale(
 
 
 @contextmanager
-def _plot_context(style: str | None, fontsize: float | None) -> Iterator[None]:
-    """Apply the style and font size of one plot, and restore them afterwards.
+def _plot_context(fontsize: float | None) -> Iterator[None]:
+    """Apply the font size of one plot, and restore it afterwards.
 
     A backend that starts while plotting (e.g. Jupyter's inline backend, at the first
     figure of a session) turns interactive mode on; it stays on afterwards, so that
     later figures are shown.
     """
-    styles = [] if style is None else [style]
-    if fontsize is not None:
-        styles.append({"font.size": fontsize})
-    if not styles:
+    if fontsize is None:
         yield
         return
-    with plt.style.context(styles):
+    with plt.rc_context({"font.size": fontsize}):
         try:
             yield
         finally:
@@ -160,6 +159,7 @@ def _edges(centres: np.ndarray) -> np.ndarray:
     )
 
 
+@with_dark_mode
 def plot_angular_lightcone_slice(
     lightcone: un.Quantity,
     angle: un.Quantity,
@@ -170,7 +170,6 @@ def plot_angular_lightcone_slice(
     zmin: float | None = None,
     zmax: float | None = None,
     grid: bool = True,
-    style: str | None = "dark_background",
     fontsize: float | None = 16,
     title: str | None = None,
     rlabel: str | None = None,
@@ -188,7 +187,7 @@ def plot_angular_lightcone_slice(
     comoving distance from the observer, so the plot shows the lightcone as a wedge
     of its true shape, as the angular lightcone plots of 21cmFAST's lightcone
     tutorial do. By default it also has their colour map (:func:`eor_colormap`), with
-    zero in black, and their dark background.
+    zero in black, and with ``dark_mode=True`` their dark background.
     The distances are labelled with their redshifts if these are given.
 
     Parameters
@@ -213,9 +212,6 @@ def plot_angular_lightcone_slice(
         The highest redshift to plot; the slice nearest to it is the last one plotted.
     grid : bool, optional
         Whether to draw the grid lines. Their labels are drawn either way.
-    style : str, optional
-        The matplotlib style of the plot, "dark_background" by default. None uses
-        the current style. It applies fully to figures that this function makes.
     fontsize : float, optional
         The font size of the plot. None uses the current font size.
     title : str, optional
@@ -236,6 +232,10 @@ def plot_angular_lightcone_slice(
         whichever is higher, or the 95th percentile with a named colour map.
     ax : plt.Axes, optional
         The axes to plot on. If None, a new figure and axes will be created.
+    dark_mode : bool, optional
+        Whether to draw the plot in dark mode (matplotlib's "dark_background"
+        style), as 21cmFAST's lightcone plots are. By default, as set by
+        :func:`~tuesday.core.plotting.set_dark_mode`, which is off until it is set.
 
     Returns
     -------
@@ -305,7 +305,7 @@ def plot_angular_lightcone_slice(
     if rlabel is None:
         rlabel = "Redshift" if redshift is not None else "Comoving distance [Mpc]"
 
-    with _plot_context(style, fontsize):
+    with _plot_context(fontsize):
         if ax is None:
             _, ax = plt.subplots(figsize=(12, 10), layout="constrained")
         colours = _colour_scale(
@@ -385,6 +385,7 @@ def plot_angular_lightcone_slice(
     return ax
 
 
+@with_dark_mode
 def plot_healpix_map(
     values: un.Quantity,
     nside: int,
@@ -393,7 +394,6 @@ def plot_healpix_map(
     order: Literal["ring", "nested"] = "ring",
     projection: Literal["mollweide", "cartesian"] | None = None,
     n_grid: int = 720,
-    style: str | None = "dark_background",
     fontsize: float | None = 16,
     title: str | None = None,
     clabel: str | None = None,
@@ -410,7 +410,7 @@ def plot_healpix_map(
     increases to the right. Points outside the given pixels are left blank. In the
     Mollweide projection, the grid lines are 30 degrees apart in longitude and 15
     degrees in latitude, and only the latitudes are labelled. By default the colours
-    and background are those of :func:`plot_angular_lightcone_slice`.
+    are those of :func:`plot_angular_lightcone_slice`.
 
     Parameters
     ----------
@@ -433,9 +433,6 @@ def plot_healpix_map(
     n_grid : int, optional
         The number of points of the grid along the longitude; the latitude gets the
         number that keeps the points about square on the sky.
-    style : str, optional
-        The matplotlib style of the plot, "dark_background" by default. None uses
-        the current style. It applies fully to figures that this function makes.
     fontsize : float, optional
         The font size of the plot. None uses the current font size.
     title : str, optional
@@ -455,6 +452,10 @@ def plot_healpix_map(
     ax : plt.Axes, optional
         The axes to plot on, with the "mollweide" projection for that projection. If
         None, a new figure and axes will be created.
+    dark_mode : bool, optional
+        Whether to draw the plot in dark mode (matplotlib's "dark_background"
+        style), as 21cmFAST's lightcone plots are. By default, as set by
+        :func:`~tuesday.core.plotting.set_dark_mode`, which is off until it is set.
 
     Returns
     -------
@@ -511,7 +512,7 @@ def plot_healpix_map(
             "ax must have the 'mollweide' projection for projection='mollweide', "
             "and no projection otherwise"
         )
-    with _plot_context(style, fontsize):
+    with _plot_context(fontsize):
         if ax is None:
             figsize = (10, 6) if projection == "mollweide" else (6, 5)
             fig = plt.figure(figsize=figsize)

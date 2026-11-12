@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from astropy_healpix import HEALPix
 from matplotlib import rcParams
-from matplotlib.colors import LogNorm, to_rgb
+from matplotlib.colors import LogNorm, to_rgb, to_rgba
 
 from tuesday.core import eor_colormap, plot_angular_lightcone_slice, plot_healpix_map
 from tuesday.core.lightcones import disc_pixels
@@ -106,7 +106,7 @@ def test_angular_slice_labels_and_cut(arc):
 
 
 def test_angular_slice_options(arc):
-    """A named colour map, a log scale, a style, given axes and labels."""
+    """A named colour map, a log scale, dark mode, given axes and labels."""
     lc, angle, distance, _ = arc
     mesh = plot_angular_lightcone_slice(
         lc, angle, distance, cmap="viridis"
@@ -128,7 +128,6 @@ def test_angular_slice_options(arc):
         angle,
         distance,
         ax=ax,
-        style=None,
         fontsize=20,
         rlabel="d",
         clabel="x_HI",
@@ -137,9 +136,17 @@ def test_angular_slice_options(arc):
     assert "d" in _texts(ax)
     assert ax.figure.axes[-1].yaxis.label.get_fontsize() == 20
     assert ax.figure.axes[-1].get_ylabel() == "x_HI"
-    # The font size and style apply to this plot only.
+    # The font size applies to this plot only.
     assert rcParams["font.size"] == 10
-    assert rcParams["axes.facecolor"] == "white"
+
+    # A white background by default, and a black one in dark mode.
+    ax = plot_angular_lightcone_slice(lc, angle, distance)
+    assert to_rgba(ax.figure.get_facecolor()) == to_rgba("white")
+    ax = plot_angular_lightcone_slice(lc, angle, distance, dark_mode=True)
+    assert to_rgba(ax.figure.get_facecolor()) == to_rgba("black")
+    ax = plot_healpix_map(np.arange(48) * un.mK, 2, dark_mode=True)
+    assert to_rgba(ax.figure.get_facecolor()) == to_rgba("black")
+    assert rcParams["figure.facecolor"] == "white"
 
 
 @pytest.mark.parametrize(
@@ -256,16 +263,15 @@ def test_healpix_errors(values, kwargs, error):
 
 
 def test_plot_context_keeps_interactive_mode():
-    """The style is restored, but not interactive mode if a backend turned it on."""
+    """The font size is restored, but not interactive mode if a backend set it."""
     was_interactive = matplotlib.is_interactive()
     matplotlib.interactive(False)
     size = rcParams["font.size"]
     try:
-        with _plot_context("dark_background", size + 3):
+        with _plot_context(size + 3):
             assert rcParams["font.size"] == size + 3
             matplotlib.interactive(True)
         assert matplotlib.is_interactive()
         assert rcParams["font.size"] == size
-        assert rcParams["axes.facecolor"] == "white"
     finally:
         matplotlib.interactive(was_interactive)
