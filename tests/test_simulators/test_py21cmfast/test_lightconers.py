@@ -7,10 +7,11 @@ import pytest
 from astropy import units as un
 from py21cmfast import AngularLightconer, InputParameters, run_lightcone
 from py21cmfast.io.caching import OutputCache, RunCache
+from py21cmfast.lightconers import Lightconer
 from scipy.spatial.transform import Rotation
 
-from tuesday.core import lightcones
 from tuesday.core.lightcones import CELLS_PER_SAMPLE
+from tuesday.simulators.py21cmfast import lightconers
 from tuesday.simulators.py21cmfast.lightconers import FastAngularLightconer
 from tuesday.simulators.py21cmfast.lightcones import construct_lightcone_from_cache
 
@@ -75,16 +76,26 @@ def run(tmp_path_factory) -> SimpleNamespace:
 
 
 def _record_ways(monkeypatch) -> list[str]:
-    """Record which way each slice is made: "sample" first or "interpolate" first."""
+    """Record which way each slice is made: "sample" first or "interpolate" first.
+
+    Sampling first goes through tuesday's sample_then_interpolate; interpolating
+    first through 21cmFAST's coeval_subselect.
+    """
     called = []
-    for name in ("sample_then_interpolate", "interpolate_then_sample"):
-        original = getattr(lightcones.slices, name)
+    sample = lightconers.sample_then_interpolate
 
-        def spy(*args, _name=name, _original=original, **kw):
-            called.append(_name.split("_")[0])
-            return _original(*args, **kw)
+    def spy_sample(*args, **kw):
+        called.append("sample")
+        return sample(*args, **kw)
 
-        monkeypatch.setattr(lightcones.slices, name, spy)
+    subselect = Lightconer.coeval_subselect
+
+    def spy_subselect(self, *args, **kw):
+        called.append("interpolate")
+        return subselect(self, *args, **kw)
+
+    monkeypatch.setattr(lightconers, "sample_then_interpolate", spy_sample)
+    monkeypatch.setattr(Lightconer, "coeval_subselect", spy_subselect)
     return called
 
 
@@ -143,7 +154,7 @@ def test_matches_stock(run, monkeypatch, tile_first, rotation, dvdr_and_rsds):
     result = construct_lightcone_from_cache(
         run.cache,
         FastAngularLightconer.between_redshifts(
-            **directions, tile_first=tile_first, threads=2, chunk_size=7, **kw
+            **directions, tile_first=tile_first, **kw
         ),
         **options,
     )
@@ -224,13 +235,22 @@ def test_samples_first_rule():
 
 
 def test_validation():
-    """n_subsamples must split the directions; threads and chunk_size positive."""
+    """n_subsamples must split the directions."""
     distances = np.array([100.0]) * un.Mpc
     with pytest.raises(ValueError, match="cannot be split"):
         FastAngularLightconer(**_ring(10), n_subsamples=4, lc_distances=distances)
     with pytest.raises(ValueError, match="n_subsamples must be at least 1"):
         FastAngularLightconer(**_ring(10), n_subsamples=0, lc_distances=distances)
-    with pytest.raises(ValueError, match="threads must be at least 1"):
-        FastAngularLightconer(**_ring(10), threads=0, lc_distances=distances)
-    with pytest.raises(ValueError, match="chunk_size must be at least 1"):
-        FastAngularLightconer(**_ring(10), chunk_size=0, lc_distances=distances)
+
+
+def test_slice_interpolator():
+    """cosmotile's interpolator, with the sub-samples of each pixel, kept per slice."""
+    distances = np.array([100.0]) * un.Mpc
+    lightconer = FastAngularLightconer(
+        **_ring(12), n_subsamples=3, lc_distances=distances
+    )
+    first = lightconer.slice_interpolator(50.0 * un.pixel)
+    assert lightconer.slice_interpolator(50.0 * un.pixel) is first
+    assert lightconer.slice_interpolator(51.0 * un.pixel) is not first
+    assert first.keywords["coordinates"].shape == (3, 12)
+    np.testing.assert_allclose(first.keywords["weights"], 1 / 3)
