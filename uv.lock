@@ -3227,6 +3227,7 @@ source = { editable = "." }
 dependencies = [
     { name = "21cmsense" },
     { name = "astropy" },
+    { name = "astropy-healpix" },
     { name = "attrs" },
     { name = "cosmotile" },
     { name = "deprecation" },
@@ -3270,6 +3271,7 @@ requires-dist = [
     { name = "21cmfast", marker = "extra == '21cmfast'", specifier = ">=4.3.2" },
     { name = "21cmsense", specifier = ">=3.0.0" },
     { name = "astropy", specifier = ">=6.0" },
+    { name = "astropy-healpix", specifier = ">=1.0" },
     { name = "attrs", specifier = ">=25.3.0" },
     { name = "cosmotile", specifier = ">=0.3.0" },
     { name = "deprecation" },

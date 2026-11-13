@@ -13,6 +13,7 @@ from scipy.ndimage import gaussian_filter
 from tuesday import __version__
 
 from ..units import validate
+from .style import with_dark_mode
 
 try:
     eor_colour = colors.LinearSegmentedColormap.from_list(
@@ -52,7 +53,8 @@ def _plot_slice(
 ) -> plt.Axes:
     """Plot a 2D slice of the data."""
     validate(yaxis, "length")
-    rcParams.update({"font.size": fontsize})
+    if fontsize is not None:
+        rcParams.update({"font.size": fontsize})
     if xaxis.unit.physical_type != "dimensionless":
         validate(xaxis, "length")
     if ax is None:
@@ -177,6 +179,7 @@ def coeval2slice_z(
     return slice_index
 
 
+@with_dark_mode
 def plot_lightcone_slice(
     lightcone: un.Quantity,
     box_length: un.Quantity,
@@ -212,6 +215,8 @@ def plot_lightcone_slice(
         The length of the box.
     redshift : np.ndarray | un.Quantity
         The redshift values corresponding to the lightcone.
+    fontsize : float, optional
+        The font size, set for all plots. None leaves it unchanged.
     title : str, optional
         The title of the plot.
     xlabel : str, optional
@@ -229,28 +234,48 @@ def plot_lightcone_slice(
     logc : bool, optional
         Whether to use a logarithmic scale for the colorbar.
     zmin : float, optional
-        The minimum redshift of the lightcone.
+        The lowest redshift to plot; the slice nearest to it is the first one
+        plotted. Use this rather than the ``zmin`` of a slicing function given as
+        ``transform2slice``, which does not cut the redshifts.
     zmax : float, optional
-        The maximum redshift of the lightcone.
+        The highest redshift to plot; the slice nearest to it is the last one
+        plotted.
     vmin : float, optional
-        The minimum value for the color scale.
+        The minimum value for the color scale. If neither limit is given, the 5th
+        percentile (of the positive values, with ``logc``).
     vmax : float, optional
-        The maximum value for the color scale.
+        The maximum value for the color scale. If neither limit is given, the 95th
+        percentile (the largest value, with ``logc``), or, with the "eor" colormap
+        and a negative ``vmin``, the value that puts zero at the black of the
+        colormap.
     ax : plt.Axes, optional
         The axes to plot on. If None, a new figure and axes will be created.
     smooth : bool | float, optional
         Whether to apply Gaussian smoothing to the lightcone data.
         If True, a default sigma of 1.0 will be used.
         If a float, it will be used as the sigma for the Gaussian filter.
+    dark_mode : bool, optional
+        Whether to draw the plot in dark mode (matplotlib's "dark_background"
+        style). By default, as set by :func:`~tuesday.core.plotting.set_dark_mode`,
+        which is off until it is set.
     """
     validate(box_length, "length")
-    rcParams.update({"font.size": fontsize})
+    if fontsize is not None:
+        rcParams.update({"font.size": fontsize})
     if ax is None:
         _, ax = plt.subplots(figsize=(20, 4))
+    # Keep the slices from the one nearest to zmin to the one nearest to zmax, and
+    # their redshifts.
+    first = 0 if zmin is None else int(np.argmin(np.abs(redshift - zmin)))
+    last = (
+        len(redshift) - 1 if zmax is None else int(np.argmin(np.abs(redshift - zmax)))
+    )
+    lightcone = lightcone[..., first : last + 1]
+    redshift = redshift[first : last + 1]
     if transform2slice is not None:
         lightcone = transform2slice(lightcone, redshift)
     else:
-        lightcone = lc2slice_x(zmin=zmin, zmax=zmax, idx=0)(lightcone, redshift)
+        lightcone = lc2slice_x(idx=0)(lightcone, redshift)
     if smooth:
         if isinstance(smooth, bool):
             smooth = 1.0
@@ -269,11 +294,10 @@ def plot_lightcone_slice(
                 f"{lightcone.unit.physical_type} " + f" [{lightcone.unit:latex_inline}]"
             )
     if vmin is None and vmax is None:
-        if logc:
-            vmin = np.nanpercentile(np.log10(lightcone.value), 5)
-        else:
-            vmin = np.nanpercentile(lightcone.value, 5)
-        if cmap.lower() == "eor":
+        values = lightcone.value[lightcone.value > 0] if logc else lightcone.value
+        vmin = np.nanpercentile(values, 5)
+        # With a negative lower limit, put zero at the black of the "eor" colour map.
+        if cmap.lower() == "eor" and vmin < 0 and not logc:
             vmax = -1.0 * vmin / 0.86 + vmin
     return _plot_slice(
         lightcone.T,
@@ -281,6 +305,7 @@ def plot_lightcone_slice(
         yaxis,
         vmin=vmin,
         vmax=vmax,
+        fontsize=fontsize,
         log=[logx, logy, logc],
         title=title,
         xlabel="Redshift" if xlabel is None else xlabel,
@@ -307,6 +332,7 @@ def plot_redshift_slice(*args, **kwargs):
     return plot_lightcone_slice(*args, **kwargs)
 
 
+@with_dark_mode
 def plot_coeval_slice(
     coeval: un.Quantity,
     box_length: un.Quantity,
@@ -399,6 +425,10 @@ def plot_coeval_slice(
         The factor by which to decimate the vector field for plotting.
         This is useful for reducing the number of arrows in the quiver plot
         to avoid cluttering the plot. Default is 1 (no decimation).
+    dark_mode : bool, optional
+        Whether to draw the plot in dark mode (matplotlib's "dark_background"
+        style). By default, as set by :func:`~tuesday.core.plotting.set_dark_mode`,
+        which is off until it is set.
 
     Returns
     -------
@@ -406,7 +436,8 @@ def plot_coeval_slice(
         The axes with the coeval slice plot.
     """
     validate(box_length, "length")
-    rcParams.update({"font.size": fontsize})
+    if fontsize is not None:
+        rcParams.update({"font.size": fontsize})
     if ax is None:
         _, ax = plt.subplots(figsize=(7, 6))
     if transform2slice is not None:
@@ -433,6 +464,7 @@ def plot_coeval_slice(
         yaxis,
         vmin=vmin,
         vmax=vmax,
+        fontsize=fontsize,
         log=[logx, logy, logc],
         title=title,
         xlabel=f"Distance [{box_length.unit:latex_inline}]"
@@ -484,6 +516,7 @@ def plot_coeval_slice(
     return ax
 
 
+@with_dark_mode
 def plot_pdf(
     box: un.Quantity,
     *,
@@ -518,6 +551,10 @@ def plot_pdf(
         Whether to apply Gaussian smoothing to the box data.
         If True, a default sigma of 1.0 will be used.
         If a float, it will be used as the sigma for the Gaussian filter.
+    dark_mode : bool, optional
+        Whether to draw the plot in dark mode (matplotlib's "dark_background"
+        style). By default, as set by :func:`~tuesday.core.plotting.set_dark_mode`,
+        which is off until it is set.
 
     Returns
     -------
@@ -526,7 +563,8 @@ def plot_pdf(
 
 
     """
-    rcParams.update({"font.size": fontsize})
+    if fontsize is not None:
+        rcParams.update({"font.size": fontsize})
 
     if smooth:
         if isinstance(smooth, bool):
