@@ -113,12 +113,12 @@ def _assert_lightcones_close(result, reference, quantities, rtol=1e-6):
         )
 
 
-def test_run_lightcone_matches_stock(run):
+def test_run_lightcone_matches_21cmfast(run):
     """In run_lightcone, it gives what 21cmFAST's AngularLightconer gives."""
-    stock = AngularLightconer.between_redshifts(
+    angular = AngularLightconer.between_redshifts(
         **_ring(32), **_lightconer_kwargs(run.inputs)
     )
-    reference = construct_lightcone_from_cache(run.cache, stock)
+    reference = construct_lightcone_from_cache(run.cache, angular)
     _assert_lightcones_close(run.lightcone, reference, QUANTITIES)
 
 
@@ -136,7 +136,7 @@ ROTATION = Rotation.from_euler("zyx", [0.3, 0.2, 0.1])
         (False, ROTATION, True),
     ],
 )
-def test_matches_stock(run, monkeypatch, tile_first, rotation, dvdr_and_rsds):
+def test_matches_21cmfast(run, monkeypatch, tile_first, rotation, dvdr_and_rsds):
     """Sampling first or not, the lightcones equal 21cmFAST's, with dv/dr and RSDs.
 
     Every slice is made the way tile_first asks for, or, with tile_first=None, the
@@ -169,17 +169,23 @@ def test_matches_stock(run, monkeypatch, tile_first, rotation, dvdr_and_rsds):
 
 
 @pytest.mark.parametrize("order", [0, 3])
-def test_other_orders(run, order):
-    """Order 0 can sample first; orders above 1 use 21cmFAST's path."""
+def test_other_orders(run, monkeypatch, order):
+    """Orders 0 and 3 sample first when asked, and give 21cmFAST's lightcones.
+
+    Without tile_first, order 3 interpolates first, which is cheaper for splines.
+    """
     kw = _lightconer_kwargs(run.inputs, interpolation_order=order)
     reference = construct_lightcone_from_cache(
         run.cache, AngularLightconer.between_redshifts(**_ring(40), **kw)
     )
+    default = FastAngularLightconer.between_redshifts(**_ring(40), **kw)
+    assert default.samples_first(10**9) is (order == 0)
     lightconer = FastAngularLightconer.between_redshifts(
         **_ring(40), tile_first=True, **kw
     )
-    assert lightconer.samples_first(10**3) is (order == 0)
+    ways = _record_ways(monkeypatch)
     result = construct_lightcone_from_cache(run.cache, lightconer)
+    assert set(ways) == {"sample"}
     _assert_lightcones_close(result, reference, QUANTITIES)
 
 
@@ -219,7 +225,7 @@ def test_subsamples(run):
 def test_samples_first_rule():
     """Sample first when the box has more than CELLS_PER_SAMPLE cells per direction.
 
-    tile_first overrides the choice, except for orders above 1.
+    Orders above 1 interpolate first, and tile_first overrides the choice.
     """
     distances = np.array([100.0]) * un.Mpc
     lightconer = FastAngularLightconer(**_ring(100), lc_distances=distances)
@@ -232,9 +238,13 @@ def test_samples_first_rule():
         assert forced.samples_first(1) is tile_first
         assert forced.samples_first(10**9) is tile_first
     cubic = FastAngularLightconer(
-        **_ring(100), tile_first=True, interpolation_order=3, lc_distances=distances
+        **_ring(100), interpolation_order=3, lc_distances=distances
     )
     assert not cubic.samples_first(10**9)
+    cubic = FastAngularLightconer(
+        **_ring(100), tile_first=True, interpolation_order=3, lc_distances=distances
+    )
+    assert cubic.samples_first(1)
 
 
 def test_validation():

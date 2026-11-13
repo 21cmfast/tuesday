@@ -97,7 +97,8 @@ def test_metallicity_without_star_formation():
         REDSHIFT,
     )
 
-    np.testing.assert_allclose(metallicity, z_scale, rtol=1e-12)
+    assert metallicity.shape == (3,)
+    np.testing.assert_allclose(metallicity, np.full(3, z_scale), rtol=1e-12)
 
 
 def test_metallicity_relation():
