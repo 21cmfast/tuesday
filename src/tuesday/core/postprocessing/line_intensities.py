@@ -2,9 +2,10 @@
 
 The [CII] 158 micron luminosity of each halo is computed from its star formation rate
 (and, for some models, its metallicity or mass) with one of the empirical or
-simulation-based relations in :data:`CII_MODELS`. The luminosity is converted to a
-velocity-integrated flux density with :func:`cii_flux`, and a gridded flux density is
-converted to a surface brightness with :func:`cii_surface_brightness`.
+simulation-based relations in :data:`CII_MODELS`. The metallicity can be obtained from
+the star formation rate and stellar mass with :func:`halo_metallicity`. The luminosity
+is converted to a velocity-integrated flux density with :func:`cii_flux`, and a gridded
+flux density is converted to a surface brightness with :func:`cii_surface_brightness`.
 
 These functions work on plain arrays and do not depend on any simulation code; see
 :mod:`tuesday.simulators.py21cmfast.postprocessing` for wrappers that read 21cmFAST
@@ -154,6 +155,43 @@ def validate_cii_model(model: str) -> None:
         raise ValueError(
             f"Unknown [CII] model '{model}'. Available models are {list(CII_MODELS)}."
         )
+
+
+def halo_metallicity(
+    sfr: un.Quantity[un.Msun / un.yr],
+    stellar_mass: un.Quantity[un.Msun],
+    redshift: float,
+) -> np.ndarray:
+    """Calculate the gas metallicity of each halo from its SFR and stellar mass.
+
+    Uses the relation of Eqs. 14 and 15 of Davies, Mesinger & Murray (2025),
+    arXiv:2504.17254, which is also the halo metallicity of 21cmFAST:
+    ``Z = 1.23 (1 + (M* / M0)^-2.1)^-0.148 10^(-0.056 z + 0.064)``, with
+    ``M0 = 1.28825e10 Msun (SFR / [Msun/yr])^0.56``. Halos without stars or star
+    formation get the stellar-mass factor 1, as in 21cmFAST.
+
+    Parameters
+    ----------
+    sfr : un.Quantity[un.Msun / un.yr]
+        Star formation rate of each halo.
+    stellar_mass : un.Quantity[un.Msun]
+        Stellar mass of each halo.
+    redshift : float
+        Redshift of the halos.
+
+    Returns
+    -------
+    np.ndarray
+        Gas metallicity of each halo, in units of the solar metallicity.
+    """
+    sfr = np.asarray(sfr.to_value(un.Msun / un.yr), dtype=np.float64)
+    stellar_mass = np.asarray(stellar_mass.to_value(un.Msun), dtype=np.float64)
+    stellar_term = np.ones(np.broadcast(sfr, stellar_mass).shape)
+    sfr, stellar_mass = np.broadcast_arrays(sfr, stellar_mass)
+    forming = (stellar_mass > 0) & (sfr > 0)
+    m0 = 1.28825e10 * sfr[forming] ** 0.56
+    stellar_term[forming] = (1 + (stellar_mass[forming] / m0) ** -2.1) ** -0.148
+    return 1.23 * stellar_term * 10 ** (-0.056 * redshift + 0.064)
 
 
 def cii_luminosity(

@@ -16,7 +16,7 @@ authors = [
     { name = "James Davies", email = "james.davies@sns.it" },
     { name = "Steven Murray", email = "murray.steveng@gmail.com" },
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = {text="MIT"}
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -43,7 +43,7 @@ dynamic = ['version']
 
 [project.optional-dependencies]
 21cmfast = [
-    "21cmFAST>=4.1.0",
+    "21cmFAST>=4.3.2",
 ]
 ska = [
     "ska-ost-array-config>=5",
