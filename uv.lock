@@ -10,7 +10,7 @@ resolution-markers = [
 
 [[package]]
 name = "21cmfast"
-version = "4.3.1"
+version = "4.3.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "astropy" },
@@ -32,7 +32,7 @@ dependencies = [
     { name = "tomlkit" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/85/06/67c1618a333a584535b4bf126186d010361ffeaba6821b2fc597713bcef7/21cmfast-4.3.1.tar.gz", hash = "sha256:eaab3c54492ef4985bb6a5d3eb6dfbf64c6702825a527fe7c08b3ee6211cbed4", size = 50257133, upload-time = "2026-10-21T11:17:44.847Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/83/154c09b07540c299b0f7b5c55eb73c639d0d8d0b0c80eec441c61333a31d/21cmfast-4.3.2.tar.gz", hash = "sha256:1db0d884d5584c09562056306bd1acf53153f7f9a767782496990106f65c591b", size = 50265872, upload-time = "2026-11-13T09:09:25.207Z" }
 
 [[package]]
 name = "21cmsense"
@@ -2847,9 +2847,9 @@ dependencies = [
     { name = "ska-sdp-datamodels" },
     { name = "ska-sdp-func-python" },
 ]
-sdist = { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-ost-array-config/5.0.0/ska_ost_array_config-5.0.0.tar.gz", hash = "sha256:5faafc139cc60ca869be09b0b18fc8c1e379bfd7017379f1a2ca9518ecc57ca1" }
+sdist = { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-ost-array-config/5.0.0/ska_ost_array_config-5.0.0.tar.gz", hash = "sha256:5faafc139cc60ca869be09b0b18fc8c1e379bfd7017379f1a2ca9518ecc57ca1", size = 0, upload-time = "2026-09-07T10:20:40.08Z" }
 wheels = [
-    { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-ost-array-config/5.0.0/ska_ost_array_config-5.0.0-py3-none-any.whl", hash = "sha256:a5b5df139dd45aa300bee7a4ca612be7a3b2aa0f109d271c1157fdc7caf69d35" },
+    { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-ost-array-config/5.0.0/ska_ost_array_config-5.0.0-py3-none-any.whl", hash = "sha256:a5b5df139dd45aa300bee7a4ca612be7a3b2aa0f109d271c1157fdc7caf69d35", size = 0, upload-time = "2026-09-07T10:20:39.251Z" },
 ]
 
 [[package]]
@@ -2862,9 +2862,9 @@ dependencies = [
     { name = "requests" },
     { name = "schema" },
 ]
-sdist = { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-schemas/1.42.0/ska_schemas-1.42.0.tar.gz", hash = "sha256:08a06164eaaf8fb9a7f8033fc3dc9c1ffe0271b5ee295a5c5ac2b25ee9f071be" }
+sdist = { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-schemas/1.42.0/ska_schemas-1.42.0.tar.gz", hash = "sha256:08a06164eaaf8fb9a7f8033fc3dc9c1ffe0271b5ee295a5c5ac2b25ee9f071be", size = 0, upload-time = "2026-09-21T11:12:51.248Z" }
 wheels = [
-    { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-schemas/1.42.0/ska_schemas-1.42.0-py3-none-any.whl", hash = "sha256:a83f22ec982a3a1e22868ccf1b998acb72251509c1454e1478a821ebfe72e79c" },
+    { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-schemas/1.42.0/ska_schemas-1.42.0-py3-none-any.whl", hash = "sha256:a83f22ec982a3a1e22868ccf1b998acb72251509c1454e1478a821ebfe72e79c", size = 0, upload-time = "2026-09-21T11:12:51.075Z" },
 ]
 
 [[package]]
@@ -2884,9 +2884,9 @@ dependencies = [
     { name = "ska-telmodel-client", marker = "python_full_version < '4'" },
     { name = "xarray" },
 ]
-sdist = { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-sdp-datamodels/3.0.0/ska_sdp_datamodels-3.0.0.tar.gz", hash = "sha256:6a02e901ed64913e24d2ac4f13a893002349e7d4db27a7249804ec8b33001821" }
+sdist = { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-sdp-datamodels/3.0.0/ska_sdp_datamodels-3.0.0.tar.gz", hash = "sha256:6a02e901ed64913e24d2ac4f13a893002349e7d4db27a7249804ec8b33001821", size = 0, upload-time = "2026-08-03T09:33:49.082Z" }
 wheels = [
-    { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-sdp-datamodels/3.0.0/ska_sdp_datamodels-3.0.0-py3-none-any.whl", hash = "sha256:0478e6dd55c8226147b4d2e2693eca567aeb7c1e37f72513a3e75ac908bde6c9" },
+    { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-sdp-datamodels/3.0.0/ska_sdp_datamodels-3.0.0-py3-none-any.whl", hash = "sha256:0478e6dd55c8226147b4d2e2693eca567aeb7c1e37f72513a3e75ac908bde6c9", size = 0, upload-time = "2026-08-03T09:33:48.864Z" },
 ]
 
 [[package]]
@@ -2905,9 +2905,9 @@ dependencies = [
     { name = "ska-sdp-datamodels", marker = "python_full_version < '3.14'" },
     { name = "xarray" },
 ]
-sdist = { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-sdp-func-python/2.0.1/ska_sdp_func_python-2.0.1.tar.gz", hash = "sha256:d46e0dec85fce19508fd433562e27d2ba5700c505a00c705318fd02a4e617ab3" }
+sdist = { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-sdp-func-python/2.0.1/ska_sdp_func_python-2.0.1.tar.gz", hash = "sha256:d46e0dec85fce19508fd433562e27d2ba5700c505a00c705318fd02a4e617ab3", size = 0, upload-time = "2026-08-07T05:59:59.716Z" }
 wheels = [
-    { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-sdp-func-python/2.0.1/ska_sdp_func_python-2.0.1-py3-none-any.whl", hash = "sha256:cef000dcd62320818280f78d3266962059dd222264cb5125e0fbb4cde2fd5c51" },
+    { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-sdp-func-python/2.0.1/ska_sdp_func_python-2.0.1-py3-none-any.whl", hash = "sha256:cef000dcd62320818280f78d3266962059dd222264cb5125e0fbb4cde2fd5c51", size = 0, upload-time = "2026-08-07T05:59:59.544Z" },
 ]
 
 [[package]]
@@ -2926,9 +2926,9 @@ dependencies = [
     { name = "tomli" },
     { name = "toolz" },
 ]
-sdist = { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-telmodel-client/1.30.3/ska_telmodel_client-1.30.3.tar.gz", hash = "sha256:748549093f39c684e7a2e3dbb893f9762a7a23cf772ca35bf8d9b7dee251c8bd" }
+sdist = { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-telmodel-client/1.30.3/ska_telmodel_client-1.30.3.tar.gz", hash = "sha256:748549093f39c684e7a2e3dbb893f9762a7a23cf772ca35bf8d9b7dee251c8bd", size = 0, upload-time = "2026-09-16T12:29:09.273Z" }
 wheels = [
-    { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-telmodel-client/1.30.3/ska_telmodel_client-1.30.3-py3-none-any.whl", hash = "sha256:289f0e8d816c641e0c68041399cd6d731073655766b956386c5839660da3dd95" },
+    { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-telmodel-client/1.30.3/ska_telmodel_client-1.30.3-py3-none-any.whl", hash = "sha256:289f0e8d816c641e0c68041399cd6d731073655766b956386c5839660da3dd95", size = 0, upload-time = "2026-09-16T12:29:09.156Z" },
 ]
 
 [[package]]
@@ -3266,7 +3266,7 @@ tests = [
 
 [package.metadata]
 requires-dist = [
-    { name = "21cmfast", marker = "extra == '21cmfast'", specifier = ">=4.3.1" },
+    { name = "21cmfast", marker = "extra == '21cmfast'", specifier = ">=4.3.2" },
     { name = "21cmsense", specifier = ">=3.0.0" },
     { name = "astropy", specifier = ">=6.0" },
     { name = "attrs", specifier = ">=25.3.0" },

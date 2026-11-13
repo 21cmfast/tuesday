@@ -43,7 +43,7 @@ dynamic = ['version']
 
 [project.optional-dependencies]
 21cmfast = [
-    "21cmFAST>=4.3.1",
+    "21cmFAST>=4.3.2",
 ]
 ska = [
     "ska-ost-array-config>=5",
