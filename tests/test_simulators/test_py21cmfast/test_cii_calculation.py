@@ -127,7 +127,6 @@ def test_halo_metallicity_matches_21cmfast():
     # store. convert_halo_properties returns the SFR, the stellar mass and the
     # metallicity it derives from them.
     p21c = pytest.importorskip("py21cmfast")
-    from py21cmfast.drivers._global_initialization import c_state
     from py21cmfast.wrapper.cfuncs import convert_halo_properties
 
     inputs = p21c.InputParameters.from_template(
@@ -137,15 +136,14 @@ def test_halo_metallicity_matches_21cmfast():
     assert not inputs.astro_options.USE_MCGS
     rng = np.random.default_rng(0)
     n = 500
-    with c_state(inputs, ps=True, sigma=True):
-        props = convert_halo_properties(
-            redshift=REDSHIFT,
-            inputs=inputs,
-            halo_masses=10 ** rng.uniform(8.5, 12.5, n),
-            star_rng=rng.normal(size=n),
-            sfr_rng=rng.normal(size=n),
-            xray_rng=rng.normal(size=n),
-        )
+    props = convert_halo_properties(
+        redshift=REDSHIFT,
+        inputs=inputs,
+        halo_masses=10 ** rng.uniform(8.5, 12.5, n),
+        star_rng=rng.normal(size=n),
+        sfr_rng=rng.normal(size=n),
+        xray_rng=rng.normal(size=n),
+    )
     assert np.all(props["metallicity_acg"] > 0)
 
     # 21cmFAST computes the metallicity in double precision before storing all three
