@@ -16,7 +16,7 @@ authors = [
     { name = "James Davies", email = "james.davies@sns.it" },
     { name = "Steven Murray", email = "murray.steveng@gmail.com" },
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = {text="MIT"}
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -34,6 +34,7 @@ dependencies = [
     "21cmsense>=3.0.0",
     "astropy>=6.0",
     "attrs>=25.3.0",
+    "cosmotile>=0.3.0",
     "deprecation",
     "numpy>=2",
     "powerbox>=1.0.0",
@@ -43,7 +44,7 @@ dynamic = ['version']
 
 [project.optional-dependencies]
 21cmfast = [
-    "21cmFAST>=4.1.0",
+    "21cmFAST>=4.3.2",
 ]
 ska = [
     "ska-ost-array-config>=5",

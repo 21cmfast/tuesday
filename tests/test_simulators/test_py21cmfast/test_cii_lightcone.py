@@ -11,9 +11,8 @@ import numpy as np
 import py21cmfast as p21c
 import pytest
 from py21cmfast.drivers.lightcone import LightCone
-from py21cmfast.io.caching import OutputCache
+from py21cmfast.io.caching import OutputCache, RunCache
 from py21cmfast.io.h5 import read_output_struct
-from py21cmfast.wrapper.cfuncs import convert_halo_properties
 
 from tuesday.simulators.py21cmfast.lightcones import construct_lightcone_from_coevals
 from tuesday.simulators.py21cmfast.postprocessing import cii_lightcone
@@ -66,18 +65,19 @@ def run(monkeypatch) -> SimpleNamespace:
     ``gen_coeval`` are recorded in ``calls["seeds"]``, and the number of boxes still
     in memory when each box is built in ``calls["alive"]``.
     """
-    inputs, lightconer, lightcone = make_run()
-    calls = {"seeds": [], "scale": 1.0, "alive": []}
+    run_inputs, lightconer, lightcone = make_run()
+    calls = {"seeds": [], "inputs": [], "scale": 1.0, "alive": []}
     boxes = weakref.WeakSet()
 
-    def fake_gen_coeval(z, model, directory_path, seed=None):
+    def fake_gen_coeval(z, model, directory_path, seed=None, inputs=None):
         gc.collect()
         calls["alive"].append(len(boxes))
         calls["seeds"].append(seed)
+        calls["inputs"].append(inputs)
         coeval = FakeCoeval(
             redshift=z,
-            cosmo_params=inputs.cosmo_params,
-            simulation_options=inputs.simulation_options,
+            cosmo_params=run_inputs.cosmo_params,
+            simulation_options=run_inputs.simulation_options,
             cii_intensity=np.full((10, 10, 10), calls["scale"] * z),
             initial_conditions=object(),
             halobox=object(),
@@ -99,6 +99,8 @@ def test_gen_lc_output(run):
     assert np.all(intensity >= min(NODE_REDSHIFTS))
     assert np.all(intensity <= max(NODE_REDSHIFTS))
     assert np.all(cii_lc.lightcones["cii_brightness"] > 0)
+    # The boxes are read for the run of the lightcone.
+    assert all(inputs is run.lightcone.inputs for inputs in run.calls["inputs"])
 
 
 def test_gen_lc_shares_one_generator(run):
@@ -170,7 +172,7 @@ def real_run(tmp_path_factory) -> SimpleNamespace:
         random_seed=1,
         node_redshifts=NODE_REDSHIFTS,
         USE_TS_FLUCT=False,
-        INHOMO_RECO=False,
+        RECOMB_MODEL="none",
     ).evolve_input_structs(
         BOX_LEN=30,
         HII_DIM=10,
@@ -239,50 +241,89 @@ def test_interpolation_matches_21cmfast_lightcone(real_run):
     )
 
 
-def test_gen_coeval_conserves_flux(real_run):
+def test_gen_coeval_conserves_flux(real_run, monkeypatch):
     z = NODE_REDSHIFTS[1]
+    returned = {}
+
+    def keep_intensity(halo_catalog, model, seed=None):
+        luminosity, intensity = calculate_cii(halo_catalog, model, seed=seed)
+        returned["intensity"] = intensity
+        return luminosity, intensity
+
+    monkeypatch.setattr(cii_lightcone, "calculate_cii", keep_intensity)
     coeval = gen_coeval(z, "Lagache18", real_run.cache_dir, seed=5)
-    halos = read_cached(real_run.cache_dir, z, "HaloCatalog")
-    _, intensity = calculate_cii(halos, "Lagache18", seed=5)
 
     assert coeval.cii_intensity.shape == (10, 10, 10)
+    assert returned["intensity"].sum() > 0
     # Every halo lies inside the box, so gridding conserves the total flux.
-    np.testing.assert_allclose(coeval.cii_intensity.sum(), intensity.sum(), rtol=1e-10)
+    np.testing.assert_allclose(
+        coeval.cii_intensity.sum(), returned["intensity"].sum(), rtol=1e-10
+    )
+
+
+def halo_part(cache_dir: Path, z: float, field: str) -> np.ndarray:
+    """The part of a cached EmissivityFields field that comes from the sampled halos.
+
+    21cmFAST adds to its EmissivityFields the emission of halos below
+    SAMPLER_MIN_MASS, from the conditional mass function. Recomputing the box with
+    every halo mass set to zero (21cmFAST skips such halos) gives that part alone.
+    """
+    inputs = read_cached(cache_dir, z, "HaloCatalog").inputs
+    run = RunCache.from_inputs(inputs, OutputCache(cache_dir))
+    nodes = sorted(inputs.node_redshifts, reverse=True)
+    i = nodes.index(z)
+    no_halos = read_output_struct(run.HaloCatalog[z])
+    no_halos.load_all()
+    no_halos.set("halo_masses", np.zeros_like(no_halos.get("halo_masses")))
+    # The boxes of the previous node redshift, as 21cmFAST's redshift loop passes them.
+    previous = {}
+    if i > 0:
+        previous["previous_ionize_box"] = read_output_struct(
+            run.IonizedBox[nodes[i - 1]]
+        )
+        if run.TsBox:
+            previous["previous_spin_temp"] = read_output_struct(run.TsBox[nodes[i - 1]])
+    below_sampler = p21c.compute_emissivity_fields(
+        redshift=z,
+        inputs=inputs,
+        initial_conditions=read_output_struct(run.InitialConditions),
+        perturbed_field=read_output_struct(run.PerturbedField[z]),
+        halo_catalog=no_halos,
+        write=False,
+        regenerate=True,
+        **previous,
+    )
+    full = read_output_struct(run.EmissivityFields[z]).get(field)
+    return full.astype(np.float64) - below_sampler.get(field).astype(np.float64)
+
+
+def grid_halo_property(monkeypatch, cache_dir: Path, z: float, prop: str):
+    """Grid one halo property of the PerturbedHaloCatalog with gen_coeval, per Mpc^3."""
+    monkeypatch.setattr(
+        cii_lightcone,
+        "calculate_cii",
+        lambda halo_catalog, model, seed=None: (
+            None,
+            halo_catalog.get(prop)[: halo_catalog.n_halos].astype(np.float64),
+        ),
+    )
+    coeval = gen_coeval(z, "Lagache18", cache_dir)
+    options = coeval.simulation_options
+    return coeval.cii_intensity / (options.BOX_LEN / options.HII_DIM) ** 3
 
 
 def test_gen_coeval_grids_like_21cmfast(real_run, monkeypatch):
-    # Grid each halo's SFR instead of its [CII] flux: gen_coeval must place the
-    # halos where 21cmFAST does, so the box must equal the cached HaloBox SFR,
-    # which 21cmFAST builds from the Eulerian halo positions with cloud-in-cell.
-    def halo_sfr(halo_catalog, model, seed=None):
-        n = halo_catalog.n_halos
-        props = convert_halo_properties(
-            redshift=halo_catalog.redshift,
-            inputs=halo_catalog.inputs,
-            **{
-                key: halo_catalog.get(key)[:n]
-                for key in (
-                    "halo_masses",
-                    "halo_coords",
-                    "star_rng",
-                    "sfr_rng",
-                    "xray_rng",
-                )
-            },
-        )
-        return None, props["halo_sfr"]
+    # Grid each halo's ionising emissivity instead of its [CII] flux: gen_coeval must
+    # place the halos where 21cmFAST does, so the box must equal the halo part of the
+    # cached EmissivityFields n_ion, which 21cmFAST builds from the Eulerian halo
+    # positions with cloud-in-cell. (21cmFAST does not store the gridded SFR of a run
+    # without USE_TS_FLUCT.)
+    z = NODE_REDSHIFTS[1]
+    gridded = grid_halo_property(monkeypatch, real_run.cache_dir, z, "n_ion")
+    expected = halo_part(real_run.cache_dir, z, "n_ion")
 
-    monkeypatch.setattr(cii_lightcone, "calculate_cii", halo_sfr)
-    coeval = gen_coeval(NODE_REDSHIFTS[1], "Lagache18", real_run.cache_dir)
-    cell_volume = (coeval.simulation_options.BOX_LEN / 10) ** 3
-
-    # The HaloBox is stored in float32.
-    np.testing.assert_allclose(
-        coeval.cii_intensity / cell_volume,
-        coeval.halobox.get("halo_sfr"),
-        rtol=1e-5,
-        atol=1e-5 * coeval.halobox.get("halo_sfr").max(),
-    )
+    # The EmissivityFields are stored in float32.
+    np.testing.assert_allclose(gridded, expected, rtol=1e-5, atol=1e-5 * expected.max())
 
 
 def test_gen_coeval_does_not_rely_on_calculate_cii_loading(real_run, monkeypatch):
@@ -339,7 +380,7 @@ def test_gen_lc_without_21cm_outputs(real_run, tmp_path):
         "PerturbedField",
         "IonizedBox",
         "BrightnessTemp",
-        "HaloBox",
+        "EmissivityFields",
     )
     args = (real_run.lightcone, real_run.lightconer, "Lagache18")
     reduced = gen_lc(*args, cache, seed=2)
@@ -355,3 +396,128 @@ def test_gen_coeval_needs_halos_and_initial_conditions(real_run, tmp_path, missi
 
     with pytest.raises(ValueError, match=missing):
         gen_coeval(NODE_REDSHIFTS[0], "Lagache18", cache, seed=0)
+
+
+# --- A (tiny) run with minihalos and reionization feedback --------------------------
+
+
+@pytest.fixture(scope="module")
+def feedback_run(tmp_path_factory) -> SimpleNamespace:
+    """Run a tiny coeval with minihalos and reionization feedback (~1 min).
+
+    The halo properties then depend on the TsBox and IonizedBox of the previous node
+    redshift.
+    """
+    cache_dir = tmp_path_factory.mktemp("feedback_cache")
+    inputs = p21c.InputParameters.from_template(
+        ["minihalos-discrete", "size-tiny"], random_seed=3
+    ).evolve_input_structs(
+        BOX_LEN=20,
+        HII_DIM=8,
+        DIM=None,
+        HIRES_TO_LOWRES_FACTOR=2,
+        PERTURB_ALGORITHM="LINEAR",
+        ZPRIME_STEP_FACTOR=1.2,
+        R_BUBBLE_MAX=10.0,
+        USE_REIONIZATION_PHOTOHEATING_FEEDBACK=True,
+    )
+    assert inputs.astro_options.USE_MCGS
+    nodes = sorted(inputs.node_redshifts, reverse=True)
+    p21c.run_coeval(
+        out_redshifts=[nodes[2]],
+        inputs=inputs,
+        cache=OutputCache(cache_dir),
+        write=True,
+        progressbar=False,
+    )
+    return SimpleNamespace(cache_dir=cache_dir, inputs=inputs, nodes=nodes)
+
+
+@pytest.mark.parametrize("node", [1, 2])
+def test_gen_coeval_has_the_feedback_of_the_run(feedback_run, monkeypatch, node):
+    # Below Z_HEAT_MAX the halo SFRs of the run depend on the previous node's
+    # Lyman-Werner background and reionization: gen_coeval must give the halos the
+    # SFRs of the run, i.e. reproduce the halo part of the cached sfrd_acg.
+    z = feedback_run.nodes[node]
+    assert z < feedback_run.inputs.simulation_options.Z_HEAT_MAX
+    gridded = grid_halo_property(monkeypatch, feedback_run.cache_dir, z, "sfr_acg")
+    expected = halo_part(feedback_run.cache_dir, z, "sfrd_acg")
+
+    assert expected.max() > 0
+    np.testing.assert_allclose(gridded, expected, rtol=1e-5, atol=1e-5 * expected.max())
+
+
+@pytest.mark.parametrize("missing", ["TsBox", "IonizedBox"])
+def test_gen_coeval_needs_the_previous_boxes(feedback_run, tmp_path, missing):
+    cache = copy_cache_without(feedback_run.cache_dir, tmp_path / "cache", missing)
+
+    with pytest.raises(ValueError, match=missing):
+        gen_coeval(feedback_run.nodes[2], "Lagache18", cache, seed=0)
+
+
+# --- A (tiny) run with reionization feedback, without minihalos ---------------------
+
+
+@pytest.fixture(scope="module")
+def photoheating_run(tmp_path_factory) -> SimpleNamespace:
+    """Run a tiny coeval with reionization feedback but no minihalos or Ts (~10 s).
+
+    The cache then has no TsBox, and the halo properties depend on the IonizedBox of
+    the previous node redshift. Z_HEAT_MAX is the first node redshift: 21cmFAST
+    4.3.2 crashes (segfault) with reionization feedback at a first node below it.
+    """
+    cache_dir = tmp_path_factory.mktemp("photoheating_cache")
+    inputs = p21c.InputParameters.from_template(
+        ["latest-discrete", "size-tiny"],
+        random_seed=4,
+        node_redshifts=NODE_REDSHIFTS,
+        USE_TS_FLUCT=False,
+        RECOMB_MODEL="none",
+        USE_REIONIZATION_PHOTOHEATING_FEEDBACK=True,
+    ).evolve_input_structs(
+        BOX_LEN=30,
+        HII_DIM=10,
+        DIM=None,
+        HIRES_TO_LOWRES_FACTOR=2,
+        PERTURB_ALGORITHM="LINEAR",
+        Z_HEAT_MAX=NODE_REDSHIFTS[0],
+    )
+    assert not inputs.astro_options.USE_MCGS
+    p21c.run_coeval(
+        out_redshifts=[NODE_REDSHIFTS[-1]],
+        inputs=inputs,
+        cache=OutputCache(cache_dir),
+        write=True,
+        progressbar=False,
+    )
+    return SimpleNamespace(cache_dir=cache_dir, inputs=inputs)
+
+
+@pytest.mark.parametrize("node", [1, 2])
+def test_gen_coeval_with_reionization_feedback_only(
+    photoheating_run, monkeypatch, node
+):
+    # Reionization feedback without minihalos needs only the previous IonizedBox:
+    # gen_coeval must not ask for a TsBox, which such a run does not have, and must
+    # give the halos the properties of the run.
+    run = RunCache.from_inputs(
+        photoheating_run.inputs, OutputCache(photoheating_run.cache_dir)
+    )
+    assert not run.TsBox
+    z = NODE_REDSHIFTS[node]
+    gridded = grid_halo_property(monkeypatch, photoheating_run.cache_dir, z, "n_ion")
+    expected = halo_part(photoheating_run.cache_dir, z, "n_ion")
+
+    assert expected.max() > 0
+    np.testing.assert_allclose(gridded, expected, rtol=1e-5, atol=1e-5 * expected.max())
+
+
+def test_gen_coeval_with_reionization_feedback_needs_the_ionized_box(
+    photoheating_run, tmp_path
+):
+    cache = copy_cache_without(
+        photoheating_run.cache_dir, tmp_path / "cache", "IonizedBox"
+    )
+
+    with pytest.raises(ValueError, match="IonizedBox"):
+        gen_coeval(NODE_REDSHIFTS[2], "Lagache18", cache, seed=0)
