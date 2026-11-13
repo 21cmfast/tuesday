@@ -8,7 +8,7 @@ which tiles the box periodically and can average each pixel over several directi
 A slice can be made in two ways that give the same result, to rounding:
 
 * :func:`interpolate_then_sample` interpolates the two boxes, cell by cell, and
-  samples the interpolated box on the shell. This is what 21cmFAST 4.3 does. Its cost
+  samples the interpolated box on the shell. Its cost
   grows with the number of cells.
 * :func:`sample_then_interpolate` samples each box on the shell and interpolates the
   samples. Its cost grows with the number of points sampled.
