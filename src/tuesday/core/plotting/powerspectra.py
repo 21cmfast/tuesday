@@ -11,6 +11,16 @@ from scipy.ndimage import gaussian_filter
 from ..summaries import CylindricalPS, SphericalPS
 
 
+def _log_flags(log: bool | list[bool] | None, n: int) -> list[bool]:
+    """Return one flag per axis from a bool for all axes or a list of n bools."""
+    if log is None or isinstance(log, bool | np.bool_):
+        return [bool(log)] * n
+    log = list(log)
+    if len(log) != n:
+        raise ValueError(f"log must be a bool or a list of {n} bools")
+    return log
+
+
 def plot_1d_power_spectrum_k(
     power_spectrum: SphericalPS,
     *,
@@ -19,7 +29,7 @@ def plot_1d_power_spectrum_k(
     xlabel: str | None = None,
     ylabel: str | None = None,
     color: list | None = None,
-    log: list[bool] | None = False,
+    log: bool | list[bool] | None = False,
     fontsize: float | None = 16,
     legend: str | None = None,
     smooth: float | bool = False,
@@ -42,8 +52,9 @@ def plot_1d_power_spectrum_k(
         Label for the y-axis.
     color : str, optional
         Color of the PS line in the plot.
-    log : list[bool], optional
-        List of booleans to set the x and y axes to log scale.
+    log : bool | list[bool], optional
+        Whether to set the x and y axes to log scale: one bool for both, or a list
+        of two.
     fontsize : float, optional
         Font size for the plot labels.
     legend : str, optional
@@ -52,7 +63,7 @@ def plot_1d_power_spectrum_k(
         Standard deviation for Gaussian smoothing.
         If True, uses a standard deviation of 1.
     legend_kwargs : dict, optional
-        Keyword arguments for the legend.
+        Keyword arguments for the legend. None gives the defaults of matplotlib.
     """
     if not isinstance(power_spectrum, SphericalPS):
         raise ValueError(  # noqa: TRY004 - ValueError is the tested/public contract here
@@ -60,6 +71,11 @@ def plot_1d_power_spectrum_k(
             f" got {type(power_spectrum)} instead."
         )
     rcParams.update({"font.size": fontsize})
+    if ax is None:
+        _, ax = plt.subplots(figsize=(7, 6))
+    log = _log_flags(log, 2)
+    if legend_kwargs is None:
+        legend_kwargs = {}
     wavemodes = power_spectrum.kcenters
     is_deltasq = power_spectrum.is_deltasq
     power_spectrum = power_spectrum.ps
@@ -97,7 +113,7 @@ def plot_1d_power_spectrum_z(
     xlabel: str | None = "Redshift",
     ylabel: str | None = None,
     color: list | None = "C0",
-    log: list[bool] | None = False,
+    log: bool | list[bool] | None = False,
     fontsize: float | None = 16,
     legend: str | None = None,
     smooth: float | bool = False,
@@ -124,8 +140,9 @@ def plot_1d_power_spectrum_z(
         Label for the y-axis.
     color : str, optional
         Color of the PS line in the plot.
-    log : list[bool], optional
-        List of booleans to set the x and y axes to log scale.
+    log : bool | list[bool], optional
+        Whether to set the x and y axes to log scale: one bool for both, or a list
+        of two.
     fontsize : float, optional
         Font size for the plot labels.
     legend : str, optional
@@ -134,7 +151,7 @@ def plot_1d_power_spectrum_z(
         Standard deviation for Gaussian smoothing.
         If True, uses a standard deviation of 1.
     legend_kwargs : dict, optional
-        Keyword arguments for the legend.
+        Keyword arguments for the legend. None gives the defaults of matplotlib.
     """
     for i in range(len(power_spectra)):
         if not isinstance(power_spectra[i], SphericalPS):
@@ -145,6 +162,11 @@ def plot_1d_power_spectrum_z(
             )
 
     rcParams.update({"font.size": fontsize})
+    if ax is None:
+        _, ax = plt.subplots(figsize=(7, 6))
+    log = _log_flags(log, 2)
+    if legend_kwargs is None:
+        legend_kwargs = {}
 
     is_deltasq = power_spectra[0].is_deltasq
 
@@ -190,7 +212,7 @@ def plot_2d_power_spectrum(
     fontsize: float | None = 16,
     vmin: float | None = None,
     vmax: float | None = None,
-    log: list[bool] | None = False,
+    log: bool | list[bool] | None = False,
     smooth: float | bool = False,
     cbar: bool | None = True,
 ) -> tuple[plt.Figure, plt.Axes]:
@@ -216,11 +238,14 @@ def plot_2d_power_spectrum(
     fontsize : float, optional
         Font size for the plot labels.
     vmin : float, optional
-        Minimum value for the color scale.
+        Minimum value for the color scale. By default, the 5th percentile, or the
+        lowest value with a log scale.
     vmax : float, optional
-        Maximum value for the color scale.
-    log : list[bool], optional
-        List of booleans to set the kperp, kpar, and PS axes to log scale.
+        Maximum value for the color scale. By default, the 95th percentile, or the
+        highest value with a log scale.
+    log : bool | list[bool], optional
+        Whether to set the kperp, kpar, and PS axes to log scale: one bool for all,
+        or a list of three.
     smooth : float, optional
         Standard deviation for Gaussian smoothing.
         Default is False, if True, uses a standard deviation of 1.
@@ -231,6 +256,9 @@ def plot_2d_power_spectrum(
             f" got {type(power_spectrum)} instead."
         )
     rcParams.update({"font.size": fontsize})
+    if ax is None:
+        _, ax = plt.subplots(figsize=(7, 6))
+    log = _log_flags(log, 3)
     kperp = power_spectrum.kperp
     kpar = power_spectrum.kpar
     is_deltasq = power_spectrum.is_deltasq
@@ -245,20 +273,15 @@ def plot_2d_power_spectrum(
     if clabel is None:
         clabel = f"[{power_spectrum.unit:latex_inline}]"
         clabel = r"$\Delta^2_{21} \,$" + clabel if is_deltasq else r"$P(k) \,$" + clabel
-    cmap_kwargs = {}
-    if vmin is None:
-        if log[2]:
-            cmap_kwargs["vmin"] = np.nanpercentile(np.log10(power_spectrum.value), 5)
-        else:
-            cmap_kwargs["vmin"] = np.nanpercentile(power_spectrum.value, 5)
-    if vmax is None:
-        if log[2]:
-            cmap_kwargs["vmax"] = np.nanpercentile(np.log10(power_spectrum.value), 95)
-        else:
-            cmap_kwargs["vmax"] = np.nanpercentile(power_spectrum.value, 95)
     if log[2]:
-        cmap_kwargs = {}
-        cmap_kwargs["norm"] = LogNorm(vmin=vmin, vmax=vmax)
+        cmap_kwargs = {"norm": LogNorm(vmin=vmin, vmax=vmax)}
+    else:
+        cmap_kwargs = {
+            "vmin": np.nanpercentile(power_spectrum.value, 5) if vmin is None else vmin,
+            "vmax": np.nanpercentile(power_spectrum.value, 95)
+            if vmax is None
+            else vmax,
+        }
 
     if title is not None:
         ax.set_title(title, fontsize=fontsize)
@@ -279,7 +302,7 @@ def plot_2d_power_spectrum(
 
     ax.set_xlabel(xlabel, fontsize=fontsize)
     if cbar:
-        plt.colorbar(im, label=clabel)
+        plt.colorbar(im, ax=ax, label=clabel)
     if log[0]:
         ax.set_xscale("log")
     if log[1]:
