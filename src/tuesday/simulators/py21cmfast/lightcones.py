@@ -891,6 +891,17 @@ def link_lightcone_file(
     ValueError
         If there is no complete store in ``directory``, or if the stores do not have
         the same distances.
+
+    Warnings
+    --------
+    The file holds no data of its own. Its lightcones are links to the stores in
+    ``directory``, by paths relative to the file. The file and ``directory`` can be
+    moved together, as long as their relative position stays the same. If the stores
+    are deleted, moved or renamed, or the file is moved without them, the lightcones
+    can no longer be read, and :meth:`py21cmfast.LightCone.from_file` fails with a
+    ``TypeError``. To keep a lightcone without the stores, save a copy that holds the
+    data, with ``LightCone.from_file(path).save(copy)``, which reads the whole
+    lightcone into memory.
     """
     directory = Path(directory)
     path = Path(path) if path is not None else directory.with_suffix(".h5")
