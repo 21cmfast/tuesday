@@ -19,12 +19,12 @@ from typing import Literal
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy import units as un
-from astropy_healpix import HEALPix
+from astropy_healpix import HEALPix, nside_to_pixel_resolution
 from matplotlib import rcParams
 from matplotlib.colors import Colormap, LinearSegmentedColormap, LogNorm
 from matplotlib.ticker import MaxNLocator
 
-from ..lightcones.healpix import _check_order, _check_pixels, pixel_side
+from ..lightcones.healpix import _check_order, _check_pixels
 from .style import with_dark_mode
 
 #: The fraction of tuesday's "eor" colour map at which it is black.
@@ -489,7 +489,7 @@ def plot_healpix_map(
         # Longitudes relative to the middle of the patch, which may cross zero.
         lon0 = np.angle(np.mean(np.exp(1j * plon)))
         rel = (plon - lon0 + np.pi) % (2 * np.pi) - np.pi
-        pad = pixel_side(nside).to_value(un.rad)
+        pad = nside_to_pixel_resolution(nside).to_value(un.rad)
         lat_lo = max(plat.min() - pad, -np.pi / 2)
         lat_hi = min(plat.max() + pad, np.pi / 2)
         squeeze = np.cos(np.clip(0.5 * (lat_lo + lat_hi), -1.5, 1.5))

@@ -11,17 +11,14 @@ the same slice, to rounding, at a cost set by the number of directions.
 :class:`FastAngularLightconer` makes each slice in whichever of the two ways is
 cheaper (:func:`tuesday.core.lightcones.samples_first`), unless ``tile_first`` says
 which to use. Both ways sample the boxes with cosmotile's slice interpolator
-(:func:`cosmotile.make_lightcone_slice_interpolator`), as 21cmFAST does. The same is
-proposed for 21cmFAST itself (branch ``perf/angular-lightcone-sample-first``, with the
-same ``tile_first`` parameter).
+(:func:`cosmotile.make_lightcone_slice_interpolator`), as 21cmFAST does.
 
 The lightconer can also average each pixel over several directions (sub-samples), so
 that pixels larger than the cells average the field instead of aliasing it. cosmotile
 (0.3 and later) does the average, and projects the velocity on each direction before
 it.
-:func:`healpix_lightconer` makes one whose slices are HEALPix maps, of the full sky or
-of a patch, with each pixel averaged over its sub-pixels if asked. The same is proposed
-for 21cmFAST itself (branch ``feat/healpix-lightconer``).
+:meth:`FastAngularLightconer.healpix` makes one whose slices are HEALPix maps, of the
+full sky or of a patch, with each pixel averaged over its sub-pixels if asked.
 
 The loop over slices and quantities, the redshift interpolation and the
 line-of-sight convention are 21cmFAST's own: the lightconer only changes the steps of
@@ -52,6 +49,7 @@ from tuesday.core.lightcones import (
     samples_first,
     subpixel_lonlat,
 )
+from tuesday.core.lightcones.slices import _plain
 
 
 class _Deferred:
@@ -79,11 +77,6 @@ class _Pair:
         self.box_b = box_b
         self.interpolate = interpolate
         self.linear = linear
-
-
-def _plain(values: np.ndarray | Quantity) -> np.ndarray:
-    """Return a dimensionless array or Quantity as a plain array."""
-    return Quantity(values, units.dimensionless_unscaled).value
 
 
 @attrs.define(kw_only=True, slots=False)
@@ -118,8 +111,9 @@ class FastAngularLightconer(AngularLightconer):
 
     Notes
     -----
-    With ``interpolation_order`` 3 or 5, slices interpolate the boxes first, as in
-    21cmFAST, since spline interpolation pre-filters the whole box.
+    With ``interpolation_order`` 3 or 5, slices interpolate the boxes first unless
+    ``tile_first=True``, since sampling first is not cheaper for splines
+    (:func:`tuesday.core.lightcones.samples_first`).
 
     With sub-samples, :func:`py21cmfast.run_lightcone` applies the velocity-gradient
     (dv/dr) correction and the RSDs to the averaged pixels, not to each sub-sample.
@@ -146,6 +140,80 @@ class FastAngularLightconer(AngularLightconer):
                 f"{value} sub-samples per pixel"
             )
 
+    @classmethod
+    def healpix(
+        cls,
+        nside: int,
+        *,
+        order: Literal["ring", "nested"] = "ring",
+        pixels: Sequence[int] | np.ndarray | None = None,
+        subsample_level: int = 0,
+        **kw,
+    ) -> FastAngularLightconer:
+        r"""Create an angular lightconer whose slices are HEALPix maps.
+
+        Each slice is a map of the field on the pixels of a HEALPix grid, on a
+        spherical shell around ``origin`` (the corner of the box by default). The
+        lightcone has shape ``(n_pixels, n_slices)``, so ``lightcone[:, i]`` is the
+        map of slice ``i``, in the pixel order given by ``order``. It can be used
+        directly with healpy and other HEALPix codes.
+
+        Parameters
+        ----------
+        nside
+            The Nside of the maps (a power of 2).
+        order
+            The ordering of the pixels, "ring" or "nested".
+        pixels
+            The distinct indices (in ``order``) of the pixels to include, for a map of
+            part of the sky (e.g. :func:`tuesday.core.lightcones.disc_pixels`). All
+            ``12 * nside**2`` pixels by default.
+        subsample_level
+            If 0 (the default), each pixel takes the value of the field at its
+            centre. If ``k > 0``, each pixel is the mean of the field at the centres
+            of its ``4**k`` sub-pixels
+            (:func:`tuesday.core.lightcones.subpixel_lonlat`). Pixels larger than the
+            cells then average the field instead of aliasing it. The cost grows as
+            ``4**k``.
+
+        Other Parameters
+        ----------------
+        kw
+            If ``min_redshift`` is given (and not None), all other parameters are
+            passed to :meth:`~py21cmfast.lightconers.Lightconer.between_redshifts`
+            (e.g. ``min_redshift``, ``max_redshift``, ``resolution``, ``origin``,
+            ``quantities``), otherwise to the constructor (with ``lc_distances`` or
+            ``lc_redshifts``).
+
+        Returns
+        -------
+        FastAngularLightconer
+            The lightconer.
+
+        Notes
+        -----
+        The box is tiled periodically. A shell at comoving distance :math:`\chi`
+        crosses a box of side :math:`L` about :math:`\chi / L` times along each axis,
+        so the same structures appear every :math:`L / \chi` radians on the sky. A
+        patch smaller than that has no repeated structures.
+
+        To match ``nside`` and ``subsample_level`` to the cells of the box, use
+        :func:`tuesday.core.lightcones.nside_for_cell_size` and
+        :func:`tuesday.core.lightcones.subsample_level_for_cell_size`.
+        """
+        longitude, latitude = subpixel_lonlat(
+            nside, order=order, subsample_level=subsample_level, pixels=pixels
+        )
+        directions = {
+            "latitude": latitude.to_value(units.rad).ravel(),
+            "longitude": longitude.to_value(units.rad).ravel(),
+            "n_subsamples": 4**subsample_level,
+        }
+        if kw.get("min_redshift") is not None:
+            return cls.between_redshifts(**directions, **kw)
+        kw.pop("min_redshift", None)
+        return cls(**directions, **kw)
+
     @property
     def n_pixels(self) -> int:
         """The number of pixels of each slice."""
@@ -168,11 +236,8 @@ class FastAngularLightconer(AngularLightconer):
         bool
             ``tile_first`` if it is set, otherwise whether sampling first is cheaper
             for boxes of ``n_cells`` cells and all directions of a slice (sub-samples
-            included; :func:`tuesday.core.lightcones.samples_first`). False for
-            ``interpolation_order`` above 1.
+            included; :func:`tuesday.core.lightcones.samples_first`).
         """
-        if self.interpolation_order > 1:
-            return False
         if self.tile_first is not None:
             return self.tile_first
         return samples_first(
@@ -256,8 +321,9 @@ class FastAngularLightconer(AngularLightconer):
         Two boxes are sampled with cosmotile and their samples interpolated
         (:func:`tuesday.core.lightcones.sample_then_interpolate`). The "mean_max"
         interpolation (used for ``z_reion``) is not linear in the boxes, so it is then
-        applied at the cells around each direction before they are weighted, which
-        gives the same result as sampling the interpolated box.
+        applied at the cells around each direction before they are weighted (or, for
+        splines, to the boxes first), which gives the same result as sampling the
+        interpolated box.
         """
         interpolator = self.slice_interpolator(lcd)
         if isinstance(box, _Pair):
@@ -291,76 +357,3 @@ class FastAngularLightconer(AngularLightconer):
             interpolator,
         )
         return velocities[0].interpolate(_plain(los_a), _plain(los_b))
-
-
-def healpix_lightconer(
-    nside: int,
-    *,
-    order: Literal["ring", "nested"] = "ring",
-    pixels: Sequence[int] | np.ndarray | None = None,
-    subsample_level: int = 0,
-    **kw,
-) -> FastAngularLightconer:
-    r"""Create an angular lightconer whose slices are HEALPix maps.
-
-    Each slice is a map of the field on the pixels of a HEALPix grid, on a spherical
-    shell around ``origin`` (the corner of the box by default). The lightcone has shape
-    ``(n_pixels, n_slices)``, so ``lightcone[:, i]`` is the map of slice ``i``, in the
-    pixel order given by ``order``. It can be used directly with healpy and other
-    HEALPix codes.
-
-    Parameters
-    ----------
-    nside
-        The Nside of the maps (a power of 2).
-    order
-        The ordering of the pixels, "ring" or "nested".
-    pixels
-        The distinct indices (in ``order``) of the pixels to include, for a map of part
-        of the sky (e.g. :func:`tuesday.core.lightcones.disc_pixels`). All
-        ``12 * nside**2`` pixels by default.
-    subsample_level
-        If 0 (the default), each pixel takes the value of the field at its centre. If
-        ``k > 0``, each pixel is the mean of the field at the centres of its ``4**k``
-        sub-pixels (:func:`tuesday.core.lightcones.subpixel_lonlat`). Pixels larger
-        than the cells then average the field instead of aliasing it. The cost grows
-        as ``4**k``.
-
-    Other Parameters
-    ----------------
-    kw
-        If ``min_redshift`` is given (and not None), all other parameters are passed to
-        :meth:`~py21cmfast.lightconers.Lightconer.between_redshifts` (e.g.
-        ``min_redshift``, ``max_redshift``, ``resolution``, ``origin``,
-        ``quantities``), otherwise to
-        :class:`FastAngularLightconer` (with ``lc_distances`` or
-        ``lc_redshifts``).
-
-    Returns
-    -------
-    FastAngularLightconer
-        The lightconer.
-
-    Notes
-    -----
-    The box is tiled periodically. A shell at comoving distance :math:`\chi` crosses a
-    box of side :math:`L` about :math:`\chi / L` times along each axis, so the same
-    structures appear every :math:`L / \chi` radians on the sky. A patch smaller than
-    that has no repeated structures.
-
-    To match ``nside`` and ``subsample_level`` to the cells of the box, use
-    :func:`tuesday.core.lightcones.nside_for_cell_size` and
-    :func:`tuesday.core.lightcones.subsample_level_for_cell_size`.
-    """
-    longitude, latitude = subpixel_lonlat(
-        nside, order=order, subsample_level=subsample_level, pixels=pixels
-    )
-    directions = {
-        "latitude": latitude.to_value(units.rad).ravel(),
-        "longitude": longitude.to_value(units.rad).ravel(),
-        "n_subsamples": 4**subsample_level,
-    }
-    if kw.get("min_redshift") is not None:
-        return FastAngularLightconer.between_redshifts(**directions, **kw)
-    kw.pop("min_redshift", None)
-    return FastAngularLightconer(**directions, **kw)

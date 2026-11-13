@@ -1,4 +1,4 @@
-"""Make one slice of an angular lightcone from the two boxes around it.
+"""Make one slice of an angular lightcone from the two neighbouring coevals.
 
 A slice of an angular lightcone lies at a distance between those of two simulation
 boxes (coevals). It is the field on a spherical shell of that radius, interpolated in
@@ -8,7 +8,7 @@ which tiles the box periodically and can average each pixel over several directi
 A slice can be made in two ways that give the same result, to rounding:
 
 * :func:`interpolate_then_sample` interpolates the two boxes, cell by cell, and
-  samples the interpolated box on the shell. This is what 21cmFAST 4.3 does. Its cost
+  samples the interpolated box on the shell. Its cost
   grows with the number of cells.
 * :func:`sample_then_interpolate` samples each box on the shell and interpolates the
   samples. Its cost grows with the number of points sampled.
@@ -38,6 +38,8 @@ Interpolation = Callable[[np.ndarray, np.ndarray], np.ndarray]
 def _plain(values: Any) -> np.ndarray:
     """Return an array or a Quantity (of pixels, or dimensionless) as a plain array."""
     if isinstance(values, units.Quantity):
+        if values.unit.is_equivalent(units.dimensionless_unscaled):
+            return values.to_value(units.dimensionless_unscaled)
         return values.value
     return np.asarray(values)
 
@@ -75,8 +77,9 @@ def samples_first(n_cells: int, n_samples: int, *, order: int = 1) -> bool:
     n_samples
         The number of points sampled, sub-samples included (:func:`n_samples`).
     order
-        The order of the interpolation on the shell. Only orders 0 and 1 can sample
-        first.
+        The order of the interpolation on the shell. For splines (orders above 1),
+        sampling first is never cheaper: each box is pre-filtered as a whole before it
+        is sampled, so sampling two boxes first pre-filters twice instead of once.
 
     Returns
     -------
@@ -185,11 +188,14 @@ def sample_then_interpolate(
     """Sample two boxes on a shell, then interpolate the samples.
 
     This gives what :func:`interpolate_then_sample` gives. Sampling is linear in the
-    box, and so is the mean of each pixel over its sub-samples, so an interpolation
-    that is linear in the values of the boxes can be applied to the samples. One that
-    is not (``linear=False``, e.g. a rule that switches between the boxes cell by
-    cell) is applied at the cells around each point before they are weighted
-    (:func:`sample_cellwise`).
+    box at any order (the spline pre-filter of orders above 1 is linear too), and so is
+    the mean of each pixel over its sub-samples, so an interpolation that is linear in
+    the values of the boxes can be applied to the samples. One that is not
+    (``linear=False``, e.g. a rule that switches between the boxes cell by cell) is
+    applied at the cells around each point before they are weighted
+    (:func:`sample_cellwise`). That needs order 0 or 1: a spline sample depends on all
+    cells of the box, so for orders above 1 such a rule is applied to the boxes first
+    (:func:`interpolate_then_sample`).
 
     Parameters
     ----------
@@ -198,7 +204,8 @@ def sample_then_interpolate(
     box_a, box_b
         The two 3D boxes around the slice, of the same shape.
     interpolator
-        The slice interpolator of cosmotile for the shell, of order 0 or 1.
+        The slice interpolator of cosmotile for the shell
+        (:func:`cosmotile.make_lightcone_slice_interpolator`).
     linear
         Whether ``interpolate`` is linear in the values of the boxes.
 
@@ -206,20 +213,14 @@ def sample_then_interpolate(
     -------
     np.ndarray
         The slice, one value per pixel.
-
-    Raises
-    ------
-    ValueError
-        If the interpolator's order is above 1. Spline interpolation pre-filters the
-        whole box, so it interpolates first.
     """
     order = interpolator.keywords["order"]
-    if order > 1:
-        raise ValueError("only interpolation orders 0 and 1 can sample first")
     weights = interpolator.keywords.get("weights")
     if linear or (order == 0 and weights is None):
         # order 0 takes one cell per point, so any rule commutes with it
         return _plain(interpolate(interpolator(box_a), interpolator(box_b)))
+    if order > 1:
+        return interpolate_then_sample(interpolate, box_a, box_b, interpolator)
     coordinates = _plain(interpolator.keywords["coordinates"])
     if order == 0:
         # the cell around each point, as map_coordinates rounds with order 0
@@ -257,7 +258,7 @@ def shell_slice(
         Whether ``interpolate`` is linear in the values of the boxes.
     sample_first
         True to sample first, False to interpolate first, None (the default) to
-        choose the cheaper. Orders above 1 always interpolate first.
+        choose the cheaper (:func:`samples_first`).
 
     Returns
     -------
@@ -269,7 +270,7 @@ def shell_slice(
         sample_first = samples_first(
             np.size(box_a), n_samples(interpolator), order=order
         )
-    if sample_first and order <= 1:
+    if sample_first:
         return sample_then_interpolate(
             interpolate, box_a, box_b, interpolator, linear=linear
         )

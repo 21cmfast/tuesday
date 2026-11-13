@@ -10,11 +10,12 @@ interpolated onto the lightcone with the same lightconer as the 21cmFAST run, an
 converted to a surface brightness with :func:`~.cii_calculation.calculate_bvoxel`.
 
 The ``HaloCatalog`` and ``InitialConditions`` of each node redshift must be in the
-cache. Runs with minihalos (``USE_MCGS``) or reionization feedback
-(``USE_REIONIZATION_PHOTOHEATING_FEEDBACK``) also need the ``TsBox`` and
-``IonizedBox`` of the previous node redshift, from which 21cmFAST takes the feedback
-on the halo properties. The other 21-cm outputs of the run (``PerturbedField``,
-``BrightnessTemp``) are not used.
+cache. Below ``Z_HEAT_MAX``, except at the first node redshift, the halo properties
+also depend on boxes of the previous node redshift, from which 21cmFAST takes the
+feedback: runs with minihalos (``USE_MCGS``) need its ``TsBox`` and ``IonizedBox``,
+and runs with reionization feedback (``USE_REIONIZATION_PHOTOHEATING_FEEDBACK``) but
+no minihalos need its ``IonizedBox``. The other 21-cm outputs of the run
+(``PerturbedField``, ``BrightnessTemp``) are not used.
 """
 
 import logging
@@ -143,6 +144,9 @@ def _run_cache(
 def _cached_path(run: RunCache, kind: str, z: float) -> Path | None:
     """Return the cached file of one output of the run (None if it is not there)."""
     paths = getattr(run, kind)
+    if paths is None:
+        # The run does not make this output (e.g. a TsBox without USE_TS_FLUCT).
+        return None
     if isinstance(paths, Path):
         path = paths
     else:
@@ -199,9 +203,10 @@ def gen_coeval(
     ------
     ValueError
         If the cache misses an output the box needs: the ``HaloCatalog`` at ``z``,
-        the ``InitialConditions`` and, for runs with minihalos or reionization
-        feedback below ``Z_HEAT_MAX``, the ``TsBox`` and ``IonizedBox`` of the
-        previous node redshift.
+        the ``InitialConditions`` and, below ``Z_HEAT_MAX`` and after the first node
+        redshift, the ``TsBox`` and ``IonizedBox`` of the previous node redshift for
+        runs with minihalos, or its ``IonizedBox`` for runs with reionization
+        feedback and no minihalos.
 
     Notes
     -----
@@ -225,29 +230,28 @@ def gen_coeval(
     initial_conditions = _cached_struct(run, "InitialConditions", z, directory_path)
 
     # The feedback on the halo properties comes from the boxes of the previous node
-    # redshift, as in 21cmFAST's redshift loop. Above Z_HEAT_MAX, or without
-    # minihalos and reionization feedback, there is none.
+    # redshift, as in 21cmFAST's redshift loop: the Lyman-Werner background of the
+    # TsBox for minihalos, and the reionization redshift and photo-ionization rate of
+    # the IonizedBox for reionization feedback. perturb_halo_catalog asks for both
+    # boxes in runs with minihalos. Above Z_HEAT_MAX, or at the first node, there is
+    # no feedback.
     astro_options = inputs.astro_options
     previous = {}
     node_redshifts = sorted(inputs.node_redshifts, reverse=True)
     i_node = int(np.argmin(np.abs(np.array(node_redshifts) - z)))
-    if (
-        z < inputs.simulation_options.Z_HEAT_MAX
-        and i_node > 0
-        and (
+    if z < inputs.simulation_options.Z_HEAT_MAX and i_node > 0:
+        z_previous = node_redshifts[i_node - 1]
+        if astro_options.USE_MCGS:
+            previous["previous_spin_temp"] = _cached_struct(
+                run, "TsBox", z_previous, directory_path
+            )
+        if (
             astro_options.USE_MCGS
             or astro_options.USE_REIONIZATION_PHOTOHEATING_FEEDBACK
-        )
-    ):
-        z_previous = node_redshifts[i_node - 1]
-        previous = {
-            "previous_spin_temp": _cached_struct(
-                run, "TsBox", z_previous, directory_path
-            ),
-            "previous_ionize_box": _cached_struct(
+        ):
+            previous["previous_ionize_box"] = _cached_struct(
                 run, "IonizedBox", z_previous, directory_path
-            ),
-        }
+            )
 
     # perturb_halo_catalog reads every halo array but only loads the coordinates and
     # masses from disk itself, and crashes if the others are not in memory, so load
