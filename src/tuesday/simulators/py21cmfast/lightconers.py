@@ -42,6 +42,7 @@ from py21cmfast.lightconers import AngularLightconer
 from py21cmfast.wrapper.inputs import SimulationOptions
 
 from tuesday.core.lightcones import sample_then_interpolate, samples_first
+from tuesday.core.lightcones.slices import _plain
 
 
 class _Deferred:
@@ -69,11 +70,6 @@ class _Pair:
         self.box_b = box_b
         self.interpolate = interpolate
         self.linear = linear
-
-
-def _plain(values: np.ndarray | Quantity) -> np.ndarray:
-    """Return a dimensionless array or Quantity as a plain array."""
-    return Quantity(values, units.dimensionless_unscaled).value
 
 
 @attrs.define(kw_only=True, slots=False)
@@ -108,8 +104,9 @@ class FastAngularLightconer(AngularLightconer):
 
     Notes
     -----
-    With ``interpolation_order`` 3 or 5, slices interpolate the boxes first, as in
-    21cmFAST, since spline interpolation pre-filters the whole box.
+    With ``interpolation_order`` 3 or 5, slices interpolate the boxes first unless
+    ``tile_first=True``, since sampling first is not cheaper for splines
+    (:func:`tuesday.core.lightcones.samples_first`).
 
     With sub-samples, :func:`py21cmfast.run_lightcone` applies the velocity-gradient
     (dv/dr) correction and the RSDs to the averaged pixels, not to each sub-sample.
@@ -158,11 +155,8 @@ class FastAngularLightconer(AngularLightconer):
         bool
             ``tile_first`` if it is set, otherwise whether sampling first is cheaper
             for boxes of ``n_cells`` cells and all directions of a slice (sub-samples
-            included; :func:`tuesday.core.lightcones.samples_first`). False for
-            ``interpolation_order`` above 1.
+            included; :func:`tuesday.core.lightcones.samples_first`).
         """
-        if self.interpolation_order > 1:
-            return False
         if self.tile_first is not None:
             return self.tile_first
         return samples_first(
@@ -246,8 +240,9 @@ class FastAngularLightconer(AngularLightconer):
         Two boxes are sampled with cosmotile and their samples interpolated
         (:func:`tuesday.core.lightcones.sample_then_interpolate`). The "mean_max"
         interpolation (used for ``z_reion``) is not linear in the boxes, so it is then
-        applied at the cells around each direction before they are weighted, which
-        gives the same result as sampling the interpolated box.
+        applied at the cells around each direction before they are weighted (or, for
+        splines, to the boxes first), which gives the same result as sampling the
+        interpolated box.
         """
         interpolator = self.slice_interpolator(lcd)
         if isinstance(box, _Pair):

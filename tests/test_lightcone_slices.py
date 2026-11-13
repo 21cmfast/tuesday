@@ -50,7 +50,7 @@ def mean_max(a, b):
     return out
 
 
-@pytest.mark.parametrize("order", [0, 1])
+@pytest.mark.parametrize("order", [0, 1, 3])
 @pytest.mark.parametrize("n_subsamples", [1, 4])
 def test_sample_then_interpolate_equals_interpolate_then_sample(
     boxes, order, n_subsamples
@@ -80,11 +80,9 @@ def test_linear_has_no_default(boxes):
         shell_slice(linear, *boxes, interpolator(10))
 
 
-def test_higher_orders_interpolate_first(boxes):
-    """Order 3 cannot sample first; shell_slice interpolates first for it."""
+def test_higher_orders_apply_nonlinear_rules_first(boxes):
+    """For order 3, a rule that is not linear is applied to the boxes first."""
     shell = interpolator(5, order=3)
-    with pytest.raises(ValueError, match="orders 0 and 1"):
-        sample_then_interpolate(linear, *boxes, shell, linear=True)
     np.testing.assert_array_equal(
         shell_slice(mean_max, *boxes, shell, linear=False, sample_first=True),
         interpolate_then_sample(mean_max, *boxes, shell),
