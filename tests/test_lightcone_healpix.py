@@ -4,26 +4,19 @@ import astropy.units as un
 import numpy as np
 import pytest
 from astropy.coordinates import angular_separation
-from astropy_healpix import HEALPix
+from astropy_healpix import HEALPix, nside_to_pixel_resolution
 
 from tuesday.core.lightcones import (
     degrade,
     disc_pixels,
     nside_for_cell_size,
-    pixel_side,
     subpixel_lonlat,
     subsample_level_for_cell_size,
 )
 
 
-def test_pixel_side():
-    """The side is the root of the pixel area, 4 pi / (12 nside^2) sr."""
-    for nside in (1, 64):
-        side = pixel_side(nside).to_value(un.rad)
-        np.testing.assert_allclose(side**2, 4 * np.pi / (12 * nside**2), rtol=1e-14)
-    for nside in (0, -4):
-        with pytest.raises(ValueError, match="nside must be positive"):
-            pixel_side(nside)
+def _pixel_size(nside: int) -> float:
+    return nside_to_pixel_resolution(nside).to_value(un.rad)
 
 
 def test_nside_for_cell_size():
@@ -32,8 +25,8 @@ def test_nside_for_cell_size():
     for cell, distance in [(1.5, 11773), (3.0, 5000), (1.0, 2.0)]:
         nside = nside_for_cell_size(cell * un.Mpc, distance * un.Mpc)
         angle = cell / distance
-        assert pixel_side(nside).to_value(un.rad) <= angle
-        assert nside == 1 or pixel_side(nside // 2).to_value(un.rad) > angle
+        assert _pixel_size(nside) <= angle
+        assert nside == 1 or _pixel_size(nside // 2) > angle
     assert nside_for_cell_size(1 * un.Gpc, 1 * un.Mpc) == 1
     with pytest.raises(ValueError, match="positive"):
         nside_for_cell_size(0 * un.Mpc, 1 * un.Mpc)

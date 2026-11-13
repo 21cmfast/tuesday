@@ -20,7 +20,7 @@ from typing import Literal
 import astropy.units as un
 import numpy as np
 from astropy.coordinates import angular_separation
-from astropy_healpix import HEALPix
+from astropy_healpix import HEALPix, pixel_resolution_to_nside
 
 _ORDERS = ("ring", "nested")
 
@@ -30,28 +30,15 @@ def _check_order(order: str) -> None:
         raise ValueError(f"order must be 'ring' or 'nested', not {order!r}")
 
 
-def pixel_side(nside: int) -> un.Quantity[un.rad]:
-    """Return the side of a HEALPix pixel, the square root of its area.
-
-    Parameters
-    ----------
-    nside
-        The Nside of the grid.
-
-    Returns
-    -------
-    un.Quantity[un.rad]
-        The side of each pixel.
-    """
-    if nside < 1:
-        raise ValueError("nside must be positive")
-    return np.sqrt(np.pi / 3) / nside * un.rad
-
-
 def nside_for_cell_size(
     cell_size: un.Quantity[un.Mpc], distance: un.Quantity[un.Mpc]
 ) -> int:
     """Return the smallest HEALPix Nside whose pixels are no larger than a cell.
+
+    The size of a pixel is the square root of its area
+    (:func:`astropy_healpix.nside_to_pixel_resolution`), and that of a cell is the
+    angle it subtends at ``distance``. This is
+    :func:`astropy_healpix.pixel_resolution_to_nside` of that angle, rounded up.
 
     A cell subtends a larger angle on near shells than on far ones. At the farthest
     distance of a lightcone, the pixels resolve the cells on every shell. At a nearer
@@ -80,10 +67,8 @@ def nside_for_cell_size(
     """
     if not (cell_size > 0 and distance > 0):
         raise ValueError("cell_size and distance must be positive")
-    cells_per_radian = (distance / cell_size).to_value(un.dimensionless_unscaled)
-    return 2 ** max(
-        0, int(np.ceil(np.log2(pixel_side(1).to_value(un.rad) * cells_per_radian)))
-    )
+    angle = (cell_size / distance).to_value(un.dimensionless_unscaled) * un.rad
+    return int(pixel_resolution_to_nside(angle, round="up"))
 
 
 def subsample_level_for_cell_size(

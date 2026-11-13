@@ -7,7 +7,6 @@ __all__ = [
     "interpolate_then_sample",
     "n_samples",
     "nside_for_cell_size",
-    "pixel_side",
     "sample_cellwise",
     "sample_then_interpolate",
     "samples_first",
@@ -20,7 +19,6 @@ from .healpix import (
     degrade,
     disc_pixels,
     nside_for_cell_size,
-    pixel_side,
     subpixel_lonlat,
     subsample_level_for_cell_size,
 )
