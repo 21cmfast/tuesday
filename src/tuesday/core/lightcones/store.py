@@ -1,4 +1,4 @@
-"""Lightcones on disk, filled one node interval at a time.
+"""A module defining on-disk lightcone storage with support for incremental checkpointing.
 
 A lightcone made from the coeval boxes of a simulation is filled interval by interval:
 the slices between two consecutive node redshifts come from the boxes at those two
