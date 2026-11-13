@@ -340,6 +340,17 @@ def test_include_dvdr_on_disk(on_disk, lightconers, ts, name):
     assert path.stat().st_mtime_ns == mtime
 
 
+def test_include_dvdr_on_disk_in_whole_chunks(on_disk, lightconers):
+    """Blocks of whole chunks give the same result as a few lines of sight at a time."""
+    cache, out = on_disk(False, lightconers)
+    path = include_dvdr_on_disk(out / "rect", cache.inputs, max_memory=1, clobber=True)
+    with LightconeStore.open(path) as store:
+        expected = store.lightcone[()]
+    include_dvdr_on_disk(out / "rect", cache.inputs, clobber=True)
+    with LightconeStore.open(path) as store:
+        np.testing.assert_array_equal(store.lightcone[()], expected)
+
+
 def test_include_dvdr_on_disk_errors(cache, lightconers, tmp_path):
     """The stores must be complete, and the slices one cell apart."""
     lightconer = lightconers["rect"]
@@ -357,6 +368,53 @@ def test_include_dvdr_on_disk_errors(cache, lightconers, tmp_path):
     )
     with pytest.raises(ValueError, match="one cell apart"):
         include_dvdr_on_disk(tmp_path / "coarse", cache.inputs)
+
+
+def test_link_lightcone_file_stores(on_disk, lightconers, tmp_path):
+    """The stores that the file links to, and stores that do not fit together."""
+    cache, out = on_disk(False, lightconers)
+    stores = tmp_path / "stores"
+    stores.mkdir()
+    for quantity in ("brightness_temp", "los_velocity"):
+        shutil.copy(out / "rect" / f"{quantity}.h5", stores)
+
+    # without the dv/dr correction, brightness_temp is the lightcone without it
+    lightcone = LightCone.from_file(
+        link_lightcone_file(stores, cache.inputs, tmp_path / "plain.h5")
+    )
+    assert set(lightcone.lightcones) == {"brightness_temp", "los_velocity"}
+    with LightconeStore.open(stores / "brightness_temp.h5") as store:
+        np.testing.assert_array_equal(
+            lightcone.lightcones["brightness_temp"], store.lightcone[()]
+        )
+
+    # a file that is not a store is left out
+    include_dvdr_on_disk(stores, cache.inputs)
+    (stores / "brightness_temp.h5").write_bytes(b"not a lightcone store")
+    lightcone = LightCone.from_file(
+        link_lightcone_file(stores, cache.inputs, tmp_path / "dvdr.h5")
+    )
+    assert set(lightcone.lightcones) == {"brightness_temp", "los_velocity"}
+    with LightconeStore.open(stores / f"{DVDR}.h5") as store:
+        np.testing.assert_array_equal(
+            lightcone.lightcones["brightness_temp"], store.lightcone[()]
+        )
+
+    # a store with other distances
+    with LightconeStore.open(stores / "los_velocity.h5") as velocity:
+        shape, distances = velocity.shape, velocity.distances
+        redshifts, node_redshifts = velocity.redshifts, velocity.node_redshifts
+    with LightconeStore.open_or_create(
+        stores / "density.h5",
+        quantity="density",
+        shape=shape,
+        distances=distances * 1.01,
+        redshifts=redshifts,
+        node_redshifts=node_redshifts,
+    ) as other:
+        other.mark_done(range(other.done.size))
+    with pytest.raises(ValueError, match="other distances"):
+        link_lightcone_file(stores, cache.inputs, tmp_path / "mixed.h5")
 
 
 @pytest.mark.parametrize("ts", [False, True], ids=["no_ts", "ts"])
