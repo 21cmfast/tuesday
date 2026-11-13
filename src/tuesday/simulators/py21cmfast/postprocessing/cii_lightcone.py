@@ -1,16 +1,21 @@
 """Build a [CII] line-intensity lightcone from cached 21cmFAST halo catalogues.
 
 For each node redshift of a 21cmFAST lightcone, the halo catalogue is read from the
-output cache, the [CII] emission of each halo is computed with
-:func:`~.cii_calculation.calculate_cii` and gridded into a coeval box at the Eulerian
-halo positions, in the same way as 21cmFAST grids the halo properties of its
-``HaloBox``. The boxes are then interpolated onto the lightcone with the same
-lightconer as the 21cmFAST run, and converted to a surface brightness with
-:func:`~.cii_calculation.calculate_bvoxel`.
+output cache and moved to the Eulerian halo positions with
+:func:`py21cmfast.perturb_halo_catalog`, which also computes the halo properties of
+the run. The [CII] emission of each halo is computed from them with
+:func:`~.cii_calculation.calculate_cii` and gridded into a coeval box, in the same way
+as 21cmFAST grids the halo properties of its ``EmissivityFields``. The boxes are then
+interpolated onto the lightcone with the same lightconer as the 21cmFAST run, and
+converted to a surface brightness with :func:`~.cii_calculation.calculate_bvoxel`.
 
-Only the ``HaloCatalog`` and ``InitialConditions`` of each node redshift need to be in
-the cache; the 21-cm outputs of the run (``PerturbedField``, ``IonizedBox``,
-``BrightnessTemp``) are not used.
+The ``HaloCatalog`` and ``InitialConditions`` of each node redshift must be in the
+cache. Below ``Z_HEAT_MAX``, except at the first node redshift, the halo properties
+also depend on boxes of the previous node redshift, from which 21cmFAST takes the
+feedback: runs with minihalos (``USE_MCGS``) need its ``TsBox`` and ``IonizedBox``,
+and runs with reionization feedback (``USE_REIONIZATION_PHOTOHEATING_FEEDBACK``) but
+no minihalos need its ``IonizedBox``. The other 21-cm outputs of the run
+(``PerturbedField``, ``BrightnessTemp``) are not used.
 """
 
 import logging
@@ -21,7 +26,7 @@ import attrs
 import numpy as np
 import py21cmfast as p21c
 from attrs import define, field
-from py21cmfast.io.caching import OutputCache
+from py21cmfast.io.caching import OutputCache, RunCache
 from py21cmfast.io.h5 import read_output_struct
 from py21cmfast.lightconers import Lightconer
 
@@ -51,15 +56,16 @@ class CIICoeval:
         Velocity-integrated [CII] flux density in each cell, in Jy km/s.
     initial_conditions : py21cmfast.InitialConditions, optional
         Initial conditions of the run.
-    halobox : py21cmfast.HaloBox, optional
-        The 21cmFAST gridded halo properties at this redshift, if cached.
+    halobox : py21cmfast.EmissivityFields, optional
+        The 21cmFAST gridded halo properties at this redshift, if cached (the
+        ``EmissivityFields``, called ``HaloBox`` before 21cmFAST 4.3).
     """
 
     redshift: float = field(converter=float)
     inputs: p21c.InputParameters
     cii_intensity: np.ndarray
     initial_conditions: p21c.InitialConditions | None = None
-    halobox: p21c.HaloBox | None = None
+    halobox: p21c.EmissivityFields | None = None
 
     @property
     def simulation_options(self) -> p21c.SimulationOptions:
@@ -105,18 +111,73 @@ def _cic_grid(positions: np.ndarray, weights: np.ndarray, n_cells: int) -> np.nd
     return grid.reshape((n_cells,) * 3)
 
 
+def _run_cache(
+    z: float, directory_path: str | Path, inputs: p21c.InputParameters | None
+) -> RunCache:
+    """Return the cached files of the run whose halo catalogue at ``z`` is used.
+
+    Without ``inputs``, the run is the one whose ``HaloCatalog`` at ``z`` is in the
+    cache directory; it must be the only one.
+    """
+    output_cache = OutputCache(direc=directory_path)
+    if inputs is None:
+        found = output_cache.list_datasets(kind="HaloCatalog", redshift=z)
+        if not found:
+            raise ValueError(
+                f"The [CII] box at z={z} needs the HaloCatalog of the run, which is "
+                f"not in the cache at {directory_path}."
+            )
+        if len(found) > 1:
+            raise ValueError(
+                f"The cache at {directory_path} holds the halo catalogues of "
+                f"{len(found)} runs at z={z}: pass the inputs of the run to use."
+            )
+        inputs = read_output_struct(found[0]).inputs
+    return RunCache.from_inputs(inputs, output_cache)
+
+
+def _cached_path(run: RunCache, kind: str, z: float) -> Path | None:
+    """Return the cached file of one output of the run (None if it is not there)."""
+    paths = getattr(run, kind)
+    if paths is None:
+        # The run does not make this output (e.g. a TsBox without USE_TS_FLUCT).
+        return None
+    if isinstance(paths, Path):
+        path = paths
+    else:
+        # The node redshift closest to z, as RunCache.get_output_struct_at_z does.
+        closest = min(paths, key=lambda node: abs(node - z), default=None)
+        path = (
+            paths[closest] if closest is not None and abs(closest - z) < 1e-6 else None
+        )
+    return path if path is not None and path.exists() else None
+
+
+def _cached_struct(run: RunCache, kind: str, z: float, directory_path: str | Path):
+    """Read one cached output of the run, with an error that names what is missing."""
+    path = _cached_path(run, kind, z)
+    if path is None:
+        raise ValueError(
+            f"The [CII] box at z={z} needs the {kind} of the run"
+            + ("" if kind == "InitialConditions" else f" at z={z}")
+            + f", which is not in the cache at {directory_path}."
+        )
+    return read_output_struct(path)
+
+
 def gen_coeval(
     z: float,
     model: str,
     directory_path: str | Path,
     seed: int | np.random.Generator | None = None,
+    inputs: p21c.InputParameters | None = None,
 ) -> CIICoeval:
     """Build a coeval box with the gridded [CII] emission at one redshift.
 
     Parameters
     ----------
     z : float
-        Redshift of the cached outputs to read.
+        Redshift of the cached outputs to read, one of the node redshifts of the run.
     model : str
         The [CII] luminosity model; see :func:`~.cii_calculation.calculate_cii`.
     directory_path : str or Path
@@ -124,6 +185,9 @@ def gen_coeval(
     seed : int or np.random.Generator, optional
         Seed or generator for the scatter of the [CII] model. If None, a random
         seed is used.
+    inputs : py21cmfast.InputParameters, optional
+        Input parameters of the run. Needed only if the cache directory holds more
+        than one run; otherwise they are read from the cached halo catalogue.
 
     Returns
     -------
@@ -133,63 +197,88 @@ def gen_coeval(
     Raises
     ------
     ValueError
-        If the cache has no ``HaloCatalog`` or ``InitialConditions`` at ``z``.
+        If the cache misses an output the box needs: the ``HaloCatalog`` at ``z``,
+        the ``InitialConditions`` and, below ``Z_HEAT_MAX`` and after the first node
+        redshift, the ``TsBox`` and ``IonizedBox`` of the previous node redshift for
+        runs with minihalos, or its ``IonizedBox`` for runs with reionization
+        feedback and no minihalos.
 
     Notes
     -----
     The halos are moved from the Lagrangian positions of the ``HaloCatalog`` to
-    their Eulerian positions with :func:`py21cmfast.perturb_halo_catalog`, and their
-    flux is assigned to the grid with cloud-in-cell interpolation. This is how
-    21cmFAST grids the halo properties of its ``HaloBox`` (``map_mass.c``), so the
-    [CII] emission lies on the same cells as the other 21cmFAST fields.
+    their Eulerian positions with :func:`py21cmfast.perturb_halo_catalog`, which
+    also computes their properties as 21cmFAST does for the run: with the minihalo
+    and reionization feedback of the previous node's ``TsBox`` (Lyman-Werner
+    background) and ``IonizedBox`` (reionization redshift and photo-ionization
+    rate), and the relative velocities of the initial conditions. The [CII] flux of
+    each halo is then assigned to the grid with cloud-in-cell interpolation, as
+    21cmFAST grids its ``EmissivityFields``, so the [CII] emission lies on the same
+    cells as the other 21cmFAST fields.
+
+    Only the halos of the catalogue contribute. 21cmFAST also adds the emission of
+    halos below ``SAMPLER_MIN_MASS`` to its ``EmissivityFields`` (from the
+    conditional mass function), which has no [CII] counterpart here.
     """
-    output_cache = OutputCache(direc=directory_path)
-    cache_obj = {
-        cache_file.stem: read_output_struct(cache_file)
-        for cache_file in output_cache.list_datasets(redshift=z)
-    }
+    run = _run_cache(z, directory_path, inputs)
+    inputs = run.inputs
+    halo_catalog = _cached_struct(run, "HaloCatalog", z, directory_path)
+    initial_conditions = _cached_struct(run, "InitialConditions", z, directory_path)
 
-    missing = [
-        name for name in ("HaloCatalog", "InitialConditions") if name not in cache_obj
-    ]
-    if missing:
-        raise ValueError(
-            f"The [CII] box at z={z} needs the {' and '.join(missing)} of the run, "
-            f"which are not in the cache at {directory_path} (found "
-            f"{sorted(cache_obj) or 'nothing'})."
-        )
-    halo_catalog = cache_obj["HaloCatalog"]
-    initial_conditions = cache_obj["InitialConditions"]
-    _, intensity = calculate_cii(halo_catalog, model, seed=seed)
+    # The feedback on the halo properties comes from the boxes of the previous node
+    # redshift, as in 21cmFAST's redshift loop: the Lyman-Werner background of the
+    # TsBox for minihalos, and the reionization redshift and photo-ionization rate of
+    # the IonizedBox for reionization feedback. perturb_halo_catalog asks for both
+    # boxes in runs with minihalos. Above Z_HEAT_MAX, or at the first node, there is
+    # no feedback.
+    astro_options = inputs.astro_options
+    previous = {}
+    node_redshifts = sorted(inputs.node_redshifts, reverse=True)
+    i_node = int(np.argmin(np.abs(np.array(node_redshifts) - z)))
+    if z < inputs.simulation_options.Z_HEAT_MAX and i_node > 0:
+        z_previous = node_redshifts[i_node - 1]
+        if astro_options.USE_MCGS:
+            previous["previous_spin_temp"] = _cached_struct(
+                run, "TsBox", z_previous, directory_path
+            )
+        if (
+            astro_options.USE_MCGS
+            or astro_options.USE_REIONIZATION_PHOTOHEATING_FEEDBACK
+        ):
+            previous["previous_ionize_box"] = _cached_struct(
+                run, "IonizedBox", z_previous, directory_path
+            )
 
-    # The HaloCatalog holds the Lagrangian halo positions. Move the halos to their
-    # Eulerian positions, as 21cmFAST does for the HaloBox. perturb_halo_catalog
-    # reads every halo array but only loads the coordinates and masses from disk
-    # itself, and crashes if the others are not in memory, so load them all.
+    # perturb_halo_catalog reads every halo array but only loads the coordinates and
+    # masses from disk itself, and crashes if the others are not in memory, so load
+    # them all.
     halo_catalog.load_all()
     perturbed = p21c.perturb_halo_catalog(
         initial_conditions=initial_conditions,
-        inputs=halo_catalog.inputs,
+        inputs=inputs,
         halo_catalog=halo_catalog,
+        **previous,
     )
     if perturbed.n_halos != halo_catalog.n_halos:
         raise ValueError(
             f"Perturbing the {halo_catalog.n_halos} halos at z={z} returned "
             f"{perturbed.n_halos} halos."
         )
-    resolution = halo_catalog.simulation_options.HII_DIM
-    cell_size = halo_catalog.simulation_options.BOX_LEN / resolution
+    _, intensity = calculate_cii(perturbed, model, seed=seed)
+
+    resolution = inputs.simulation_options.HII_DIM
+    cell_size = inputs.simulation_options.BOX_LEN / resolution
     # Halo coordinates are in Mpc. Only the first n_halos entries are real halos,
     # matching the output of calculate_cii.
     positions = perturbed.get("halo_coords")[: perturbed.n_halos] / cell_size
     cii_intensity = _cic_grid(positions, intensity, resolution)
 
+    emissivity_fields = _cached_path(run, "EmissivityFields", z)
     return CIICoeval(
         redshift=z,
-        inputs=halo_catalog.inputs,
+        inputs=inputs,
         cii_intensity=cii_intensity,
         initial_conditions=initial_conditions,
-        halobox=cache_obj.get("HaloBox"),
+        halobox=read_output_struct(emissivity_fields) if emissivity_fields else None,
     )
 
 
@@ -223,7 +312,9 @@ def gen_coeval_list(
     coeval_list = []
     for z in lc.inputs.node_redshifts:
         logger.info("Building the [CII] coeval box at z=%.3f", z)
-        coeval_list.append(gen_coeval(z, model, directory_path, seed=rng))
+        coeval_list.append(
+            gen_coeval(z, model, directory_path, seed=rng, inputs=lc.inputs)
+        )
     return coeval_list
 
 
@@ -284,7 +375,7 @@ def gen_lc(
     def cii_coevals() -> Iterator[CIICoeval]:
         for z in lc.inputs.node_redshifts:
             logger.info("Building the [CII] coeval box at z=%.3f", z)
-            coeval = gen_coeval(z, model, directory_path, seed=rng)
+            coeval = gen_coeval(z, model, directory_path, seed=rng, inputs=lc.inputs)
             # Only the gridded [CII] field is interpolated; drop the initial
             # conditions and halo box read from the cache so that they can be freed.
             coeval.initial_conditions = None
