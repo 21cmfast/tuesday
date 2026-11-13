@@ -11,6 +11,7 @@ from py21cmfast.drivers.lightcone import AngularLightcone, LightCone
 from py21cmfast.io import h5
 from py21cmfast.io.caching import OutputCache, RunCache
 from py21cmfast.wrapper import outputs
+from py21cmfast.wrapper.classy_interface import run_classy
 from scipy.spatial.transform import Rotation
 
 from tuesday.core.lightcones import LightconeStore
@@ -18,11 +19,13 @@ from tuesday.simulators.py21cmfast.lightconers import FastAngularLightconer
 from tuesday.simulators.py21cmfast.lightcones import (
     DVDR,
     CachedFields,
+    apply_rsds_on_disk,
     construct_lightcone_from_cache,
     include_dvdr_on_disk,
     lightconer_metadata,
     link_lightcone_file,
     make_lightcones_on_disk,
+    rsd_lightconer,
 )
 
 NODES = [10.0, 9.0, 8.0, 7.0, 6.0]
@@ -43,7 +46,13 @@ def random_cache(cachedir: Path, ts: bool = False) -> RunCache:
     def write(box, path):
         box._init_arrays()
         for name, array in box.arrays.items():
-            values = rng.normal(size=array.shape).astype(array.dtype)
+            values = rng.normal(size=array.shape)
+            if name.startswith("velocity"):
+                # about 3000 km/s (in Mpc/s), which moves the field by about a cell
+                values *= 1e-16
+            elif name == "tau_21":
+                values = np.abs(values)
+            values = values.astype(array.dtype)
             setattr(box, name, array.with_value(values))
         for name in box._struct.primitive_fields:
             setattr(box, name, 0.0)
@@ -462,3 +471,155 @@ def test_link_lightcone_file(on_disk, lightconers, tmp_path, monkeypatch, ts, na
 
     with pytest.raises(ValueError, match="no complete lightcone"):
         link_lightcone_file(tmp_path, cache.inputs)
+
+
+# --- RSDs ---------------------------------------------------------------------------
+
+
+def classy_output(inputs):
+    """Run CLASS for the cosmology of a run, as 21cmFAST does for the RSDs."""
+    cosmo = inputs.cosmo_params
+    return run_classy(
+        h=cosmo.hlittle,
+        Omega_cdm=cosmo.OMm - cosmo.OMb,
+        Omega_b=cosmo.OMb,
+        n_s=cosmo.POWER_INDEX,
+        sigma8=cosmo.SIGMA_8,
+        output="vTk",
+    )
+
+
+def test_rsd_lightconer(cache, lightconers):
+    """The distances of run_lightcone with RSDs, with the same quantities."""
+    lightconer = attrs.evolve(lightconers["rect"], quantities=("density",))
+    extended = rsd_lightconer(lightconer, cache.inputs)
+    reference = lightconer.validate_options(
+        cache.inputs, include_dvdr_in_tau21=False, apply_rsds=True
+    )
+    np.testing.assert_array_equal(extended.lc_distances, reference.lc_distances)
+    assert extended.quantities == ("density",)
+    assert extended.lc_distances.min() < lightconer.lc_distances.min()
+    assert extended.lc_distances.max() > lightconer.lc_distances.max()
+    np.testing.assert_allclose(
+        np.diff(extended.lc_distances), cache.inputs.simulation_options.cell_size
+    )
+
+
+@pytest.fixture(scope="module")
+def rsd_on_disk(tmp_path_factory):
+    """Make lightcones on disk with dv/dr and RSDs, from random boxes.
+
+    They are made once for each value of USE_TS_FLUCT, a few lines of sight at a
+    time.
+    """
+    made = {}
+
+    def make(ts: bool, lightconers: dict):
+        if ts not in made:
+            tmp = tmp_path_factory.mktemp("rsds")
+            cache = random_cache(tmp / "cache", ts=ts)
+            classy = classy_output(cache.inputs)
+            extended = {
+                name: rsd_lightconer(lc, cache.inputs, classy_output=classy)
+                for name, lc in lightconers.items()
+            }
+            quantities = ["brightness_temp", "density", "los_velocity"]
+            if ts:
+                quantities.append("tau_21")
+            make_lightcones_on_disk(extended, quantities, cache, tmp / "out")
+            rsds = [DVDR, *quantities[1:]]
+            for name in lightconers:
+                include_dvdr_on_disk(tmp / "out" / name, cache.inputs)
+                apply_rsds_on_disk(tmp / "out" / name, cache.inputs, rsds, max_memory=1)
+            made[ts] = cache, extended, tmp / "out"
+        return made[ts]
+
+    return make
+
+
+@pytest.mark.parametrize("ts", [False, True], ids=["no_ts", "ts"])
+@pytest.mark.parametrize("name", ["rect", "angular", "healpix"])
+def test_rsds_on_disk(rsd_on_disk, lightconers, tmp_path, ts, name):
+    """The lightcones of run_lightcone with dv/dr and RSDs, read from the links."""
+    cache, extended, out = rsd_on_disk(ts, lightconers)
+    reference = construct_lightcone_from_cache(
+        cache,
+        attrs.evolve(lightconers[name], quantities=("brightness_temp", "density")),
+        global_quantities=("brightness_temp", "density"),
+        include_dvdr_in_tau21=True,
+        apply_rsds=True,
+        n_rsd_subcells=4,
+    )
+    path = link_lightcone_file(
+        out / name, cache.inputs, lc_distances=lightconers[name].lc_distances
+    )
+    kind = LightCone if name == "rect" else AngularLightcone
+    lightcone = kind.from_file(path)
+
+    # the slices outside the requested distances are left out, as run_lightcone does
+    np.testing.assert_allclose(
+        lightcone.lightcone_distances, reference.lightcone_distances, rtol=1e-12
+    )
+    expected = set(reference.lightcones) | {"brightness_temp_no_dvdr"}
+    assert set(lightcone.lightcones) == expected
+    assert f"{DVDR}_with_rsds.h5" in {p.name for p in (out / name).iterdir()}
+    for key, values in reference.lightcones.items():
+        # the dv/dr-corrected field is stored in float32, before its RSDs
+        scale = np.abs(values).max()
+        np.testing.assert_allclose(
+            lightcone.lightcones[key], values, rtol=1e-5, atol=1e-6 * scale
+        )
+    with_rsds = lightcone.lightcones["density_with_rsds"]
+    assert not np.allclose(with_rsds, lightcone.lightcones["density"])
+    for key in ("brightness_temp", "density"):
+        np.testing.assert_allclose(
+            lightcone.global_quantities[key],
+            reference.global_quantities[key],
+            rtol=1e-6,
+        )
+
+    # without the requested distances, all the slices are read
+    full = kind.from_file(
+        link_lightcone_file(out / name, cache.inputs, tmp_path / "a.h5")
+    )
+    np.testing.assert_allclose(
+        full.lightcone_distances, extended[name].lc_distances, rtol=1e-12
+    )
+
+
+def test_apply_rsds_on_disk_errors(cache, lightconers, tmp_path):
+    """The stores must be complete and one cell apart; n_rsd_subcells is checked."""
+    lightconer = lightconers["rect"]
+    make_lightcones_on_disk({"rect": lightconer}, "density", cache, tmp_path)
+    with pytest.raises(ValueError, match=r"los_velocity\.h5"):
+        apply_rsds_on_disk(tmp_path / "rect", cache.inputs, "density")
+
+    make_lightcones_on_disk({"rect": lightconer}, "los_velocity", cache, tmp_path)
+    paths = apply_rsds_on_disk(tmp_path / "rect", cache.inputs, "density")
+    path = paths["density"]
+    assert path == tmp_path / "rect" / "density_with_rsds.h5"
+    with LightconeStore.open(path) as store:
+        assert store.complete
+        assert store.quantity == "density_with_rsds"
+        assert store.metadata["n_rsd_subcells"] == 4
+    mtime = path.stat().st_mtime_ns
+    apply_rsds_on_disk(tmp_path / "rect", cache.inputs, ["density"])
+    assert path.stat().st_mtime_ns == mtime
+    with pytest.raises(ValueError, match="n_rsd_subcells=4"):
+        apply_rsds_on_disk(tmp_path / "rect", cache.inputs, "density", n_rsd_subcells=2)
+    apply_rsds_on_disk(
+        tmp_path / "rect", cache.inputs, "density", n_rsd_subcells=2, clobber=True
+    )
+    with LightconeStore.open(path) as store:
+        assert store.metadata["n_rsd_subcells"] == 2
+
+    coarse = RectilinearLightconer.between_redshifts(
+        min_redshift=6.2,
+        max_redshift=9.8,
+        resolution=2 * cache.inputs.simulation_options.cell_size,
+    )
+    make_lightcones_on_disk(
+        {"coarse": coarse}, ["density", "los_velocity"], cache, tmp_path
+    )
+    with pytest.raises(ValueError, match="one cell apart"):
+        apply_rsds_on_disk(tmp_path / "coarse", cache.inputs, "density")
