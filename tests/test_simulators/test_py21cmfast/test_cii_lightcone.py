@@ -464,7 +464,7 @@ def photoheating_run(tmp_path_factory) -> SimpleNamespace:
 
     The cache then has no TsBox, and the halo properties depend on the IonizedBox of
     the previous node redshift. Z_HEAT_MAX is the first node redshift: 21cmFAST
-    4.3.1 crashes (segfault) with reionization feedback at a first node below it.
+    4.3.2 crashes (segfault) with reionization feedback at a first node below it.
     """
     cache_dir = tmp_path_factory.mktemp("photoheating_cache")
     inputs = p21c.InputParameters.from_template(

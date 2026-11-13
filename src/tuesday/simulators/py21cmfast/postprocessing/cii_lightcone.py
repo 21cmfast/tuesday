@@ -26,11 +26,6 @@ import attrs
 import numpy as np
 import py21cmfast as p21c
 from attrs import define, field
-
-# c_state sets up the backend tables (power spectrum, sigma(M)) for a set of inputs.
-# perturb_halo_catalog needs them but does not set them up itself in 21cmFAST 4.3,
-# and then fails, or returns zero SFRs, in a process that has not run a simulation.
-from py21cmfast.drivers._global_initialization import c_state
 from py21cmfast.io.caching import OutputCache, RunCache
 from py21cmfast.io.h5 import read_output_struct
 from py21cmfast.lightconers import Lightconer
@@ -257,13 +252,12 @@ def gen_coeval(
     # masses from disk itself, and crashes if the others are not in memory, so load
     # them all.
     halo_catalog.load_all()
-    with c_state(inputs, ps=True, sigma=True):
-        perturbed = p21c.perturb_halo_catalog(
-            initial_conditions=initial_conditions,
-            inputs=inputs,
-            halo_catalog=halo_catalog,
-            **previous,
-        )
+    perturbed = p21c.perturb_halo_catalog(
+        initial_conditions=initial_conditions,
+        inputs=inputs,
+        halo_catalog=halo_catalog,
+        **previous,
+    )
     if perturbed.n_halos != halo_catalog.n_halos:
         raise ValueError(
             f"Perturbing the {halo_catalog.n_halos} halos at z={z} returned "
