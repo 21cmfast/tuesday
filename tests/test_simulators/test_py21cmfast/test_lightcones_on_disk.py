@@ -431,9 +431,9 @@ def classy_output(inputs):
     )
 
 
-def test_rsd_lightconer(cache):
+def test_rsd_lightconer(cache, lightconers):
     """The distances of run_lightcone with RSDs, with the same quantities."""
-    lightconer = attrs.evolve(lightconers(cache)["rect"], quantities=("density",))
+    lightconer = attrs.evolve(lightconers["rect"], quantities=("density",))
     extended = rsd_lightconer(lightconer, cache.inputs)
     reference = lightconer.validate_options(
         cache.inputs, include_dvdr_in_tau21=False, apply_rsds=True
@@ -456,25 +456,24 @@ def rsd_on_disk(tmp_path_factory):
     """
     made = {}
 
-    def make(ts: bool):
+    def make(ts: bool, lightconers: dict):
         if ts not in made:
             tmp = tmp_path_factory.mktemp("rsds")
             cache = random_cache(tmp / "cache", ts=ts)
             classy = classy_output(cache.inputs)
-            lcs = lightconers(cache)
             extended = {
                 name: rsd_lightconer(lc, cache.inputs, classy_output=classy)
-                for name, lc in lcs.items()
+                for name, lc in lightconers.items()
             }
             quantities = ["brightness_temp", "density", "los_velocity"]
             if ts:
                 quantities.append("tau_21")
             make_lightcones_on_disk(extended, quantities, cache, tmp / "out")
             rsds = [DVDR, *quantities[1:]]
-            for name in lcs:
+            for name in lightconers:
                 include_dvdr_on_disk(tmp / "out" / name, cache.inputs)
                 apply_rsds_on_disk(tmp / "out" / name, cache.inputs, rsds, max_memory=1)
-            made[ts] = cache, lcs, extended, tmp / "out"
+            made[ts] = cache, extended, tmp / "out"
         return made[ts]
 
     return make
@@ -482,19 +481,19 @@ def rsd_on_disk(tmp_path_factory):
 
 @pytest.mark.parametrize("ts", [False, True], ids=["no_ts", "ts"])
 @pytest.mark.parametrize("name", ["rect", "angular", "healpix"])
-def test_rsds_on_disk(rsd_on_disk, tmp_path, ts, name):
+def test_rsds_on_disk(rsd_on_disk, lightconers, tmp_path, ts, name):
     """The lightcones of run_lightcone with dv/dr and RSDs, read from the links."""
-    cache, lcs, extended, out = rsd_on_disk(ts)
+    cache, extended, out = rsd_on_disk(ts, lightconers)
     reference = construct_lightcone_from_cache(
         cache,
-        attrs.evolve(lcs[name], quantities=("brightness_temp", "density")),
+        attrs.evolve(lightconers[name], quantities=("brightness_temp", "density")),
         global_quantities=("brightness_temp", "density"),
         include_dvdr_in_tau21=True,
         apply_rsds=True,
         n_rsd_subcells=4,
     )
     path = link_lightcone_file(
-        out / name, cache.inputs, lc_distances=lcs[name].lc_distances
+        out / name, cache.inputs, lc_distances=lightconers[name].lc_distances
     )
     kind = LightCone if name == "rect" else AngularLightcone
     lightcone = kind.from_file(path)
@@ -530,9 +529,9 @@ def test_rsds_on_disk(rsd_on_disk, tmp_path, ts, name):
     )
 
 
-def test_apply_rsds_on_disk_errors(cache, tmp_path):
+def test_apply_rsds_on_disk_errors(cache, lightconers, tmp_path):
     """The stores must be complete and one cell apart; n_rsd_subcells is checked."""
-    lightconer = lightconers(cache)["rect"]
+    lightconer = lightconers["rect"]
     make_lightcones_on_disk({"rect": lightconer}, "density", cache, tmp_path)
     with pytest.raises(ValueError, match=r"los_velocity\.h5"):
         apply_rsds_on_disk(tmp_path / "rect", cache.inputs, "density")
