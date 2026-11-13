@@ -133,7 +133,7 @@ ROTATION = Rotation.from_euler("zyx", [0.3, 0.2, 0.1])
         (False, ROTATION, True),
     ],
 )
-def test_matches_stock(run, monkeypatch, tile_first, rotation, dvdr_and_rsds):
+def test_matches_21cmfast(run, monkeypatch, tile_first, rotation, dvdr_and_rsds):
     """Sampling first or not, the lightcones equal 21cmFAST's, with dv/dr and RSDs.
 
     Every slice is made the way tile_first asks for, or, with tile_first=None, the
