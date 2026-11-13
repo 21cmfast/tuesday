@@ -796,11 +796,11 @@ lxml = [
 
 [[package]]
 name = "filelock"
-version = "3.32.7"
+version = "4.2.10"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/0f/59/e19834834cb01a32febfbb0f8a23a9088088f5d45991824ff2bc3b5e8acb/filelock-3.32.7.tar.gz", hash = "sha256:37b8a3d9811b0f9aef7e5ec5c71bb320de52df51e6ca9bcd6f5ad81187660da7", size = 225154, upload-time = "2026-09-16T00:24:20.907Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/cf/05bcdacabdc0aec7dc8e19d76281bd82325df62dae3b6430e9ba57397689/filelock-4.2.10.tar.gz", hash = "sha256:fcc3c0cb8bfe7f4b3bb0e231c04b15dbad068cb3c2515f343d8fde4dce93bd5d", size = 670595, upload-time = "2026-11-09T18:58:00.54Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/15/df/31098c5aeb4d966b553641472bd55fcf5fdfac953549894b8a765ba44e91/filelock-3.32.7-py3-none-any.whl", hash = "sha256:65ff0d0190ea42038b32bda4b77834fb05be2cad4c5b9b01aa4dfb3614536e52", size = 100157, upload-time = "2026-09-16T00:24:19.543Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/90/5d0096a325aa0f83ba7a3968bfb485b67e32c947bdf9cd0fcb4b485be718/filelock-4.2.10-py3-none-any.whl", hash = "sha256:9479aaeb4db20b5a53e3da28493edd24720b66b8a0b84030aa56ccdf243d6857", size = 218040, upload-time = "2026-11-09T18:57:59.088Z" },
 ]
 
 [[package]]
@@ -2663,15 +2663,15 @@ wheels = [
 
 [[package]]
 name = "python-gitlab"
-version = "8.5.0"
+version = "8.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "requests" },
     { name = "requests-toolbelt" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/26/55/8050293b360a29218a15892c2b936e286a69fd4f5d2cf54c7cbe19d34b47/python_gitlab-8.5.0.tar.gz", hash = "sha256:628529ec4ce1f9a7ba2c145b2cf5e4eeca3015418e504b2e6fba70171b6b1b59", size = 411497, upload-time = "2026-07-28T02:04:30.015Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5c/dc/292d32245ca35447b265c47a0ed9f35de1ab280a05da1da306b61a035833/python_gitlab-8.6.0.tar.gz", hash = "sha256:d1602164fb58ab280ceef460faf015cec6e7d83bb2d9cbae44ba448adb5568ef", size = 423347, upload-time = "2026-09-28T03:13:53.86Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/93/3d/fb547ed2ac318132517e001b74b09d1f17d2c2c681cad1e32a8b84139867/python_gitlab-8.5.0-py3-none-any.whl", hash = "sha256:94228973c54f09eccd30f5160eca91200adc31d6ed0c894221a3865b90f96426", size = 148234, upload-time = "2026-07-28T02:04:28.454Z" },
+    { url = "https://files.pythonhosted.org/packages/55/aa/9c96a88d79453eaea91f301c318dc3c5e95b195087759fd94fedf1104386/python_gitlab-8.6.0-py3-none-any.whl", hash = "sha256:34fee7e5576cf01982c4bfa98f94d50e24733edb66beba3cb8ef286287723019", size = 159654, upload-time = "2026-09-28T03:13:52.285Z" },
 ]
 
 [[package]]
@@ -3350,7 +3350,7 @@ wheels = [
 
 [[package]]
 name = "ska-schemas"
-version = "1.42.0"
+version = "1.43.1"
 source = { registry = "https://artefact.skao.int/repository/pypi-internal/simple" }
 dependencies = [
     { name = "appdirs" },
@@ -3358,9 +3358,9 @@ dependencies = [
     { name = "requests" },
     { name = "schema" },
 ]
-sdist = { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-schemas/1.42.0/ska_schemas-1.42.0.tar.gz", hash = "sha256:08a06164eaaf8fb9a7f8033fc3dc9c1ffe0271b5ee295a5c5ac2b25ee9f071be", size = 0, upload-time = "2026-09-21T11:12:51.248Z" }
+sdist = { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-schemas/1.43.1/ska_schemas-1.43.1.tar.gz", hash = "sha256:d46b2219ea7da780f35427575d52898b16c8d2c6423504207e74e8675b4a6513", size = 0, upload-time = "2026-11-02T13:18:32.614Z" }
 wheels = [
-    { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-schemas/1.42.0/ska_schemas-1.42.0-py3-none-any.whl", hash = "sha256:a83f22ec982a3a1e22868ccf1b998acb72251509c1454e1478a821ebfe72e79c", size = 0, upload-time = "2026-09-21T11:12:51.075Z" },
+    { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-schemas/1.43.1/ska_schemas-1.43.1-py3-none-any.whl", hash = "sha256:8e71643e36b6bdabe214ec3056c91ad91510b2b269b3fefec52053a1c385a7fb", size = 0, upload-time = "2026-11-02T13:18:32.427Z" },
 ]
 
 [[package]]
@@ -3408,7 +3408,7 @@ wheels = [
 
 [[package]]
 name = "ska-telmodel-client"
-version = "1.30.3"
+version = "1.31.2"
 source = { registry = "https://artefact.skao.int/repository/pypi-internal/simple" }
 dependencies = [
     { name = "appdirs" },
@@ -3418,13 +3418,13 @@ dependencies = [
     { name = "prettytable" },
     { name = "python-gitlab" },
     { name = "pyyaml" },
+    { name = "requests" },
     { name = "ska-schemas" },
-    { name = "tomli" },
     { name = "toolz" },
 ]
-sdist = { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-telmodel-client/1.30.3/ska_telmodel_client-1.30.3.tar.gz", hash = "sha256:748549093f39c684e7a2e3dbb893f9762a7a23cf772ca35bf8d9b7dee251c8bd", size = 0, upload-time = "2026-09-16T12:29:09.273Z" }
+sdist = { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-telmodel-client/1.31.2/ska_telmodel_client-1.31.2.tar.gz", hash = "sha256:de7e4b8ab1467163528a7ed2b1478ff33e01f5bfb15a875f5180df4864e50409", size = 0, upload-time = "2026-11-02T14:25:29.269Z" }
 wheels = [
-    { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-telmodel-client/1.30.3/ska_telmodel_client-1.30.3-py3-none-any.whl", hash = "sha256:289f0e8d816c641e0c68041399cd6d731073655766b956386c5839660da3dd95", size = 0, upload-time = "2026-09-16T12:29:09.156Z" },
+    { url = "https://artefact.skao.int/repository/pypi-internal/packages/ska-telmodel-client/1.31.2/ska_telmodel_client-1.31.2-py3-none-any.whl", hash = "sha256:0a05920865755fbb7caffe7f2bc2a561b9c1dc0250136035417b7dea331db0f5", size = 0, upload-time = "2026-11-02T14:25:29.141Z" },
 ]
 
 [[package]]
@@ -3722,11 +3722,11 @@ wheels = [
 
 [[package]]
 name = "toolz"
-version = "1.1.0"
+version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/11/d6/114b492226588d6ff54579d95847662fc69196bdeec318eb45393b24c192/toolz-1.1.0.tar.gz", hash = "sha256:27a5c770d068c110d9ed9323f24f1543e83b2f300a687b7891c1a6d56b697b5b", size = 52613, upload-time = "2025-10-17T04:03:21.661Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/31/6f/ae20c212a07aa2d156c787383d8088a5e045ee39628661edb190c97e1659/toolz-1.2.0.tar.gz", hash = "sha256:9667a038e9d6ecba37995e26cb2f59ec6420b6ad8dd9677de59db9b956b08490", size = 55442, upload-time = "2026-10-07T04:16:25.639Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fb/12/5911ae3eeec47800503a238d971e51722ccea5feb8569b735184d5fcdbc0/toolz-1.1.0-py3-none-any.whl", hash = "sha256:15ccc861ac51c53696de0a5d6d4607f99c210739caf987b5d2054f3efed429d8", size = 58093, upload-time = "2025-10-17T04:03:20.435Z" },
+    { url = "https://files.pythonhosted.org/packages/db/17/4c8beb6c8c4176c6bf143bfd7e1e4dd6719b00ced90738c7ac471b71c1df/toolz-1.2.0-py3-none-any.whl", hash = "sha256:890f820b1cb8152785aaf9386d8707770110809035800985ca65cb24ce1120ef", size = 60789, upload-time = "2026-10-07T04:16:24.173Z" },
 ]
 
 [[package]]
