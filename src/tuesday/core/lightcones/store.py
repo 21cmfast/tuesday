@@ -1,4 +1,4 @@
-"""A module defining on-disk lightcone storage with support for incremental checkpointing.
+"""On-disk lightcone storage, with support for incremental checkpointing.
 
 A lightcone made from the coeval boxes of a simulation is filled interval by interval:
 the slices between two consecutive node redshifts come from the boxes at those two
@@ -256,8 +256,6 @@ class LightconeStore:
         file.flush()
         return cls(file)
 
-    # --- what the store holds ----------------------------------------------------
-
     @property
     def path(self) -> Path:
         """The file of the store."""
@@ -312,8 +310,6 @@ class LightconeStore:
     def metadata(self) -> dict[str, Any]:
         """The description of how the lightcone is made."""
         return dict(self._file["metadata"].attrs)
-
-    # --- filling the store --------------------------------------------------------
 
     def write(self, index: slice | Sequence[int], values: np.ndarray) -> None:
         """Write slices of the lightcone.

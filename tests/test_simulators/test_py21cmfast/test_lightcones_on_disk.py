@@ -13,7 +13,7 @@ from py21cmfast.wrapper import outputs
 from scipy.spatial.transform import Rotation
 
 from tuesday.core.lightcones import LightconeStore
-from tuesday.simulators.py21cmfast.lightconers import healpix_lightconer
+from tuesday.simulators.py21cmfast.lightconers import FastAngularLightconer
 from tuesday.simulators.py21cmfast.lightcones import (
     CachedFields,
     construct_lightcone_from_cache,
@@ -60,6 +60,7 @@ def cache(tmp_path_factory) -> RunCache:
     return random_cache(tmp_path_factory.mktemp("cache") / "cache")
 
 
+@pytest.fixture(scope="module")
 def lightconers(cache: RunCache) -> dict:
     """A rectilinear, an angular and a HEALPix lightconer, between z = 6.2 and 9.8."""
     options = cache.inputs.simulation_options
@@ -73,7 +74,7 @@ def lightconers(cache: RunCache) -> dict:
         "angular": AngularLightconer.like_rectilinear(
             simulation_options=options, max_redshift=9.5, match_at_z=6.5
         ),
-        "healpix": healpix_lightconer(nside=2, subsample_level=1, **between),
+        "healpix": FastAngularLightconer.healpix(nside=2, subsample_level=1, **between),
     }
 
 
@@ -95,9 +96,9 @@ def test_cached_fields(cache):
 
 
 @pytest.mark.parametrize("name", ["rect", "angular", "healpix"])
-def test_matches_in_memory(cache, tmp_path, name):
+def test_matches_in_memory(cache, lightconers, tmp_path, name):
     """The lightcones on disk are those made in memory from the cache."""
-    lightconer = lightconers(cache)[name]
+    lightconer = lightconers[name]
     quantities = ("density", "z_reion", "los_velocity")
     paths = make_lightcones_on_disk({name: lightconer}, quantities, cache, tmp_path)
     assert set(paths[name]) == set(quantities)
@@ -126,9 +127,9 @@ def test_matches_in_memory(cache, tmp_path, name):
             assert same_metadata(store.metadata, lightconer_metadata(lightconer))
 
 
-def test_los_velocity_alone(cache, tmp_path):
+def test_los_velocity_alone(cache, lightconers, tmp_path):
     """los_velocity alone is made, without a file for the field made with it."""
-    lightconer = lightconers(cache)["healpix"]
+    lightconer = lightconers["healpix"]
     paths = make_lightcones_on_disk({"hp": lightconer}, "los_velocity", cache, tmp_path)
     assert paths == {"hp": {"los_velocity": tmp_path / "hp" / "los_velocity.h5"}}
     assert sorted(p.name for p in (tmp_path / "hp").iterdir()) == ["los_velocity.h5"]
@@ -154,10 +155,10 @@ class CountingFields(CachedFields):
         return super().read(redshift, field)
 
 
-def test_partial_and_resume(cache, tmp_path):
+def test_partial_and_resume(lightconers, tmp_path):
     """Missing boxes stop the job, or are skipped; a later call fills the rest."""
     copy = random_cache(tmp_path / "cache")
-    lcs = lightconers(copy)
+    lcs = lightconers
     full = make_lightcones_on_disk(lcs, "density", copy, tmp_path / "full")
 
     # Move away the density at z = 8, as if the run had not reached it yet.
@@ -205,9 +206,9 @@ def test_partial_and_resume(cache, tmp_path):
     shutil.rmtree(tmp_path / "cache")
 
 
-def test_other_lightconer(cache, tmp_path):
+def test_other_lightconer(cache, lightconers, tmp_path):
     """A file made with another lightconer is not resumed, unless clobbered."""
-    lightconer = lightconers(cache)["healpix"]
+    lightconer = lightconers["healpix"]
     make_lightcones_on_disk({"hp": lightconer}, "density", cache, tmp_path)
     rotated = attrs.evolve(lightconer, rotation=Rotation.from_euler("z", 0.3))
     np.testing.assert_allclose(
@@ -229,9 +230,9 @@ def test_other_lightconer(cache, tmp_path):
         )
 
 
-def test_lightconer_metadata(cache):
+def test_lightconer_metadata(cache, lightconers):
     """The options that change the slices, with large arrays hashed."""
-    lcs = lightconers(cache)
+    lcs = lightconers
     rect = lightconer_metadata(lcs["rect"])
     assert rect == {
         "lightconer": "py21cmfast.lightconers.RectilinearLightconer",
@@ -247,7 +248,7 @@ def test_lightconer_metadata(cache):
     assert "tile_first" not in hp
     faster = attrs.evolve(lcs["healpix"], tile_first=True)
     assert same_metadata(lightconer_metadata(faster), hp)
-    other = healpix_lightconer(
+    other = FastAngularLightconer.healpix(
         nside=2,
         subsample_level=1,
         order="nested",
@@ -258,9 +259,9 @@ def test_lightconer_metadata(cache):
     assert lightconer_metadata(other)["latitude"] != hp["latitude"]
 
 
-def test_errors(cache, tmp_path):
+def test_errors(cache, lightconers, tmp_path):
     """Quantities that are not fields, and lightcones beyond the nodes."""
-    lcs = lightconers(cache)
+    lcs = lightconers
     with pytest.raises(KeyError, match="not a coeval field"):
         make_lightcones_on_disk(lcs, "Tk_box", cache, tmp_path)
     with pytest.raises(ValueError, match="distinct"):

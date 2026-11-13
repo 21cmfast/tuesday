@@ -272,8 +272,6 @@ def construct_lightcone_from_filelist(
     )
 
 
-# --- Lightcones on disk, filled from the cache one node interval at a time ----------
-
 #: The output structs whose arrays are coeval fields, in the order in which
 #: :class:`py21cmfast.Coeval` looks a field up.
 _COEVAL_STRUCTS = (
@@ -386,7 +384,7 @@ class CachedFields:
         return read_output_struct(self.path(redshift, field)).get(field)
 
 
-def _describe(value: Any) -> Any:
+def _serialise(value: Any) -> Any:
     """Return a value of a lightconer as a value that HDF5 can store as an attribute."""
     if isinstance(value, Rotation):
         value = value.as_matrix()
@@ -435,7 +433,7 @@ def lightconer_metadata(lightconer: Lightconer) -> dict[str, Any]:
             continue
         if name in _SPEED_OPTIONS:
             continue
-        out[name] = _describe(getattr(lightconer, field.name))
+        out[name] = _serialise(getattr(lightconer, field.name))
     return out
 
 
@@ -508,19 +506,20 @@ def _to_fill(
 def _read_node(
     source: CachedFields,
     nodes: Sequence[float],
-    j: int,
+    node_index: int,
     fields: Sequence[str],
     stores: Mapping[str, Mapping[str, LightconeStore]],
 ) -> SimpleNamespace:
     """Read the fields at a node redshift, and record their means in the stores."""
     inputs = source.inputs
-    box = {f: source.read(nodes[j], f) for f in fields}
+    redshift = nodes[node_index]
+    box = {f: source.read(redshift, f) for f in fields}
     for by_quantity in stores.values():
         for q, store in by_quantity.items():
             if q in box:
-                store.set_global_mean(j, float(np.mean(box[q])))
+                store.set_global_mean(node_index, float(np.mean(box[q])))
     return SimpleNamespace(
-        redshift=nodes[j],
+        redshift=redshift,
         simulation_options=inputs.simulation_options,
         cosmo_params=inputs.cosmo_params,
         **box,
@@ -573,7 +572,11 @@ def make_lightcones_on_disk(
 
     Each lightcone of each quantity is written to its own file,
     ``out_dir/<name>/<quantity>.h5``, a
-    :class:`~tuesday.core.lightcones.store.LightconeStore`. The store records which
+    :class:`~tuesday.core.lightcones.store.LightconeStore`. ``<name>`` is the key of
+    the lightconer in ``lightconers``, chosen freely, e.g. ``"angular"`` for an
+    :class:`py21cmfast.AngularLightconer` and ``"rectilinear"`` for a
+    :class:`py21cmfast.RectilinearLightconer`. Lightconers of all kinds are filled
+    in the same pass over the node redshifts. The store records which
     intervals between node redshifts are filled. Calling this again with the same
     arguments fills the intervals that are not filled yet. The store also records the
     mean of each quantity's box at the node redshifts that were read.
@@ -642,10 +645,14 @@ def make_lightcones_on_disk(
     # before any file is written.
     todo = {}
     for name in makers:
-        for i in _to_fill(slices[name], paths[name].values(), clobber=clobber):
-            todo.setdefault(i, []).append(name)
-    cached = {j: source.has(nodes[j], fields) for i in todo for j in (i, i + 1)}
-    if missing := sorted({nodes[j] for j, ok in cached.items() if not ok}):
+        for interval in _to_fill(slices[name], paths[name].values(), clobber=clobber):
+            todo.setdefault(interval, []).append(name)
+    cached = {
+        node_index: source.has(nodes[node_index], fields)
+        for interval in todo
+        for node_index in (interval, interval + 1)
+    }
+    if missing := sorted({nodes[n] for n, ok in cached.items() if not ok}):
         if not partial:
             raise FileNotFoundError(
                 f"{fields} are not cached at {len(missing)} node redshifts "
@@ -659,12 +666,20 @@ def make_lightcones_on_disk(
             missing[0],
             missing[-1],
         )
-        todo = {i: names for i, names in todo.items() if cached[i] and cached[i + 1]}
+        todo = {
+            interval: names
+            for interval, names in todo.items()
+            if cached[interval] and cached[interval + 1]
+        }
 
     stores = {name: {} for name in makers}
     try:
         for name, lightconer in makers.items():
-            empty = [i for i, index in enumerate(slices[name]) if not index.size]
+            empty = [
+                interval
+                for interval, index in enumerate(slices[name])
+                if not index.size
+            ]
             for q, path in paths[name].items():
                 stores[name][q] = LightconeStore.open_or_create(
                     path,
@@ -679,20 +694,27 @@ def make_lightcones_on_disk(
                 if empty:
                     stores[name][q].mark_done(empty)
 
+        # The boxes at the two ends of the interval, by node index. The box shared
+        # with the previous interval is kept.
         boxes = {}
-        for i, names in sorted(todo.items()):
-            boxes = {j: box for j, box in boxes.items() if j in (i, i + 1)}
-            for j in (i, i + 1):
-                if j not in boxes:
-                    boxes[j] = _read_node(source, nodes, j, fields, stores)
+        for interval, names in sorted(todo.items()):
+            ends = (interval, interval + 1)
+            boxes = {n: box for n, box in boxes.items() if n in ends}
+            for node_index in ends:
+                if node_index not in boxes:
+                    boxes[node_index] = _read_node(
+                        source, nodes, node_index, fields, stores
+                    )
             for name in names:
-                _fill_interval(makers[name], stores[name], boxes[i + 1], boxes[i])
+                _fill_interval(
+                    makers[name], stores[name], boxes[interval + 1], boxes[interval]
+                )
                 for store in stores[name].values():
-                    store.mark_done(i)
+                    store.mark_done(interval)
             logger.info(
                 "Filled the slices between z = %.3f and %.3f of %s.",
-                nodes[i],
-                nodes[i + 1],
+                nodes[interval],
+                nodes[interval + 1],
                 ", ".join(names),
             )
     finally:
