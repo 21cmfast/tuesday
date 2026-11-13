@@ -4,12 +4,14 @@ import hashlib
 import itertools
 import json
 import logging
+import os
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import attrs
+import h5py
 import numpy as np
 from astropy import units
 from astropy.units import Quantity
@@ -17,6 +19,7 @@ from py21cmfast.drivers.lightcone import LightCone, setup_lightcone_instance
 from py21cmfast.io import read_output_struct
 from py21cmfast.io.caching import RunCache
 from py21cmfast.lightconers import AngularLightconer, Lightconer
+from py21cmfast.rsds import include_dvdr_in_tau21
 from py21cmfast.wrapper import outputs
 from py21cmfast.wrapper.inputs import InputParameters
 from scipy.spatial.transform import Rotation
@@ -723,3 +726,221 @@ def make_lightcones_on_disk(
                 store.close()
 
     return paths
+
+
+#: The name of the brightness-temperature lightcone with the dv/dr correction.
+DVDR = "brightness_temp_dvdr"
+
+#: About how many bytes 21cmFAST's dv/dr correction uses per value of the lightcone
+#: (the inputs, the velocity gradient and the result, in float64).
+_DVDR_BYTES_PER_VALUE = 64
+
+
+def _complete(path: Path) -> bool:
+    """Whether a file is a complete lightcone store."""
+    if not path.exists():
+        return False
+    try:
+        with LightconeStore.open(path) as store:
+            return store.complete
+    except (OSError, ValueError):
+        return False
+
+
+def _temporary_path(path: Path) -> Path:
+    """Return the temporary path at which to write a file before renaming it."""
+    return path.with_name(f".{path.name}.tmp")
+
+
+def include_dvdr_on_disk(
+    directory: str | Path,
+    inputs: InputParameters,
+    *,
+    max_memory: float = 2e9,
+    clobber: bool = False,
+) -> Path:
+    """Apply 21cmFAST's dv/dr correction to a brightness-temperature lightcone on disk.
+
+    This applies :func:`py21cmfast.rsds.include_dvdr_in_tau21` to the stores
+    ``brightness_temp.h5``, ``los_velocity.h5`` and (with ``USE_TS_FLUCT``)
+    ``tau_21.h5`` in ``directory``, as made by :func:`make_lightcones_on_disk`. The
+    result is what :func:`py21cmfast.run_lightcone` returns as ``brightness_temp``
+    with ``include_dvdr_in_tau21=True`` (its default). It is written to
+    ``brightness_temp_dvdr.h5`` in the same directory.
+
+    The correction differentiates the velocity along each line of sight, so the
+    lightcone is corrected in blocks of lines of sight that fit in ``max_memory``.
+    These are blocks of whole chunks if ``max_memory`` allows it: with the default
+    chunks of the stores, the lines of sight of one chunk need about 1 GiB. The file
+    is written under a temporary name and renamed when it is complete.
+
+    Parameters
+    ----------
+    directory
+        The directory of the stores of one lightconer.
+    inputs
+        The input parameters of the run.
+    max_memory
+        About how many bytes of memory to use.
+    clobber
+        Whether to make the corrected lightcone again if it exists.
+
+    Returns
+    -------
+    Path
+        The file of the corrected lightcone.
+
+    Raises
+    ------
+    ValueError
+        If a store that is needed is missing or not complete, or if the slices are
+        not one cell apart (which the correction assumes).
+    """
+    directory = Path(directory)
+    names = ["brightness_temp", "los_velocity"]
+    if inputs.astro_options.USE_TS_FLUCT:
+        names.append("tau_21")
+    paths = [directory / f"{name}.h5" for name in names]
+    if missing := [p.name for p in paths if not _complete(p)]:
+        raise ValueError(f"{missing} in {directory} are missing or not complete")
+    out = directory / f"{DVDR}.h5"
+    if _complete(out) and not clobber:
+        return out
+
+    stores = [LightconeStore.open(p) for p in paths]
+    try:
+        temperature, velocity, *tau = stores
+        spacing = np.diff(temperature.distances)
+        if not np.allclose(spacing, inputs.simulation_options.cell_size, rtol=1e-6):
+            raise ValueError(
+                "21cmFAST's dv/dr correction assumes slices one cell apart; the slices "
+                f"in {directory} are not"
+            )
+        shape = temperature.shape
+        # blocks of whole chunks, if a chunk fits in memory
+        rows = max(1, int(max_memory // (_DVDR_BYTES_PER_VALUE * np.prod(shape[1:]))))
+        chunk = temperature.lightcone.chunks[0]
+        if rows > chunk:
+            rows = rows // chunk * chunk
+
+        tmp = _temporary_path(out)
+        with LightconeStore.open_or_create(
+            tmp,
+            quantity=DVDR,
+            shape=shape,
+            distances=temperature.distances,
+            redshifts=temperature.redshifts,
+            node_redshifts=temperature.node_redshifts,
+            metadata=temperature.metadata,
+            chunks=temperature.lightcone.chunks,
+            clobber=True,
+        ) as result:
+            for start in range(0, shape[0], rows):
+                block = slice(start, start + rows)
+                corrected = include_dvdr_in_tau21(
+                    brightness_temp=temperature.lightcone[block],
+                    los_velocity=velocity.lightcone[block],
+                    redshifts=temperature.redshifts,
+                    inputs=inputs,
+                    periodic=False,
+                    tau_21=tau[0].lightcone[block] if tau else None,
+                )
+                result.lightcone[block] = np.asarray(corrected, dtype=np.float32)
+            result.mark_done(range(result.done.size))
+    finally:
+        for store in stores:
+            store.close()
+    tmp.replace(out)
+    return out
+
+
+def link_lightcone_file(
+    directory: str | Path, inputs: InputParameters, path: str | Path | None = None
+) -> Path:
+    """Write a 21cmFAST lightcone file that links to the lightcones on disk.
+
+    The file has the layout of the files of :class:`py21cmfast.LightCone`, so
+    :meth:`py21cmfast.LightCone.from_file` (or
+    :meth:`py21cmfast.AngularLightcone.from_file`) can read it. Its lightcones are
+    HDF5 external links to the complete stores in ``directory``, so nothing is
+    copied, and h5py can read parts of them. If the dv/dr-corrected lightcone
+    (:func:`include_dvdr_on_disk`) is there, ``brightness_temp`` links to it and
+    ``brightness_temp_no_dvdr`` to the lightcone without the correction, as in the
+    output of :func:`py21cmfast.run_lightcone`. The global quantities are the means
+    recorded in the stores, in the order of ``inputs.node_redshifts``, and NaN at the
+    node redshifts that were not read.
+
+    The file is written under a temporary name and renamed when it is complete.
+
+    Parameters
+    ----------
+    directory
+        The directory of the stores of one lightconer.
+    inputs
+        The input parameters of the run.
+    path
+        The file to write. ``<directory>.h5`` by default.
+
+    Returns
+    -------
+    Path
+        The file.
+
+    Raises
+    ------
+    ValueError
+        If there is no complete store in ``directory``, or if the stores do not have
+        the same distances.
+
+    Warnings
+    --------
+    The file holds no data of its own. Its lightcones are links to the stores in
+    ``directory``, by paths relative to the file. The file and ``directory`` can be
+    moved together, as long as their relative position stays the same. If the stores
+    are deleted, moved or renamed, or the file is moved without them, the lightcones
+    can no longer be read, and :meth:`py21cmfast.LightCone.from_file` fails with a
+    ``TypeError``. To keep a lightcone without the stores, save a copy that holds the
+    data, with ``LightCone.from_file(path).save(copy)``, which reads the whole
+    lightcone into memory.
+    """
+    directory = Path(directory)
+    path = Path(path) if path is not None else directory.with_suffix(".h5")
+    stores = {p.stem: p for p in sorted(directory.glob("*.h5")) if _complete(p)}
+    if not stores:
+        raise ValueError(f"there is no complete lightcone in {directory}")
+    links = dict(stores)
+    if DVDR in links:
+        links["brightness_temp"] = links.pop(DVDR)
+        if "brightness_temp" in stores:
+            links["brightness_temp_no_dvdr"] = stores["brightness_temp"]
+
+    node_redshifts = np.asarray(inputs.node_redshifts, dtype=float)
+    distances = None
+    global_quantities = {}
+    for name, store_path in stores.items():
+        with LightconeStore.open(store_path) as store:
+            if distances is None:
+                distances = store.distances
+            elif not np.allclose(store.distances, distances, rtol=1e-10):
+                raise ValueError(f"the lightcones in {directory} have other distances")
+            means = store.global_mean
+            stored = store.node_redshifts
+        if name != DVDR and np.isfinite(means).any():
+            order = [int(np.argmin(np.abs(stored - z))) for z in node_redshifts]
+            global_quantities[name] = means[order]
+
+    tmp = _temporary_path(path)
+    LightCone(
+        lightcone_distances=distances,
+        inputs=inputs,
+        lightcones={},
+        global_quantities=global_quantities,
+        last_completed_node=len(node_redshifts) - 1,
+        last_completed_lcidx=0,
+    ).save(tmp, clobber=True)
+    with h5py.File(tmp, "a") as file:
+        for name, target in sorted(links.items()):
+            relative = os.path.relpath(target, path.parent)
+            file["lightcones"][name] = h5py.ExternalLink(relative, "/lightcone")
+    tmp.replace(path)
+    return path
