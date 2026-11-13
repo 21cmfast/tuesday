@@ -13,6 +13,7 @@ from scipy.ndimage import gaussian_filter
 from tuesday import __version__
 
 from ..units import validate
+from .style import with_dark_mode
 
 try:
     eor_colour = colors.LinearSegmentedColormap.from_list(
@@ -178,6 +179,7 @@ def coeval2slice_z(
     return slice_index
 
 
+@with_dark_mode
 def plot_lightcone_slice(
     lightcone: un.Quantity,
     box_length: un.Quantity,
@@ -252,6 +254,10 @@ def plot_lightcone_slice(
         Whether to apply Gaussian smoothing to the lightcone data.
         If True, a default sigma of 1.0 will be used.
         If a float, it will be used as the sigma for the Gaussian filter.
+    dark_mode : bool, optional
+        Whether to draw the plot in dark mode (matplotlib's "dark_background"
+        style). By default, as set by :func:`~tuesday.core.plotting.set_dark_mode`,
+        which is off until it is set.
     """
     validate(box_length, "length")
     if fontsize is not None:
@@ -326,6 +332,7 @@ def plot_redshift_slice(*args, **kwargs):
     return plot_lightcone_slice(*args, **kwargs)
 
 
+@with_dark_mode
 def plot_coeval_slice(
     coeval: un.Quantity,
     box_length: un.Quantity,
@@ -418,6 +425,10 @@ def plot_coeval_slice(
         The factor by which to decimate the vector field for plotting.
         This is useful for reducing the number of arrows in the quiver plot
         to avoid cluttering the plot. Default is 1 (no decimation).
+    dark_mode : bool, optional
+        Whether to draw the plot in dark mode (matplotlib's "dark_background"
+        style). By default, as set by :func:`~tuesday.core.plotting.set_dark_mode`,
+        which is off until it is set.
 
     Returns
     -------
@@ -505,6 +516,7 @@ def plot_coeval_slice(
     return ax
 
 
+@with_dark_mode
 def plot_pdf(
     box: un.Quantity,
     *,
@@ -539,6 +551,10 @@ def plot_pdf(
         Whether to apply Gaussian smoothing to the box data.
         If True, a default sigma of 1.0 will be used.
         If a float, it will be used as the sigma for the Gaussian filter.
+    dark_mode : bool, optional
+        Whether to draw the plot in dark mode (matplotlib's "dark_background"
+        style). By default, as set by :func:`~tuesday.core.plotting.set_dark_mode`,
+        which is off until it is set.
 
     Returns
     -------
