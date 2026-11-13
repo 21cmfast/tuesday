@@ -297,16 +297,15 @@ def on_disk(tmp_path_factory):
     """
     made = {}
 
-    def make(ts: bool):
+    def make(ts: bool, lightconers: dict):
         if ts not in made:
             tmp = tmp_path_factory.mktemp("dvdr")
             cache = random_cache(tmp / "cache", ts=ts)
             quantities = ["brightness_temp", "los_velocity"]
             if ts:
                 quantities.append("tau_21")
-            lcs = lightconers(cache)
-            make_lightcones_on_disk(lcs, quantities, cache, tmp / "out")
-            made[ts] = cache, lcs, tmp / "out"
+            make_lightcones_on_disk(lightconers, quantities, cache, tmp / "out")
+            made[ts] = cache, tmp / "out"
         return made[ts]
 
     return make
@@ -314,12 +313,12 @@ def on_disk(tmp_path_factory):
 
 @pytest.mark.parametrize("ts", [False, True], ids=["no_ts", "ts"])
 @pytest.mark.parametrize("name", ["rect", "angular", "healpix"])
-def test_include_dvdr_on_disk(on_disk, ts, name):
+def test_include_dvdr_on_disk(on_disk, lightconers, ts, name):
     """The correction of run_lightcone, in blocks of lines of sight."""
-    cache, lcs, out = on_disk(ts)
+    cache, out = on_disk(ts, lightconers)
     reference = construct_lightcone_from_cache(
         cache,
-        attrs.evolve(lcs[name], quantities=("brightness_temp",)),
+        attrs.evolve(lightconers[name], quantities=("brightness_temp",)),
         include_dvdr_in_tau21=True,
     )
     # a few lines of sight at a time
@@ -341,9 +340,9 @@ def test_include_dvdr_on_disk(on_disk, ts, name):
     assert path.stat().st_mtime_ns == mtime
 
 
-def test_include_dvdr_on_disk_errors(cache, tmp_path):
+def test_include_dvdr_on_disk_errors(cache, lightconers, tmp_path):
     """The stores must be complete, and the slices one cell apart."""
-    lightconer = lightconers(cache)["rect"]
+    lightconer = lightconers["rect"]
     make_lightcones_on_disk({"rect": lightconer}, "brightness_temp", cache, tmp_path)
     with pytest.raises(ValueError, match=r"los_velocity\.h5"):
         include_dvdr_on_disk(tmp_path / "rect", cache.inputs)
@@ -362,9 +361,9 @@ def test_include_dvdr_on_disk_errors(cache, tmp_path):
 
 @pytest.mark.parametrize("ts", [False, True], ids=["no_ts", "ts"])
 @pytest.mark.parametrize("name", ["rect", "healpix"])
-def test_link_lightcone_file(on_disk, tmp_path, monkeypatch, ts, name):
+def test_link_lightcone_file(on_disk, lightconers, tmp_path, monkeypatch, ts, name):
     """21cmFAST reads the lightcones on disk through the links of one file."""
-    cache, lcs, out = on_disk(ts)
+    cache, out = on_disk(ts, lightconers)
     include_dvdr_on_disk(out / name, cache.inputs)
     path = link_lightcone_file(out / name, cache.inputs)
     assert path == out / f"{name}.h5"
@@ -386,12 +385,12 @@ def test_link_lightcone_file(on_disk, tmp_path, monkeypatch, ts, name):
                 lightcone.lightcones[key], store.lightcone[()]
             )
     np.testing.assert_allclose(
-        lightcone.lightcone_distances, lcs[name].lc_distances, rtol=1e-12
+        lightcone.lightcone_distances, lightconers[name].lc_distances, rtol=1e-12
     )
     assert lightcone.inputs == cache.inputs
     reference = construct_lightcone_from_cache(
         cache,
-        attrs.evolve(lcs[name], quantities=("brightness_temp",)),
+        attrs.evolve(lightconers[name], quantities=("brightness_temp",)),
         global_quantities=("brightness_temp",),
     )
     assert set(lightcone.global_quantities) == {"brightness_temp"} | (

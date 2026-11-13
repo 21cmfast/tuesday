@@ -728,8 +728,6 @@ def make_lightcones_on_disk(
     return paths
 
 
-# --- Finishing the lightcones on disk ------------------------------------------------
-
 #: The name of the brightness-temperature lightcone with the dv/dr correction.
 DVDR = "brightness_temp_dvdr"
 
