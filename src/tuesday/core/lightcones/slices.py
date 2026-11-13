@@ -1,4 +1,4 @@
-"""Make one slice of an angular lightcone from the two boxes around it.
+"""Make one slice of an angular lightcone from the two neighbouring coevals.
 
 A slice of an angular lightcone lies at a distance between those of two simulation
 boxes (coevals). It is the field on a spherical shell of that radius, interpolated in
