@@ -11,9 +11,7 @@ the same slice, to rounding, at a cost set by the number of directions.
 :class:`FastAngularLightconer` makes each slice in whichever of the two ways is
 cheaper (:func:`tuesday.core.lightcones.samples_first`), unless ``tile_first`` says
 which to use. Both ways sample the boxes with cosmotile's slice interpolator
-(:func:`cosmotile.make_lightcone_slice_interpolator`), as 21cmFAST does. The same is
-proposed for 21cmFAST itself (branch ``perf/angular-lightcone-sample-first``, with the
-same ``tile_first`` parameter).
+(:func:`cosmotile.make_lightcone_slice_interpolator`), as 21cmFAST does.
 
 The lightconer can also average each pixel over several directions (sub-samples), so
 that pixels larger than the cells average the field instead of aliasing it. cosmotile
