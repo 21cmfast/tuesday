@@ -406,7 +406,7 @@ def feedback_run(tmp_path_factory) -> SimpleNamespace:
     """Run a tiny coeval with minihalos and reionization feedback (~1 min).
 
     The halo properties then depend on the TsBox and IonizedBox of the previous node
-    redshift, as in EOS26.
+    redshift.
     """
     cache_dir = tmp_path_factory.mktemp("feedback_cache")
     inputs = p21c.InputParameters.from_template(
