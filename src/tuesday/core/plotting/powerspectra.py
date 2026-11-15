@@ -9,6 +9,7 @@ from matplotlib.colors import LogNorm
 from scipy.ndimage import gaussian_filter
 
 from ..summaries import CylindricalPS, SphericalPS
+from .style import with_dark_mode
 
 
 def _log_flags(log: bool | list[bool] | None, n: int) -> list[bool]:
@@ -21,6 +22,7 @@ def _log_flags(log: bool | list[bool] | None, n: int) -> list[bool]:
     return log
 
 
+@with_dark_mode
 def plot_1d_power_spectrum_k(
     power_spectrum: SphericalPS,
     *,
@@ -64,6 +66,10 @@ def plot_1d_power_spectrum_k(
         If True, uses a standard deviation of 1.
     legend_kwargs : dict, optional
         Keyword arguments for the legend. None gives the defaults of matplotlib.
+    dark_mode : bool, optional
+        Whether to draw the plot in dark mode (matplotlib's "dark_background"
+        style). By default, as set by :func:`~tuesday.core.plotting.set_dark_mode`,
+        which is off until it is set.
     """
     if not isinstance(power_spectrum, SphericalPS):
         raise ValueError(  # noqa: TRY004 - ValueError is the tested/public contract here
@@ -104,6 +110,7 @@ def plot_1d_power_spectrum_k(
     return ax
 
 
+@with_dark_mode
 def plot_1d_power_spectrum_z(
     power_spectra: list[SphericalPS],
     at_k: float,
@@ -152,6 +159,10 @@ def plot_1d_power_spectrum_z(
         If True, uses a standard deviation of 1.
     legend_kwargs : dict, optional
         Keyword arguments for the legend. None gives the defaults of matplotlib.
+    dark_mode : bool, optional
+        Whether to draw the plot in dark mode (matplotlib's "dark_background"
+        style). By default, as set by :func:`~tuesday.core.plotting.set_dark_mode`,
+        which is off until it is set.
     """
     for i in range(len(power_spectra)):
         if not isinstance(power_spectra[i], SphericalPS):
@@ -200,6 +211,7 @@ def plot_1d_power_spectrum_z(
     return ax
 
 
+@with_dark_mode
 def plot_2d_power_spectrum(
     power_spectrum: CylindricalPS,
     *,
@@ -249,6 +261,10 @@ def plot_2d_power_spectrum(
     smooth : float, optional
         Standard deviation for Gaussian smoothing.
         Default is False, if True, uses a standard deviation of 1.
+    dark_mode : bool, optional
+        Whether to draw the plot in dark mode (matplotlib's "dark_background"
+        style). By default, as set by :func:`~tuesday.core.plotting.set_dark_mode`,
+        which is off until it is set.
     """
     if not isinstance(power_spectrum, CylindricalPS):
         raise ValueError(  # noqa: TRY004 - ValueError is the tested/public contract here
@@ -311,6 +327,7 @@ def plot_2d_power_spectrum(
     return ax
 
 
+@with_dark_mode
 def plot_power_spectrum(
     power_spectrum: SphericalPS | CylindricalPS | list[SphericalPS],
     *,
@@ -379,6 +396,10 @@ def plot_power_spectrum(
         If True, uses a standard deviation of 1.
     legend_kwargs : dict, optional
         Keyword arguments for the legend on the 1D PS plot.
+    dark_mode : bool, optional
+        Whether to draw the plot in dark mode (matplotlib's "dark_background"
+        style). By default, as set by :func:`~tuesday.core.plotting.set_dark_mode`,
+        which is off until it is set.
     """
     if isinstance(smooth, bool) and smooth:
         smooth = 1.0

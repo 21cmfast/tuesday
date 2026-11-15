@@ -1,6 +1,7 @@
 """A sub-package for typical plotting routines such as power spectra."""
 
 __all__ = [
+    "get_dark_mode",
     "plot_1d_power_spectrum_k",
     "plot_1d_power_spectrum_z",
     "plot_2d_power_spectrum",
@@ -8,6 +9,7 @@ __all__ = [
     "plot_lightcone_slice",
     "plot_pdf",
     "plot_power_spectrum",
+    "set_dark_mode",
 ]
 
 from .powerspectra import (
@@ -17,3 +19,4 @@ from .powerspectra import (
     plot_power_spectrum,
 )
 from .sliceplots import plot_coeval_slice, plot_lightcone_slice, plot_pdf
+from .style import get_dark_mode, set_dark_mode
