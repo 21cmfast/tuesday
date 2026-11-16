@@ -63,17 +63,19 @@ def run(monkeypatch) -> SimpleNamespace:
 
     Each box has an intensity equal to its redshift (times ``scale``), so the
     interpolated lightcone lies between the node values. The seeds passed to
-    ``gen_coeval`` are recorded in ``calls["seeds"]``, and the number of boxes still
-    in memory when each box is built in ``calls["alive"]``.
+    ``gen_coeval`` are recorded in ``calls["seeds"]``, its ``include_unresolved``
+    in ``calls["include_unresolved"]``, and the number of boxes still in memory when
+    each box is built in ``calls["alive"]``.
     """
     inputs, lightconer, lightcone = make_run()
-    calls = {"seeds": [], "scale": 1.0, "alive": []}
+    calls = {"seeds": [], "scale": 1.0, "alive": [], "include_unresolved": []}
     boxes = weakref.WeakSet()
 
     def fake_gen_coeval(z, model, directory_path, seed=None, include_unresolved=False):
         gc.collect()
         calls["alive"].append(len(boxes))
         calls["seeds"].append(seed)
+        calls["include_unresolved"].append(include_unresolved)
         coeval = FakeCoeval(
             redshift=z,
             cosmo_params=inputs.cosmo_params,
@@ -109,6 +111,19 @@ def test_gen_lc_shares_one_generator(run):
     assert len(seeds) == len(NODE_REDSHIFTS)
     assert isinstance(seeds[0], np.random.Generator)
     assert all(seed is seeds[0] for seed in seeds)
+
+
+@pytest.mark.parametrize("include_unresolved", [True, False])
+def test_gen_lc_passes_include_unresolved(run, include_unresolved: bool):
+    gen_lc(
+        run.lightcone,
+        run.lightconer,
+        "Lagache18",
+        "unused",
+        include_unresolved=include_unresolved,
+    )
+
+    assert run.calls["include_unresolved"] == [include_unresolved] * len(NODE_REDSHIFTS)
 
 
 def test_gen_lc_keeps_two_coevals_in_memory(run):

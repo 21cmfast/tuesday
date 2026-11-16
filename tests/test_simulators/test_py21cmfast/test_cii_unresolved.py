@@ -12,7 +12,7 @@ from py21cmfast.io.h5 import read_output_struct
 from py21cmfast.wrapper.cfuncs import convert_halo_properties
 
 from tuesday.core.postprocessing.line_intensities import cii_flux
-from tuesday.simulators.py21cmfast.postprocessing import cii_lightcone
+from tuesday.simulators.py21cmfast.postprocessing import cii_lightcone, cii_unresolved
 from tuesday.simulators.py21cmfast.postprocessing.cii_lightcone import (
     _cic_grid,
     gen_coeval,
@@ -150,7 +150,7 @@ def test_gen_coeval_include_unresolved(subsampler_run):
     )
 
 
-def test_gen_lc_passes_include_unresolved(monkeypatch):
+def test_gen_coeval_list_passes_include_unresolved(monkeypatch):
     calls = []
 
     def fake_gen_coeval(z, model, directory_path, seed=None, include_unresolved=False):
@@ -164,6 +164,52 @@ def test_gen_lc_passes_include_unresolved(monkeypatch):
             lc, "deLooze14", "unused", include_unresolved=True
         )
     assert calls == [True]
+
+
+def test_include_unresolved_keeps_sampled_scatter(subsampler_run, monkeypatch):
+    # The averages over the unresolved halos draw their own random numbers: they
+    # must not advance the generator of the sampled-halo scatter, or the sampled
+    # [CII] of the later node redshifts would change with include_unresolved.
+    def consuming_grid(initial_conditions, z, models, seed=None, **kwargs):
+        np.random.default_rng(seed).standard_normal(1000)
+        n = initial_conditions.inputs.simulation_options.HII_DIM
+        return {model: np.zeros((n, n, n)) for model in models}
+
+    monkeypatch.setattr(cii_lightcone, "grid_unresolved_halos", consuming_grid)
+    lc = SimpleNamespace(inputs=SimpleNamespace(node_redshifts=[7.5, REDSHIFT]))
+    without = cii_lightcone.gen_coeval_list(
+        lc, "deLooze14", subsampler_run.cache_dir, seed=4
+    )
+    with_unresolved = cii_lightcone.gen_coeval_list(
+        lc, "deLooze14", subsampler_run.cache_dir, seed=4, include_unresolved=True
+    )
+
+    for a, b in zip(without, with_unresolved, strict=True):
+        np.testing.assert_array_equal(a.cii_intensity, b.cii_intensity)
+
+
+@pytest.mark.parametrize("model", ["Vallini15", "Horlaville24"])
+def test_metallicity_models_need_ts_fluct(subsampler_run, model: str):
+    # The test run has USE_TS_FLUCT=False, so 21cmFAST gives no metallicities.
+    ic = subsampler_run.cache["InitialConditions"]
+    with pytest.raises(ValueError, match="USE_TS_FLUCT"):
+        grid_unresolved_halos(ic, REDSHIFT, models=[model], seed=0)
+    with pytest.raises(ValueError, match="USE_TS_FLUCT"):
+        mean_halo_properties(
+            fix_cached_inputs(ic.inputs), REDSHIFT, np.array([1e8]), models=[model]
+        )
+
+
+def test_unknown_model_raises_without_unresolved_halos(subsampler_run, monkeypatch):
+    # With no mass range to integrate, the model name must still be checked.
+    monkeypatch.setattr(
+        cii_unresolved, "unresolved_mass_range", lambda inputs: (1e9, 1e8)
+    )
+    ic = subsampler_run.cache["InitialConditions"]
+    with pytest.raises(ValueError, match="Unknown \\[CII\\] model"):
+        unresolved_cell_totals(ic, REDSHIFT, models=["Silva15"], seed=0)
+    totals = unresolved_cell_totals(ic, REDSHIFT, models=["deLooze14"], seed=0)
+    assert not np.any(totals["deLooze14"])
 
 
 def test_mean_cii_without_scatter_matches_power_law():

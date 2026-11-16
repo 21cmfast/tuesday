@@ -51,6 +51,8 @@ from py21cmfast.wrapper.cfuncs import (
 from scipy.stats import norm
 
 from tuesday.core.postprocessing.line_intensities import (
+    CII_MODELS,
+    METALLICITY_MODELS,
     cii_flux,
     cii_luminosity,
     validate_cii_model,
@@ -111,6 +113,18 @@ def _check_supported(inputs: p21c.InputParameters) -> None:
             "The [CII] of halos below the sampler mass is only implemented for "
             f"discrete-halo runs without minihalos: {'; '.join(problems)}."
         )
+
+
+def _validate_models(inputs: p21c.InputParameters, models: Sequence[str]) -> None:
+    """Check the [CII] model names, and that the run gives the halo metallicities."""
+    for model in models:
+        validate_cii_model(model)
+        if model in METALLICITY_MODELS and not inputs.astro_options.USE_TS_FLUCT:
+            raise ValueError(
+                f"The [CII] model '{model}' needs halo metallicities, which 21cmFAST "
+                "only computes when USE_TS_FLUCT=True. Use one of the SFR-only models: "
+                f"{[m for m in CII_MODELS if m not in METALLICITY_MODELS]}."
+            )
 
 
 def unresolved_mass_range(inputs: p21c.InputParameters) -> tuple[float, float]:
@@ -226,9 +240,14 @@ def mean_halo_properties(
     The metallicity, used by the metallicity-dependent models, is that of the
     sampled-halo relation and is not recomputed for the rescaled SFR; the change is
     below a percent.
+
+    Raises
+    ------
+    ValueError
+        If a model is unknown, or needs metallicities and the run was done without
+        ``USE_TS_FLUCT``.
     """
-    for model in models:
-        validate_cii_model(model)
+    _validate_models(inputs, models)
     rng = np.random.default_rng(seed)
     quantiles = (np.arange(n_draws) + 0.5) / n_draws
     star_rng, sfr_rng, xray_rng = (
@@ -316,10 +335,14 @@ def unresolved_cell_totals(
 
     Raises
     ------
+    ValueError
+        If a model is unknown, or needs metallicities and the run was done without
+        ``USE_TS_FLUCT``.
     NotImplementedError
         If the run uses options that are not supported (see the module notes).
     """
     inputs = fix_cached_inputs(initial_conditions.inputs)
+    _validate_models(inputs, models)
     m_min, m_max = unresolved_mass_range(inputs)
     delta = _linear_density(initial_conditions, redshift)
     if m_min >= m_max:
@@ -421,6 +444,14 @@ def grid_unresolved_halos(
         Eulerian grids of the low-resolution shape: ``"halo_mass"`` (Msun),
         ``"sfr"`` (Msun/s), and, for each model, the velocity-integrated [CII]
         flux density in Jy km/s.
+
+    Raises
+    ------
+    ValueError
+        If a model is unknown, or needs metallicities and the run was done without
+        ``USE_TS_FLUCT``.
+    NotImplementedError
+        If the run uses options that are not supported (see the module notes).
     """
     # Imported here: cii_lightcone imports this module.
     from .cii_lightcone import _cic_grid

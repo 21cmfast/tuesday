@@ -130,7 +130,9 @@ def gen_coeval(
         If True, add the [CII] emission of the halos below ``SAMPLER_MIN_MASS``,
         which are not in the ``HaloCatalog``, computed as 21cmFAST computes their
         contribution to the ``HaloBox``; see
-        :func:`~.cii_unresolved.grid_unresolved_halos`.
+        :func:`~.cii_unresolved.grid_unresolved_halos`. Its averages use a child of
+        the generator of ``seed``, so the [CII] of the sampled halos is the same
+        with and without this option.
 
     Returns
     -------
@@ -195,8 +197,10 @@ def gen_coeval(
     positions = perturbed.get("halo_coords")[: perturbed.n_halos] / cell_size
     cii_intensity = _cic_grid(positions, intensity, resolution)
     if include_unresolved:
+        # A child generator: spawning does not advance ``rng``, so the scatter of the
+        # sampled halos at this and later redshifts does not depend on this option.
         cii_intensity += grid_unresolved_halos(
-            initial_conditions, z, models=[model], seed=rng
+            initial_conditions, z, models=[model], seed=rng.spawn(1)[0]
         )[model]
 
     return CIICoeval(
