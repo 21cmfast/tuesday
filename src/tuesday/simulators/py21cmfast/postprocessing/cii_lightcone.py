@@ -27,6 +27,7 @@ from py21cmfast.lightconers import Lightconer
 
 from ..lightcones import construct_lightcone_from_coevals
 from .cii_calculation import calculate_bvoxel, calculate_cii
+from .cii_unresolved import grid_unresolved_halos
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,7 @@ def gen_coeval(
     model: str,
     directory_path: str | Path,
     seed: int | np.random.Generator | None = None,
+    include_unresolved: bool = False,
 ) -> CIICoeval:
     """Build a coeval box with the gridded [CII] emission at one redshift.
 
@@ -124,6 +126,11 @@ def gen_coeval(
     seed : int or np.random.Generator, optional
         Seed or generator for the scatter of the [CII] model. If None, a random
         seed is used.
+    include_unresolved : bool, optional
+        If True, add the [CII] emission of the halos below ``SAMPLER_MIN_MASS``,
+        which are not in the ``HaloCatalog``, computed as 21cmFAST computes their
+        contribution to the ``HaloBox``; see
+        :func:`~.cii_unresolved.grid_unresolved_halos`.
 
     Returns
     -------
@@ -134,6 +141,9 @@ def gen_coeval(
     ------
     ValueError
         If the cache has no ``HaloCatalog`` or ``InitialConditions`` at ``z``.
+    NotImplementedError
+        If ``include_unresolved`` is True for a run with options that
+        :mod:`~.cii_unresolved` does not support.
 
     Notes
     -----
@@ -160,7 +170,8 @@ def gen_coeval(
         )
     halo_catalog = cache_obj["HaloCatalog"]
     initial_conditions = cache_obj["InitialConditions"]
-    _, intensity = calculate_cii(halo_catalog, model, seed=seed)
+    rng = np.random.default_rng(seed)
+    _, intensity = calculate_cii(halo_catalog, model, seed=rng)
 
     # The HaloCatalog holds the Lagrangian halo positions. Move the halos to their
     # Eulerian positions, as 21cmFAST does for the HaloBox. perturb_halo_catalog
@@ -183,6 +194,10 @@ def gen_coeval(
     # matching the output of calculate_cii.
     positions = perturbed.get("halo_coords")[: perturbed.n_halos] / cell_size
     cii_intensity = _cic_grid(positions, intensity, resolution)
+    if include_unresolved:
+        cii_intensity += grid_unresolved_halos(
+            initial_conditions, z, models=[model], seed=rng
+        )[model]
 
     return CIICoeval(
         redshift=z,
@@ -198,6 +213,7 @@ def gen_coeval_list(
     model: str,
     directory_path: str | Path,
     seed: int | np.random.Generator | None = None,
+    include_unresolved: bool = False,
 ) -> list[CIICoeval]:
     """Build [CII] coeval boxes at all node redshifts of a lightcone.
 
@@ -213,6 +229,9 @@ def gen_coeval_list(
         Seed or generator for the scatter of the [CII] model. A single generator is
         shared by all redshifts, so their scatter is independent. If None, a random
         seed is used.
+    include_unresolved : bool, optional
+        If True, add the [CII] emission of the halos below ``SAMPLER_MIN_MASS``;
+        see :func:`gen_coeval`.
 
     Returns
     -------
@@ -223,7 +242,15 @@ def gen_coeval_list(
     coeval_list = []
     for z in lc.inputs.node_redshifts:
         logger.info("Building the [CII] coeval box at z=%.3f", z)
-        coeval_list.append(gen_coeval(z, model, directory_path, seed=rng))
+        coeval_list.append(
+            gen_coeval(
+                z,
+                model,
+                directory_path,
+                seed=rng,
+                include_unresolved=include_unresolved,
+            )
+        )
     return coeval_list
 
 
@@ -233,6 +260,7 @@ def gen_lc(
     model: str,
     directory_path: str | Path,
     seed: int | np.random.Generator | None = None,
+    include_unresolved: bool = False,
 ) -> p21c.LightCone:
     """Build a [CII] surface-brightness lightcone from a 21cmFAST run.
 
@@ -259,6 +287,9 @@ def gen_lc(
     seed : int or np.random.Generator, optional
         Seed or generator for the scatter of the [CII] model, shared by all
         redshifts. If None, a random seed is used.
+    include_unresolved : bool, optional
+        If True, add the [CII] emission of the halos below ``SAMPLER_MIN_MASS``;
+        see :func:`gen_coeval`.
 
     Returns
     -------
@@ -284,7 +315,13 @@ def gen_lc(
     def cii_coevals() -> Iterator[CIICoeval]:
         for z in lc.inputs.node_redshifts:
             logger.info("Building the [CII] coeval box at z=%.3f", z)
-            coeval = gen_coeval(z, model, directory_path, seed=rng)
+            coeval = gen_coeval(
+                z,
+                model,
+                directory_path,
+                seed=rng,
+                include_unresolved=include_unresolved,
+            )
             # Only the gridded [CII] field is interpolated; drop the initial
             # conditions and halo box read from the cache so that they can be freed.
             coeval.initial_conditions = None

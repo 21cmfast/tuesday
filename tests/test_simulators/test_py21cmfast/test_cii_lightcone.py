@@ -70,7 +70,7 @@ def run(monkeypatch) -> SimpleNamespace:
     calls = {"seeds": [], "scale": 1.0, "alive": []}
     boxes = weakref.WeakSet()
 
-    def fake_gen_coeval(z, model, directory_path, seed=None):
+    def fake_gen_coeval(z, model, directory_path, seed=None, include_unresolved=False):
         gc.collect()
         calls["alive"].append(len(boxes))
         calls["seeds"].append(seed)
