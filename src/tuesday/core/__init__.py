@@ -29,7 +29,9 @@ __all__ = [
     "plot_1d_power_spectrum_k",
     "plot_1d_power_spectrum_z",
     "plot_2d_power_spectrum",
+    "plot_angular_lightcone_slice",
     "plot_coeval_slice",
+    "plot_healpix_map",
     "plot_lightcone_slice",
     "plot_pdf",
     "plot_power_spectrum",
@@ -55,6 +57,11 @@ from .instrument_models.noise import (
     observe_lightcone,
     sample_from_rms_uvgrid,
     taper2d,
+)
+from .plotting.angular import (
+    eor_colormap,
+    plot_angular_lightcone_slice,
+    plot_healpix_map,
 )
 from .plotting.powerspectra import (
     plot_1d_power_spectrum_k,
