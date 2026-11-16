@@ -18,7 +18,12 @@ from astropy.units import Quantity
 from py21cmfast.drivers.lightcone import LightCone, setup_lightcone_instance
 from py21cmfast.io import read_output_struct
 from py21cmfast.io.caching import RunCache
-from py21cmfast.lightconers import AngularLightconer, Lightconer
+from py21cmfast.lightconers import (
+    CoevalSnapshot,
+    LightconerProtocol,
+    context_from_inputs,
+    prepare_lightconer,
+)
 from py21cmfast.rsds import apply_rsds, include_dvdr_in_tau21
 from py21cmfast.wrapper import outputs
 from py21cmfast.wrapper.inputs import InputParameters
@@ -31,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 def construct_lightcone_from_cache(
     cache: RunCache,
-    lightconer: Lightconer,
+    lightconer: LightconerProtocol,
     global_quantities: Sequence[str] = (),
     apply_rsds: bool = False,
     include_dvdr_in_tau21: bool = False,
@@ -39,10 +44,10 @@ def construct_lightcone_from_cache(
 ) -> LightCone:
     """Construct a lightcone from a cached coeval simulation run.
 
-    This function takes a RunCache object, a Lightconer object, and a list of global
+    This function takes a RunCache object, a lightconer, and a list of global
     quantities, and constructs a lightcone by iterating through the redshifts in the
     cache. It retrieves coeval boxes from the cache, extracts global quantities, and
-    uses the Lightconer to generate lightcone slices.
+    uses the lightconer to generate lightcone slices.
 
     Parameters
     ----------
@@ -81,13 +86,17 @@ def construct_lightcone_from_cache(
     inputs = cache.inputs
     node_redshifts = sorted(cache.BrightnessTemp.keys(), reverse=True)
 
-    # The requested distances, before validate_options extends them for RSDs.
+    # The requested distances, before the lightcone is extended for RSDs.
     lc_distances = lightconer.lc_distances.copy()
-    # validate_options returns the lightconer to use: it adds the los_velocity and
+    # prepare_lightconer returns the lightconer to use: it adds the los_velocity and
     # tau_21 quantities that the dv/dr correction and the RSDs need.
-    lightconer = lightconer.validate_options(
-        cache.inputs, apply_rsds=apply_rsds, include_dvdr_in_tau21=include_dvdr_in_tau21
+    lightconer = prepare_lightconer(
+        lightconer,
+        inputs=cache.inputs,
+        apply_rsds=apply_rsds,
+        include_dvdr_in_tau21=include_dvdr_in_tau21,
     )
+    session = lightconer.start(context_from_inputs(inputs, node_redshifts))
 
     # Create the LightCone instance, loading from file if needed
     lightcone = setup_lightcone_instance(
@@ -97,6 +106,7 @@ def construct_lightcone_from_cache(
         include_dvdr_in_tau21=include_dvdr_in_tau21,
         apply_rsds=apply_rsds,
         photon_nonconservation_data={},
+        shape=session.shape,
     )
 
     lightcone._last_completed_node = -1
@@ -108,7 +118,6 @@ def construct_lightcone_from_cache(
         - 1
     )
 
-    prev_coeval = None
     for iz, z in enumerate(node_redshifts):
         # Here we read all the boxes that we might need, without actually reading
         # any data.
@@ -129,15 +138,12 @@ def construct_lightcone_from_cache(
                     getattr(coeval, quantity)
                 )
 
-        # Get lightcone slices
-        if prev_coeval is not None:
-            for quantity, idx, this_lc in lightconer.make_lightcone_slices(
-                coeval, prev_coeval
-            ):
-                if this_lc is not None:
-                    lightcone.lightcones[quantity][..., idx] = this_lc
+        # Get the parts of the lightcone that can be made with this box.
+        for quantity, index, values in session.ingest(CoevalSnapshot(coeval)):
+            lightcone.lightcones[quantity][index] = values
 
-        prev_coeval = coeval
+    for quantity, index, values in session.finish():
+        lightcone.lightcones[quantity][index] = values
 
     # Apply the dv/dr correction and RSDs, and trim the RSD buffer, with the method
     # that run_lightcone calls at its last node (private in 21cmFAST 4.3).
@@ -156,27 +162,27 @@ def construct_lightcone_from_cache(
 
 def construct_lightcone_from_coevals(
     coevals: Iterable[Any],
-    lightconer: Lightconer,
+    lightconer: LightconerProtocol,
     inputs: InputParameters,
     node_redshifts: Sequence[float] | None = None,
 ) -> LightCone:
     """Construct a Lightcone by interpolating a sequence of coeval boxes.
 
-    Each pair of consecutive boxes is interpolated onto the lightcone with
-    :meth:`~py21cmfast.lightconers.Lightconer.make_lightcone_slices`, as in
-    :func:`py21cmfast.run_lightcone`. The boxes do not need to be 21cmFAST
-    :class:`~py21cmfast.Coeval` objects, nor to be stored on disk.
+    The boxes are passed one at a time to the lightconer, which makes the lightcone
+    out of them, as in :func:`py21cmfast.run_lightcone`. The boxes do not need to be
+    21cmFAST :class:`~py21cmfast.Coeval` objects, nor to be stored on disk.
 
-    ``coevals`` is iterated once, and only the current and previous boxes are
-    referenced, so if it is a generator that builds each box when it is requested,
-    at most two boxes are in memory at a time.
+    ``coevals`` is iterated once, and only the boxes that the lightconer keeps are
+    referenced (the current and the previous one, for the lightconers of tuesday
+    and 21cmFAST), so if it is a generator that builds each box when it is
+    requested, no more boxes than that are in memory at a time.
 
     Parameters
     ----------
     coevals
         The coeval boxes, in order of decreasing redshift. Each must have the
-        attributes ``redshift``, ``simulation_options`` and ``cosmo_params``, and
-        one attribute per quantity of ``lightconer``.
+        attribute ``redshift``, and one attribute per field that the lightconer
+        needs (``lightconer.required_fields()``).
     lightconer
         The object used to generate lightcone slices.
     inputs
@@ -198,7 +204,10 @@ def construct_lightcone_from_coevals(
         node_redshifts = inputs.node_redshifts
     node_redshifts = sorted(node_redshifts, reverse=True)
 
-    lightconer.validate_options(inputs, apply_rsds=False, include_dvdr_in_tau21=False)
+    prepare_lightconer(
+        lightconer, inputs=inputs, apply_rsds=False, include_dvdr_in_tau21=False
+    )
+    session = lightconer.start(context_from_inputs(inputs, node_redshifts))
 
     # Create the LightCone instance, loading from file if needed
     lightcone = setup_lightcone_instance(
@@ -208,6 +217,7 @@ def construct_lightcone_from_coevals(
         photon_nonconservation_data={},
         include_dvdr_in_tau21=False,
         apply_rsds=False,
+        shape=session.shape,
     )
 
     lightcone._last_completed_node = -1
@@ -219,24 +229,18 @@ def construct_lightcone_from_coevals(
         - 1
     )
 
-    prev_box = None
     for box in coevals:
-        # Get lightcone slices
-        if prev_box is not None:
-            for quantity, idx, this_lc in lightconer.make_lightcone_slices(
-                box, prev_box
-            ):
-                if this_lc is not None:
-                    lightcone.lightcones[quantity][..., idx] = this_lc
-
-        prev_box = box
+        for quantity, index, values in session.ingest(CoevalSnapshot(box)):
+            lightcone.lightcones[quantity][index] = values
+    for quantity, index, values in session.finish():
+        lightcone.lightcones[quantity][index] = values
 
     return lightcone
 
 
 def construct_lightcone_from_filelist(
     filelist: Sequence[Path],
-    lightconer: Lightconer,
+    lightconer: LightconerProtocol,
 ) -> LightCone:
     """Construct a Lightcone from a list of OutputStruct files.
 
@@ -256,16 +260,11 @@ def construct_lightcone_from_filelist(
 
     def as_coevals() -> Iterator[SimpleNamespace]:
         for box in boxes:
-            # This hacks an OutputStruct to look like a Coeval, which has all the
-            # boxes defined directly as attributes. Later versions
-            # of 21cmFAST will not require this.
-            _box = SimpleNamespace()
-            _box.__dict__.update(box.__dict__)
-            _box.simulation_options = box.inputs.simulation_options
-            _box.cosmo_params = box.inputs.cosmo_params
-            for q in lightconer.quantities:
-                setattr(_box, q, box.get(q))
-            yield _box
+            # An OutputStruct with the fields as attributes, like a Coeval.
+            yield SimpleNamespace(
+                redshift=box.redshift,
+                **{f: box.get(f) for f in lightconer.required_fields()},
+            )
 
     return construct_lightcone_from_coevals(
         as_coevals(),
@@ -408,7 +407,7 @@ def _serialise(value: Any) -> Any:
     return value
 
 
-def lightconer_metadata(lightconer: Lightconer) -> dict[str, Any]:
+def lightconer_metadata(lightconer: LightconerProtocol) -> dict[str, Any]:
     """Describe a lightconer by values that HDF5 can store as attributes.
 
     The description holds the class of the lightconer and each of its options that
@@ -440,46 +439,33 @@ def lightconer_metadata(lightconer: Lightconer) -> dict[str, Any]:
     return out
 
 
-def _with_quantities(lightconer: Lightconer, quantities: Sequence[str]) -> Lightconer:
-    """Return the lightconer, making only the given quantities.
-
-    21cmFAST makes the ``los_velocity`` slices together with those of the first
-    quantity, so ``los_velocity`` cannot be first. If it is the only quantity,
-    ``velocity_z`` is made first.
-    """
-    quantities = list(quantities)
-    if quantities[0] == "los_velocity":
-        if len(quantities) == 1:
-            quantities.insert(0, "velocity_z")
-        else:
-            quantities.append(quantities.pop(0))
-    return attrs.evolve(lightconer, quantities=tuple(quantities))
+def _with_quantities(
+    lightconer: LightconerProtocol, quantities: Sequence[str]
+) -> LightconerProtocol:
+    """Return the lightconer, making only the given quantities."""
+    return lightconer.evolve(quantities=tuple(quantities))
 
 
-def _fields_of(lightconer: Lightconer) -> list[str]:
+def _fields_of(lightconer: LightconerProtocol) -> list[str]:
     """Return the coeval fields that a lightconer's slices are made from."""
-    fields = [q for q in lightconer.quantities if q != "los_velocity"]
-    if "los_velocity" in lightconer.quantities:
-        if isinstance(lightconer, AngularLightconer):
-            fields += ["velocity_x", "velocity_y", "velocity_z"]
-        else:
-            fields.append("velocity_z")
-    return list(dict.fromkeys(fields))
+    return list(lightconer.required_fields())
 
 
 def _slices_by_interval(
-    lightconer: Lightconer, inputs: InputParameters, node_redshifts: Sequence[float]
+    lightconer: LightconerProtocol,
+    inputs: InputParameters,
+    node_redshifts: Sequence[float],
 ) -> list[np.ndarray]:
     """Return the indices of the slices between each pair of consecutive nodes.
 
-    These are the slices that ``lightconer.make_lightcone_slices`` makes from the
+    These are the slices that a lightconer of tuesday or 21cmFAST makes from the
     boxes at the two node redshifts.
     """
     cell = inputs.simulation_options.cell_size
     pixeleq = units.pixel_scale(cell / units.pixel)
     nodes = inputs.cosmo_params.cosmo.comoving_distance(np.asarray(node_redshifts))
     nodes = nodes.to_value(units.pixel, equivalencies=pixeleq)
-    slices = lightconer.get_lc_distances_in_pixels(cell).to_value(units.pixel)
+    slices = lightconer.lc_distances.to_value(units.pixel, equivalencies=pixeleq)
     out = []
     for d1, d2 in itertools.pairwise(nodes):
         dmin, dmax = min(d1, d2), max(d1, d2)
@@ -540,16 +526,34 @@ def _runs(index: Iterable[int]) -> Iterator[tuple[int, int]]:
 
 
 def _fill_interval(
-    lightconer: Lightconer,
+    lightconer: LightconerProtocol,
     stores: Mapping[str, LightconeStore],
     low: SimpleNamespace,
     high: SimpleNamespace,
+    inputs: InputParameters,
 ) -> None:
-    """Write the slices between two boxes into the stores of each quantity."""
+    """Write the slices between two boxes into the stores of each quantity.
+
+    The slices are made by a new session of the lightconer, which is given the two
+    boxes only. This is right for lightconers that make each slice from the two
+    boxes around it (like those of tuesday and 21cmFAST).
+    """
+    context = context_from_inputs(inputs, node_redshifts=(high.redshift, low.redshift))
+    session = lightconer.start(context)
+    if session.resume_depth != 1:
+        raise NotImplementedError(
+            "Lightcones can only be made on disk by lightconers that make each slice "
+            "from the two boxes around it."
+        )
+    chunks = [
+        chunk for box in (high, low) for chunk in session.ingest(CoevalSnapshot(box))
+    ]
+    chunks.extend(session.finish())
+
     values = {q: {} for q in stores}
-    for q, idx, this_lc in lightconer.make_lightcone_slices(low, high):
-        if this_lc is not None and q in values:
-            values[q][int(idx)] = this_lc
+    for q, index, this_lc in chunks:
+        if q in values:
+            values[q][int(index[-1])] = this_lc
     for q, by_index in values.items():
         for start, stop in _runs(by_index):
             block = np.stack([by_index[k] for k in range(start, stop)], axis=-1)
@@ -557,7 +561,7 @@ def _fill_interval(
 
 
 def make_lightcones_on_disk(
-    lightconers: Mapping[str, Lightconer],
+    lightconers: Mapping[str, LightconerProtocol],
     quantities: str | Sequence[str],
     source: CachedFields | RunCache,
     out_dir: str | Path,
@@ -570,7 +574,8 @@ def make_lightcones_on_disk(
     The lightcones are made in one pass over the node redshifts, from high to low
     redshift, as :func:`py21cmfast.run_lightcone` makes them. At each node redshift,
     only the fields that the lightcones need are read. The slices between two node
-    redshifts are made by each lightconer's ``make_lightcone_slices``, so they are
+    redshifts are made by each lightconer (by a session that is given the two
+    boxes), so they are
     those of :func:`py21cmfast.run_lightcone` (before the dv/dr correction and RSDs).
 
     Each lightcone of each quantity is written to its own file,
@@ -636,8 +641,8 @@ def make_lightcones_on_disk(
     makers = {}
     for name, lightconer in lightconers.items():
         makers[name] = _with_quantities(lightconer, quantities)
-        makers[name].validate_options(
-            inputs, include_dvdr_in_tau21=False, apply_rsds=False
+        prepare_lightconer(
+            makers[name], inputs=inputs, include_dvdr_in_tau21=False, apply_rsds=False
         )
     fields = list(dict.fromkeys(f for lc in makers.values() for f in _fields_of(lc)))
     for field in fields:
@@ -687,7 +692,7 @@ def make_lightcones_on_disk(
                 stores[name][q] = LightconeStore.open_or_create(
                     path,
                     quantity=q,
-                    shape=lightconer.get_shape(inputs.simulation_options),
+                    shape=lightconer.start(context_from_inputs(inputs, nodes)).shape,
                     distances=lightconer.lc_distances,
                     redshifts=lightconer.lc_redshifts,
                     node_redshifts=nodes,
@@ -710,7 +715,11 @@ def make_lightcones_on_disk(
                     )
             for name in names:
                 _fill_interval(
-                    makers[name], stores[name], boxes[interval + 1], boxes[interval]
+                    makers[name],
+                    stores[name],
+                    boxes[interval + 1],
+                    boxes[interval],
+                    inputs,
                 )
                 for store in stores[name].values():
                     store.mark_done(interval)
@@ -882,8 +891,11 @@ def include_dvdr_on_disk(
 
 
 def rsd_lightconer(
-    lightconer: Lightconer, inputs: InputParameters, *, classy_output: Any = None
-) -> Lightconer:
+    lightconer: LightconerProtocol,
+    inputs: InputParameters,
+    *,
+    classy_output: Any = None,
+) -> LightconerProtocol:
     """Return a lightconer extended to the distances that the RSDs need.
 
     RSDs move the field along the line of sight, so the slices near the ends of a
@@ -891,7 +903,7 @@ def rsd_lightconer(
     with ``apply_rsds=True`` therefore makes the lightcone on more distances, applies
     the RSDs and trims the result to the requested distances. This returns the
     lightconer of those distances (from
-    :meth:`~py21cmfast.lightconers.Lightconer.validate_options`, which estimates
+    :func:`py21cmfast.lightconers.prepare_lightconer`, which estimates
     them from the rms velocity given by CLASS), with the quantities of
     ``lightconer``. Its slices are one cell apart.
 
@@ -911,7 +923,7 @@ def rsd_lightconer(
 
     Returns
     -------
-    Lightconer
+    LightconerProtocol
         The lightconer of the extended distances.
 
     Raises
@@ -919,13 +931,14 @@ def rsd_lightconer(
     ValueError
         If the node redshifts do not extend far enough beyond the lightcone.
     """
-    extended = lightconer.validate_options(
-        inputs,
+    extended = prepare_lightconer(
+        lightconer,
+        inputs=inputs,
         include_dvdr_in_tau21=False,
         apply_rsds=True,
         classy_output=classy_output,
     )
-    return attrs.evolve(extended, quantities=lightconer.quantities)
+    return extended.evolve(quantities=lightconer.quantities)
 
 
 def apply_rsds_on_disk(

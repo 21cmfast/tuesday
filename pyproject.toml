@@ -160,6 +160,11 @@ property-decorators = [
 [tool.ruff.lint.mccabe]
 max-complexity = 21
 
+# TODO: remove once the 21cmFAST release with the lightconer protocol is out, and
+# require that release in the "21cmfast" extra instead.
+[tool.uv.sources]
+21cmfast = { git = "https://github.com/21cmfast/21cmFAST", branch = "claude/practical-meitner-qd0qop" }
+
 [[tool.uv.index]]
 name = "ska-nexus"
 url = "https://artefact.skao.int/repository/pypi-internal/simple"

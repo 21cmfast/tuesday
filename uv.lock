@@ -10,8 +10,8 @@ resolution-markers = [
 
 [[package]]
 name = "21cmfast"
-version = "4.3.2"
-source = { registry = "https://pypi.org/simple" }
+version = "4.3.3.dev1+geaf04975f"
+source = { git = "https://github.com/21cmfast/21cmFAST?branch=claude%2Fpractical-meitner-qd0qop#eaf04975f62855e4fbf0649c27a5306e09ee6e53" }
 dependencies = [
     { name = "astropy" },
     { name = "attrs" },
@@ -32,7 +32,6 @@ dependencies = [
     { name = "tomlkit" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a6/83/154c09b07540c299b0f7b5c55eb73c639d0d8d0b0c80eec441c61333a31d/21cmfast-4.3.2.tar.gz", hash = "sha256:1db0d884d5584c09562056306bd1acf53153f7f9a767782496990106f65c591b", size = 50265872, upload-time = "2026-11-13T09:09:25.207Z" }
 
 [[package]]
 name = "21cmsense"
@@ -1834,10 +1833,10 @@ resolution-markers = [
     "python_full_version >= '3.14'",
 ]
 dependencies = [
-    { name = "numpy", marker = "python_full_version >= '3.14'" },
-    { name = "python-dateutil", marker = "python_full_version >= '3.14'" },
-    { name = "pytz", marker = "python_full_version >= '3.14'" },
-    { name = "tzdata", marker = "python_full_version >= '3.14'" },
+    { name = "numpy" },
+    { name = "python-dateutil" },
+    { name = "pytz" },
+    { name = "tzdata" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/33/01/d40b85317f86cf08d853a4f495195c73815fdf205eef3993821720274518/pandas-2.3.3.tar.gz", hash = "sha256:e05e1af93b977f7eafa636d043f9f94c7ee3ac81af99c13508215942e64c993b", size = 4495223, upload-time = "2025-09-29T23:34:51.853Z" }
 wheels = [
@@ -1886,9 +1885,9 @@ resolution-markers = [
     "python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "numpy", marker = "python_full_version < '3.14'" },
-    { name = "python-dateutil", marker = "python_full_version < '3.14'" },
-    { name = "tzdata", marker = "(python_full_version < '3.14' and sys_platform == 'emscripten') or (python_full_version < '3.14' and sys_platform == 'win32')" },
+    { name = "numpy" },
+    { name = "python-dateutil" },
+    { name = "tzdata", marker = "sys_platform == 'emscripten' or sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/2e/0c/b28ed414f080ee0ad153f848586d61d1878f91689950f037f976ce15f6c8/pandas-3.0.1.tar.gz", hash = "sha256:4186a699674af418f655dbd420ed87f50d56b4cd6603784279d9eef6627823c8", size = 4641901, upload-time = "2026-02-17T22:20:16.434Z" }
 wheels = [
@@ -1960,7 +1959,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ptyprocess", marker = "(python_full_version >= '3.14' and sys_platform == 'emscripten') or (python_full_version >= '3.14' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32')" },
+    { name = "ptyprocess" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
@@ -2425,15 +2424,15 @@ resolution-markers = [
     "python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "astropy", marker = "python_full_version < '3.14'" },
-    { name = "docstring-parser", marker = "python_full_version < '3.14'" },
-    { name = "h5py", marker = "python_full_version < '3.14'" },
-    { name = "numba", marker = "python_full_version < '3.14'" },
-    { name = "numpy", marker = "python_full_version < '3.14'" },
-    { name = "pyerfa", marker = "python_full_version < '3.14'" },
-    { name = "pyyaml", marker = "python_full_version < '3.14'" },
-    { name = "scipy", marker = "python_full_version < '3.14'" },
-    { name = "setuptools-scm", marker = "python_full_version < '3.14'" },
+    { name = "astropy" },
+    { name = "docstring-parser" },
+    { name = "h5py" },
+    { name = "numba" },
+    { name = "numpy" },
+    { name = "pyerfa" },
+    { name = "pyyaml" },
+    { name = "scipy" },
+    { name = "setuptools-scm" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d6/d4/58408ab3fc31c785e0b6bfcb19fada21f37bc9f30577341a36ca22f5bd2d/pyuvdata-3.2.4.tar.gz", hash = "sha256:efeb571baa8d028dfed4ab8bfcfd68670e0a457b4552d3b3f0671549b7a0a108", size = 11723111, upload-time = "2025-09-15T19:45:15.133Z" }
 wheels = [
@@ -2455,15 +2454,15 @@ resolution-markers = [
     "python_full_version >= '3.14'",
 ]
 dependencies = [
-    { name = "astropy", marker = "python_full_version >= '3.14'" },
-    { name = "docstring-parser", marker = "python_full_version >= '3.14'" },
-    { name = "h5py", marker = "python_full_version >= '3.14'" },
-    { name = "numba", marker = "python_full_version >= '3.14'" },
-    { name = "numpy", marker = "python_full_version >= '3.14'" },
-    { name = "pyerfa", marker = "python_full_version >= '3.14'" },
-    { name = "pyyaml", marker = "python_full_version >= '3.14'" },
-    { name = "scipy", marker = "python_full_version >= '3.14'" },
-    { name = "setuptools-scm", marker = "python_full_version >= '3.14'" },
+    { name = "astropy" },
+    { name = "docstring-parser" },
+    { name = "h5py" },
+    { name = "numba" },
+    { name = "numpy" },
+    { name = "pyerfa" },
+    { name = "pyyaml" },
+    { name = "scipy" },
+    { name = "setuptools-scm" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/df/1f/eefd1b3f951c54af5fa41a5c2c51ebe6488d16d8db702272a2157a987c6c/pyuvdata-3.2.6.tar.gz", hash = "sha256:94eca423e0a2ee8bfe41638d4c3e80af6d367ba81ee767264f03f5a368fe7fa6", size = 11797139, upload-time = "2026-04-13T20:00:30.183Z" }
 wheels = [
@@ -2576,7 +2575,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "rpds-py" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or python_full_version >= '4'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/22/f5/df4e9027acead3ecc63e50fe1e36aca1523e1719559c499951bb4b53188f/referencing-0.37.0.tar.gz", hash = "sha256:44aefc3142c5b842538163acb373e24cce6632bd54bdb01b21ad5863489f50d8", size = 78036, upload-time = "2025-10-13T15:30:48.871Z" }
 wheels = [
@@ -3426,7 +3425,7 @@ tests = [
 
 [package.metadata]
 requires-dist = [
-    { name = "21cmfast", marker = "extra == '21cmfast'", specifier = ">=4.3.2" },
+    { name = "21cmfast", marker = "extra == '21cmfast'", git = "https://github.com/21cmfast/21cmFAST?branch=claude%2Fpractical-meitner-qd0qop" },
     { name = "21cmsense", specifier = ">=3.0.0" },
     { name = "astropy", specifier = ">=6.0" },
     { name = "astropy-healpix", specifier = ">=1.0" },

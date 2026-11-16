@@ -10,12 +10,13 @@ from py21cmfast import AngularLightconer, InputParameters, RectilinearLightconer
 from py21cmfast.drivers.lightcone import AngularLightcone, LightCone
 from py21cmfast.io import h5
 from py21cmfast.io.caching import OutputCache, RunCache
+from py21cmfast.lightconers import prepare_lightconer
 from py21cmfast.wrapper import outputs
 from py21cmfast.wrapper.classy_interface import run_classy
 from scipy.spatial.transform import Rotation
 
+from tuesday.core.lightcones import AngularLightconer as HealpixLightconer
 from tuesday.core.lightcones import LightconeStore
-from tuesday.simulators.py21cmfast.lightconers import FastAngularLightconer
 from tuesday.simulators.py21cmfast.lightcones import (
     DVDR,
     CachedFields,
@@ -85,13 +86,14 @@ def lightconers(cache: RunCache) -> dict:
         "min_redshift": 6.2,
         "max_redshift": 9.8,
         "resolution": options.cell_size,
+        "cosmo": cache.inputs.cosmo_params.cosmo,
     }
     return {
         "rect": RectilinearLightconer.between_redshifts(**between),
         "angular": AngularLightconer.like_rectilinear(
             simulation_options=options, max_redshift=9.5, match_at_z=6.5
         ),
-        "healpix": FastAngularLightconer.healpix(nside=2, subsample_level=1, **between),
+        "healpix": HealpixLightconer.healpix(nside=2, subsample_level=1, **between),
     }
 
 
@@ -258,14 +260,14 @@ def test_lightconer_metadata(cache, lightconers):
         "line_of_sight_axis": lcs["rect"].line_of_sight_axis,
     }
     hp = lightconer_metadata(lcs["healpix"])
-    assert hp["lightconer"].endswith("FastAngularLightconer")
+    assert hp["lightconer"] == "tuesday.core.lightcones.lightconers.AngularLightconer"
     assert hp["latitude"].startswith("sha256:")
     assert hp["n_subsamples"] == 4
     assert hp["rotation"] == "None"
     assert "tile_first" not in hp
     faster = attrs.evolve(lcs["healpix"], tile_first=True)
     assert same_metadata(lightconer_metadata(faster), hp)
-    other = FastAngularLightconer.healpix(
+    other = HealpixLightconer.healpix(
         nside=2,
         subsample_level=1,
         order="nested",
@@ -493,8 +495,8 @@ def test_rsd_lightconer(cache, lightconers):
     """The distances of run_lightcone with RSDs, with the same quantities."""
     lightconer = attrs.evolve(lightconers["rect"], quantities=("density",))
     extended = rsd_lightconer(lightconer, cache.inputs)
-    reference = lightconer.validate_options(
-        cache.inputs, include_dvdr_in_tau21=False, apply_rsds=True
+    reference = prepare_lightconer(
+        lightconer, inputs=cache.inputs, include_dvdr_in_tau21=False, apply_rsds=True
     )
     np.testing.assert_array_equal(extended.lc_distances, reference.lc_distances)
     assert extended.quantities == ("density",)
