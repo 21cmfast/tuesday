@@ -19,6 +19,7 @@ __all__ = [
     "convert_half_to_full_uv_plane",
     "cosmology",
     "cylindrical_to_spherical",
+    "eor_colormap",
     "get_dark_mode",
     "horizon_limit",
     "instrument_models",

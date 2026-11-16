@@ -1,6 +1,7 @@
 """A sub-package for typical plotting routines such as power spectra."""
 
 __all__ = [
+    "eor_colormap",
     "get_dark_mode",
     "plot_1d_power_spectrum_k",
     "plot_1d_power_spectrum_z",
