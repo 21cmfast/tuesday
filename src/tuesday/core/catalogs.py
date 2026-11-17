@@ -7,52 +7,71 @@ densities need, and their redshift. Functions that work on catalogues take a
 :class:`Catalog` and the name of the feature to use, e.g.
 :func:`tuesday.core.summaries.bin_number_density`.
 
+The data are kept in an astropy :class:`~astropy.table.QTable`, which
+:meth:`Catalog.to_table` returns and :meth:`Catalog.from_table` reads.
+
 A catalogue does not depend on any simulation code; see
 :mod:`tuesday.simulators.py21cmfast.catalogs` for making one from a 21cmFAST halo
 catalogue.
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 
 import numpy as np
 from astropy import units as un
+from astropy.table import QTable, Table
 
 from .units import without_littleh
 
+#: Name of the column of the positions in the table of a catalogue.
+POSITION_COLUMN = "position"
 
-@dataclass(frozen=True, eq=False)
+
 class Catalog:
     """A catalogue of objects with 3D positions and features.
 
-    The catalogue is immutable: :meth:`with_features` and :meth:`select` return new
-    catalogues. The arrays are not copied, so they share memory with the arrays
-    given.
+    The data are stored in an astropy :class:`~astropy.table.QTable`, with the
+    positions in the column :data:`POSITION_COLUMN`, one column per feature, and the
+    volume and redshift in its ``meta``. The catalogue is immutable:
+    :meth:`with_features` and :meth:`select` return new catalogues. The arrays are not
+    copied, so they share memory with the arrays given.
 
-    Attributes
+    Parameters
     ----------
     positions : un.Quantity
         Position of each object, a length of shape ``(n, 3)`` (e.g. comoving Mpc).
-    features : Mapping[str, un.Quantity]
+    features : Mapping[str, un.Quantity], optional
         Features of the objects by name, each a Quantity whose first axis has length
         ``n``. Features without a unit are dimensionless Quantities (e.g.
-        ``un.dimensionless_unscaled``), or magnitudes in ``un.mag``.
+        ``un.dimensionless_unscaled``), or magnitudes in ``un.mag``. No feature may be
+        called :data:`POSITION_COLUMN`.
     volume : un.Quantity, optional
         The volume that contains the objects, e.g. that of the simulation box: a single
         finite, positive value. Needed for number densities.
     redshift : float, optional
         Redshift of the objects, if they are all at one redshift (e.g. a coeval box).
+
+    Raises
+    ------
+    ValueError
+        If the positions are not a length of shape ``(n, 3)``, a feature does not
+        have one value per object or is called :data:`POSITION_COLUMN`, or the volume
+        is not a single finite, positive volume.
+    TypeError
+        If a feature is not a Quantity.
     """
 
-    positions: un.Quantity
-    features: Mapping[str, un.Quantity] = field(default_factory=dict)
-    volume: un.Quantity | None = None
-    redshift: float | None = None
+    __slots__ = ("_table",)
 
-    def __post_init__(self):
-        """Validate the positions, features and volume."""
-        positions = self.positions
+    def __init__(
+        self,
+        positions: un.Quantity,
+        features: Mapping[str, un.Quantity] | None = None,
+        volume: un.Quantity | None = None,
+        redshift: float | None = None,
+    ):
+        features = dict(features or {})
         if (
             not isinstance(positions, un.Quantity)
             or without_littleh(positions.unit).physical_type != "length"
@@ -63,7 +82,12 @@ class Catalog:
                 f"positions must have shape (n, 3), got {positions.shape}."
             )
         n_objects = positions.shape[0]
-        for name, value in self.features.items():
+        if POSITION_COLUMN in features:
+            raise ValueError(
+                f"No feature may be called '{POSITION_COLUMN}', the column of the "
+                "positions."
+            )
+        for name, value in features.items():
             if not isinstance(value, un.Quantity):
                 raise TypeError(
                     f"Feature '{name}' must be an astropy Quantity; use "
@@ -74,7 +98,6 @@ class Catalog:
                     f"Feature '{name}' has shape {value.shape}, but the catalogue "
                     f"has {n_objects} objects."
                 )
-        volume = self.volume
         if volume is not None:
             if not isinstance(volume, un.Quantity):
                 raise ValueError(
@@ -88,21 +111,57 @@ class Catalog:
                 raise ValueError(
                     f"volume must be a single finite, positive value, got {volume}."
                 )
-        object.__setattr__(self, "features", MappingProxyType(dict(self.features)))
+        self._table = QTable(
+            {POSITION_COLUMN: positions, **features},
+            meta={"volume": volume, "redshift": redshift},
+            copy=False,
+        )
+
+    @property
+    def positions(self) -> un.Quantity:
+        """Position of each object, of shape ``(n, 3)``."""
+        return self._table[POSITION_COLUMN]
+
+    @property
+    def features(self) -> Mapping[str, un.Quantity]:
+        """Features of the objects by name (read-only)."""
+        return MappingProxyType(
+            {
+                name: self._table[name]
+                for name in self._table.colnames
+                if name != POSITION_COLUMN
+            }
+        )
+
+    @property
+    def volume(self) -> un.Quantity | None:
+        """The volume that contains the objects."""
+        return self._table.meta["volume"]
+
+    @property
+    def redshift(self) -> float | None:
+        """Redshift of the objects."""
+        return self._table.meta["redshift"]
 
     def __len__(self) -> int:
         """Return the number of objects."""
-        return self.positions.shape[0]
+        return len(self._table)
 
     def __getitem__(self, name: str) -> un.Quantity:
         """Return one feature of the objects."""
-        try:
-            return self.features[name]
-        except KeyError:
+        if name == POSITION_COLUMN or name not in self._table.colnames:
             raise KeyError(
                 f"The catalogue has no feature '{name}'; its features are "
                 f"{list(self.features)}."
-            ) from None
+            )
+        return self._table[name]
+
+    def __repr__(self) -> str:
+        """Return a short description of the catalogue."""
+        return (
+            f"<Catalog of {len(self)} objects, features {list(self.features)}, "
+            f"volume {self.volume}, redshift {self.redshift}>"
+        )
 
     def with_features(self, **features: un.Quantity) -> "Catalog":
         """Return a catalogue with features added or replaced.
@@ -118,7 +177,12 @@ class Catalog:
         Catalog
             A new catalogue with the same positions, volume and redshift.
         """
-        return replace(self, features={**self.features, **features})
+        return Catalog(
+            self.positions,
+            {**self.features, **features},
+            volume=self.volume,
+            redshift=self.redshift,
+        )
 
     def select(self, mask: np.ndarray, volume: un.Quantity | None = None) -> "Catalog":
         """Return a catalogue of some of the objects.
@@ -139,9 +203,58 @@ class Catalog:
         Catalog
             A new catalogue with the selected objects and the same redshift.
         """
-        return replace(
-            self,
-            positions=self.positions[mask],
-            features={name: value[mask] for name, value in self.features.items()},
+        return Catalog(
+            self.positions[mask],
+            {name: value[mask] for name, value in self.features.items()},
             volume=self.volume if volume is None else volume,
+            redshift=self.redshift,
+        )
+
+    def to_table(self) -> QTable:
+        """Return the catalogue as an astropy QTable.
+
+        Returns
+        -------
+        QTable
+            A table with the positions in the column :data:`POSITION_COLUMN`, one
+            column per feature, and ``meta["volume"]`` and ``meta["redshift"]``. It is
+            a new table, but its columns share memory with the catalogue.
+        """
+        return self._table.copy(copy_data=False)
+
+    @classmethod
+    def from_table(cls, table: Table) -> "Catalog":
+        """Make a catalogue from an astropy table.
+
+        Parameters
+        ----------
+        table : Table or QTable
+            A table with a column :data:`POSITION_COLUMN` of shape ``(n, 3)`` with a
+            unit of length, and a column with a unit for each feature. The volume and
+            redshift are read from ``meta["volume"]`` and ``meta["redshift"]``, if
+            there.
+
+        Returns
+        -------
+        Catalog
+            The catalogue. Its columns share memory with the table.
+
+        Raises
+        ------
+        ValueError
+            If the table has no column :data:`POSITION_COLUMN`, or as for
+            :class:`Catalog`.
+        TypeError
+            If a column has no unit.
+        """
+        table = QTable(table, copy=False)
+        if POSITION_COLUMN not in table.colnames:
+            raise ValueError(
+                f"The table has no column '{POSITION_COLUMN}' with the positions."
+            )
+        return cls(
+            table[POSITION_COLUMN],
+            {name: table[name] for name in table.colnames if name != POSITION_COLUMN},
+            volume=table.meta.get("volume"),
+            redshift=table.meta.get("redshift"),
         )

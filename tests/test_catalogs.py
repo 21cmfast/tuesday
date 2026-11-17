@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from astropy import units as un
 from astropy.cosmology.units import littleh
+from astropy.table import QTable, Table
 
 from tuesday.core import Catalog
 
@@ -52,6 +53,35 @@ def test_features_are_read_only(catalog):
         catalog.features["sfr"] = np.ones(N) * un.Msun / un.yr
     with pytest.raises(AttributeError):
         catalog.volume = 1 * un.Mpc**3
+    with pytest.raises(AttributeError):
+        catalog.other = 1
+
+
+def test_arrays_are_not_copied():
+    positions = np.zeros((N, 3), dtype=np.float32) * un.Mpc
+    mass = np.ones(N, dtype=np.float32) * un.Msun
+    catalog = Catalog(positions=positions, features={"mass": mass})
+    assert np.shares_memory(catalog.positions, positions)
+    assert np.shares_memory(catalog["mass"], mass)
+    assert catalog["mass"].dtype == np.float32
+
+
+def test_positions_are_not_a_feature(catalog):
+    assert "position" not in catalog.features
+    with pytest.raises(KeyError, match="no feature 'position'"):
+        catalog["position"]
+    with pytest.raises(ValueError, match="No feature may be called 'position'"):
+        Catalog(
+            positions=np.zeros((N, 3)) * un.Mpc,
+            features={"position": np.zeros((N, 3)) * un.Mpc},
+        )
+
+
+def test_repr(catalog):
+    assert repr(catalog) == (
+        "<Catalog of 5 objects, features ['mass', 'spin'], volume 1000.0 Mpc3, "
+        "redshift 7.0>"
+    )
 
 
 def test_given_features_dict_is_not_used(catalog):
@@ -140,9 +170,10 @@ def test_with_features(catalog):
     new = catalog.with_features(sfr=sfr, mass=2 * catalog["mass"])
     assert set(new.features) == {"mass", "spin", "sfr"}
     np.testing.assert_allclose(new["mass"], 2 * catalog["mass"])
-    assert new["sfr"] is sfr
-    assert new.positions is catalog.positions
-    assert new.volume is catalog.volume
+    # The arrays are not copied.
+    assert np.shares_memory(new["sfr"], sfr)
+    assert np.shares_memory(new.positions, catalog.positions)
+    assert new.volume == catalog.volume
     assert new.redshift == catalog.redshift
     # The original catalogue is unchanged.
     assert set(catalog.features) == {"mass", "spin"}
@@ -167,3 +198,50 @@ def test_select_region(catalog):
     slab = catalog.select(np.array([0, 1]), volume=(5 * un.Mpc) ** 3)
     assert len(slab) == 2
     assert slab.volume == 125 * un.Mpc**3
+
+
+def test_to_table(catalog):
+    table = catalog.to_table()
+    assert isinstance(table, QTable)
+    assert table.colnames == ["position", "mass", "spin"]
+    assert table.meta == {"volume": catalog.volume, "redshift": 7.0}
+    assert np.shares_memory(table["mass"], catalog["mass"])
+    # Changing the table does not change the catalogue.
+    table["sfr"] = np.ones(N) * un.Msun / un.yr
+    table.meta["redshift"] = 8.0
+    assert "sfr" not in catalog.features
+    assert catalog.redshift == 7.0
+
+
+def test_from_table(catalog):
+    new = Catalog.from_table(catalog.to_table())
+    np.testing.assert_array_equal(new.positions, catalog.positions)
+    assert set(new.features) == {"mass", "spin"}
+    np.testing.assert_array_equal(new["mass"], catalog["mass"])
+    assert new.volume == catalog.volume
+    assert new.redshift == catalog.redshift
+    assert np.shares_memory(new["mass"], catalog["mass"])
+
+
+def test_from_plain_table():
+    table = Table(
+        {
+            "position": np.zeros((N, 3)) * un.Mpc,
+            "mass": np.ones(N) * un.Msun,
+        }
+    )
+    catalog = Catalog.from_table(table)
+    assert catalog["mass"].unit == un.Msun
+    assert catalog.volume is None
+    assert catalog.redshift is None
+
+
+def test_from_table_needs_positions():
+    with pytest.raises(ValueError, match="no column 'position'"):
+        Catalog.from_table(QTable({"mass": np.ones(N) * un.Msun}))
+
+
+def test_from_table_needs_units():
+    table = QTable({"position": np.zeros((N, 3)) * un.Mpc, "id": np.arange(N)})
+    with pytest.raises(TypeError, match="'id' must be an astropy Quantity"):
+        Catalog.from_table(table)
