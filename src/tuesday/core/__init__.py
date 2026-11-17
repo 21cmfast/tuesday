@@ -1,10 +1,12 @@
 """Core routines for analysing EoR simulations."""
 
 __all__ = [
+    "BinnedNumberDensity",
     "CylindricalPS",
     "SphericalPS",
     "apply_beam",
     "bin_kpar",
+    "bin_number_density",
     "calculate_ps",
     "calculate_ps_coeval",
     "calculate_ps_lc",
@@ -41,8 +43,11 @@ __all__ = [
     "redshift_interpolator",
     "sample_from_rms_uvgrid",
     "set_dark_mode",
+    "sfr_to_uv_magnitude",
     "summaries",
     "taper2d",
+    "uv_luminosity_function",
+    "uv_luminosity_to_magnitude",
     "validate",
 ]
 from . import cosmology, instrument_models, plotting, summaries
@@ -82,6 +87,13 @@ from .plotting.sliceplots import (
     plot_redshift_slice,
 )
 from .plotting.style import get_dark_mode, set_dark_mode
+from .summaries.luminosity_functions import (
+    BinnedNumberDensity,
+    bin_number_density,
+    sfr_to_uv_magnitude,
+    uv_luminosity_function,
+    uv_luminosity_to_magnitude,
+)
 from .summaries.powerspectra import (
     bin_kpar,
     calculate_ps,
