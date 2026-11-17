@@ -1,5 +1,6 @@
 """Tests of the [CII] emission of halos below the 21cmFAST sampler mass."""
 
+import functools
 from types import SimpleNamespace
 
 import numpy as np
@@ -117,13 +118,15 @@ def test_unresolved_sfr_matches_emissivity_fields(subsampler_run):
         REDSHIFT,
         models=[],
         inputs=subsampler_run.inputs,
+        seed=0,
     )
 
-    # The halos below the sampler contribute a sizeable part of the SFR here.
+    # The halos below the sampler contribute a sizeable part of the SFR here. The
+    # Monte Carlo means are accurate to about a tenth of a percent.
     assert expected.sum() > 0.01 * total
-    np.testing.assert_allclose(grids["sfr"].sum(), expected.sum(), rtol=5e-4)
+    np.testing.assert_allclose(grids["sfr"].sum(), expected.sum(), rtol=2e-3)
     np.testing.assert_allclose(
-        grids["sfr"], expected, rtol=2e-3, atol=1e-4 * expected.max()
+        grids["sfr"], expected, rtol=1e-2, atol=1e-3 * expected.max()
     )
 
 
@@ -131,8 +134,8 @@ def test_unresolved_halo_mass_is_conserved(subsampler_run):
     # The CHMF integral of the halo mass, moved and gridded with cloud-in-cell,
     # keeps the total mass of the Lagrangian cells.
     ic, inputs = subsampler_run.initial_conditions, subsampler_run.inputs
-    grids = grid_unresolved_halos(ic, REDSHIFT, models=[], inputs=inputs)
-    per_cell = unresolved_cell_totals(ic, REDSHIFT, models=[], inputs=inputs)[
+    grids = grid_unresolved_halos(ic, REDSHIFT, models=[], inputs=inputs, seed=0)
+    per_cell = unresolved_cell_totals(ic, REDSHIFT, models=[], inputs=inputs, seed=0)[
         "halo_mass"
     ]
 
@@ -152,6 +155,8 @@ def test_gen_coeval_include_unresolved(subsampler_run):
         REDSHIFT,
         models=["deLooze14"],
         inputs=subsampler_run.inputs,
+        # The child generator that gen_coeval spawns from its seed.
+        seed=np.random.default_rng(4).spawn(1)[0],
     )["deLooze14"]
 
     assert unresolved.sum() > 0
@@ -193,11 +198,14 @@ def test_gen_coeval_list_passes_include_unresolved(monkeypatch):
     assert calls == [True]
 
 
-def test_include_unresolved_keeps_sampled_scatter(subsampler_run):
-    # The averages over the unresolved halos draw no random numbers, so the scatter
-    # of the sampled halos, drawn from one generator for all node redshifts, is the
-    # same with and without include_unresolved: the difference at every node is the
-    # unresolved [CII] alone.
+def test_include_unresolved_keeps_sampled_scatter(subsampler_run, monkeypatch):
+    # The averages over the unresolved halos use child generators of the generator
+    # shared by all node redshifts. Spawning does not advance it, so the scatter of
+    # the sampled halos is the same with and without include_unresolved: the
+    # difference at every node is the unresolved [CII] alone.
+    # Fewer draws per mass, to keep the test short.
+    fast_grid = functools.partial(grid_unresolved_halos, n_draws=2_000)
+    monkeypatch.setattr(cii_lightcone, "grid_unresolved_halos", fast_grid)
     lc = SimpleNamespace(inputs=subsampler_run.inputs)
     without = cii_lightcone.gen_coeval_list(
         lc, "deLooze14", subsampler_run.cache_dir, seed=4
@@ -207,12 +215,15 @@ def test_include_unresolved_keeps_sampled_scatter(subsampler_run):
     )
 
     assert len(without) > 1
-    for a, b in zip(without, with_unresolved, strict=True):
-        unresolved = grid_unresolved_halos(
+    # gen_coeval spawns one child per node redshift, in order.
+    children = np.random.default_rng(4).spawn(len(without))
+    for a, b, child in zip(without, with_unresolved, children, strict=True):
+        unresolved = fast_grid(
             subsampler_run.initial_conditions,
             a.redshift,
             models=["deLooze14"],
             inputs=subsampler_run.inputs,
+            seed=child,
         )["deLooze14"]
         np.testing.assert_allclose(
             b.cii_intensity - a.cii_intensity,
@@ -252,7 +263,9 @@ def test_mean_cii_without_scatter_matches_power_law():
         "latest-discrete", random_seed=1
     ).evolve_input_structs(SIGMA_STAR=0.0, SIGMA_SFR_LIM=0.0, SIGMA_SFR_INDEX=0.0)
     masses = np.array([3e8, 1e9])
-    means = mean_halo_properties(inputs, REDSHIFT, masses, models=["deLooze14"])
+    means = mean_halo_properties(
+        inputs, REDSHIFT, masses, models=["deLooze14"], n_draws=200_000, seed=1
+    )
 
     sfr_yr = (means["sfr"] * un.Msun / un.s).to_value(un.Msun / un.yr)
     expected = 10**7.10 * sfr_yr**1.05 * np.exp((0.4 * np.log(10)) ** 2 / 2)
@@ -265,7 +278,9 @@ def test_halos_without_star_formation_do_not_emit(model: str):
     # Far below the turnover mass, 21cmFAST's float32 SFR is zero; the log of the
     # SFR in the [CII] relations must not turn the mean luminosity into NaN.
     inputs = p21c.InputParameters.from_template("latest-discrete", random_seed=1)
-    means = mean_halo_properties(inputs, REDSHIFT, np.array([1e6, 1e9]), models=[model])
+    means = mean_halo_properties(
+        inputs, REDSHIFT, np.array([1e6, 1e9]), models=[model], seed=1
+    )
     assert means["sfr"][0] == 0
     assert means[model][0] == 0
     assert means[model][1] > 0
@@ -278,14 +293,17 @@ def test_mean_sfr_is_the_integrals_relation():
     inputs = p21c.InputParameters.from_template("latest-discrete", random_seed=1)
     ap = inputs.astro_params.cdict
     masses = np.array([1e8, 1e9])
-    means = mean_halo_properties(inputs, REDSHIFT, masses, models=[])
+    means = mean_halo_properties(inputs, REDSHIFT, masses, models=[], seed=1)
 
     fstar = ap["F_STAR10_ACG"] * (masses / 1e10) ** ap["ALPHA_STAR_ACG"]
     fstar *= np.exp(-ap["M_TURN_STELLAR_FEEDBACK"] / masses)
     cosmo = inputs.cosmo_params
     hubble_time = (1 / cosmo.cosmo.H(REDSHIFT)).to_value(un.s)
     expected = fstar * cosmo.OMb / cosmo.OMm * masses / (ap["t_STAR"] * hubble_time)
-    np.testing.assert_allclose(means["sfr"], expected, rtol=5e-3)
+    # The SFR scatter of the smallest halos is wide (about 0.8 dex at 1e8 Msun), and
+    # the 1e5 stratified draws miss its far tail, which carries part of the mean:
+    # the Monte Carlo mean is low by about 1.5% at 1e8 Msun and 0.3% at 1e9 Msun.
+    np.testing.assert_allclose(means["sfr"], expected, rtol=2e-2)
 
 
 def test_integral_stellar_ratio():
@@ -341,8 +359,12 @@ def test_cii_flux_of_unresolved_grid(subsampler_run):
     # The [CII] grid is the flux of the gridded luminosity: compare the box total
     # with the CHMF-weighted luminosity integrated over the Lagrangian cells.
     ic, inputs = subsampler_run.initial_conditions, subsampler_run.inputs
-    grids = grid_unresolved_halos(ic, REDSHIFT, models=["Lagache18"], inputs=inputs)
-    per_cell = unresolved_cell_totals(ic, REDSHIFT, models=["Lagache18"], inputs=inputs)
+    grids = grid_unresolved_halos(
+        ic, REDSHIFT, models=["Lagache18"], inputs=inputs, seed=0
+    )
+    per_cell = unresolved_cell_totals(
+        ic, REDSHIFT, models=["Lagache18"], inputs=inputs, seed=0
+    )
     luminosity = per_cell["Lagache18"].sum() * un.Lsun
 
     np.testing.assert_allclose(

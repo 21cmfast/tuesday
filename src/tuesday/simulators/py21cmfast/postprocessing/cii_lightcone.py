@@ -198,9 +198,9 @@ def gen_coeval(
         If True, add the [CII] emission of the halos below ``SAMPLER_MIN_MASS``,
         which are not in the ``HaloCatalog``, computed as 21cmFAST computes their
         contribution to the ``EmissivityFields``; see
-        :func:`~.cii_unresolved.grid_unresolved_halos`. Its averages are computed
-        by quadrature and draw no random numbers, so the [CII] of the sampled halos
-        is the same with and without this option.
+        :func:`~.cii_unresolved.grid_unresolved_halos`. Its averages use a child of
+        the generator of ``seed``, so the [CII] of the sampled halos is the same
+        with and without this option.
 
     Returns
     -------
@@ -279,7 +279,8 @@ def gen_coeval(
             f"Perturbing the {halo_catalog.n_halos} halos at z={z} returned "
             f"{perturbed.n_halos} halos."
         )
-    _, intensity = calculate_cii(perturbed, model, seed=seed)
+    rng = np.random.default_rng(seed)
+    _, intensity = calculate_cii(perturbed, model, seed=rng)
 
     resolution = inputs.simulation_options.HII_DIM
     cell_size = inputs.simulation_options.BOX_LEN / resolution
@@ -288,8 +289,14 @@ def gen_coeval(
     positions = perturbed.get("halo_coords")[: perturbed.n_halos] / cell_size
     cii_intensity = _cic_grid(positions, intensity, resolution)
     if include_unresolved:
+        # A child generator: spawning does not advance ``rng``, so the scatter of the
+        # sampled halos at this and later redshifts does not depend on this option.
         cii_intensity += grid_unresolved_halos(
-            initial_conditions, z, models=[model], inputs=inputs
+            initial_conditions,
+            z,
+            models=[model],
+            inputs=inputs,
+            seed=rng.spawn(1)[0],
         )[model]
 
     emissivity_fields = _cached_path(run, "EmissivityFields", z)
