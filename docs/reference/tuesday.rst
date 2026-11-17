@@ -21,6 +21,14 @@ Plotting
 
     tuesday.core.plotting
 
+Catalogues
+----------
+.. autosummary::
+    :toctree: _autosummary
+    :template: module.rst
+
+    tuesday.core.catalogs
+
 Summary statistics
 ------------------
 .. autosummary::

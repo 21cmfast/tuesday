@@ -2,6 +2,7 @@
 
 __all__ = [
     "BinnedNumberDensity",
+    "Catalog",
     "CylindricalPS",
     "SphericalPS",
     "apply_beam",
@@ -10,6 +11,7 @@ __all__ = [
     "calculate_ps",
     "calculate_ps_coeval",
     "calculate_ps_lc",
+    "catalogs",
     "coeval2slice_x",
     "coeval2slice_y",
     "coeval2slice_z",
@@ -50,7 +52,8 @@ __all__ = [
     "uv_luminosity_to_magnitude",
     "validate",
 ]
-from . import cosmology, instrument_models, plotting, summaries
+from . import catalogs, cosmology, instrument_models, plotting, summaries
+from .catalogs import Catalog
 from .cosmology import comoving_distance_to_redshift, redshift_interpolator
 from .instrument_models.noise import (
     apply_beam,
