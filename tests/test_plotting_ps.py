@@ -137,3 +137,33 @@ def test_2d_ps_plot(ps2d):
 
     with pytest.raises(ValueError, match="power_spectrum must be a CylindricalPS"):
         plot_2d_power_spectrum(np.linspace(0, 10, 10))  # Not a dataclass
+
+
+def test_ps_plot_defaults(ps1d, ps2d):
+    """The axes, log scales and legend keywords may be left out."""
+    ax = plot_1d_power_spectrum_k(ps1d, legend="z = 6")
+    assert (ax.get_xscale(), ax.get_yscale()) == ("linear", "linear")
+    assert ax.get_legend() is not None
+
+    ax = plot_1d_power_spectrum_z([ps1d, ps1d], 1.0, legend="k = 1", log=True)
+    assert (ax.get_xscale(), ax.get_yscale()) == ("log", "log")
+    assert ax.get_legend() is not None
+
+    ax = plot_2d_power_spectrum(ps2d, log=[True, False, False])
+    assert (ax.get_xscale(), ax.get_yscale()) == ("log", "linear")
+
+    with pytest.raises(ValueError, match="log must be a bool or a list of 2 bools"):
+        plot_1d_power_spectrum_k(ps1d, log=[True])
+    plt.close("all")
+
+
+def test_2d_ps_plot_limits_and_colour_bar(ps2d):
+    """Given limits are used, and the colour bar takes room from the given axes."""
+    _, (left, right) = plt.subplots(1, 2)
+    plt.sca(right)
+    before = right.get_position().bounds
+    ax = plot_2d_power_spectrum(ps2d, ax=left, vmin=0.1, vmax=0.2)
+    assert ax.collections[0].get_clim() == (0.1, 0.2)
+    assert right.get_position().bounds == before
+    assert left.get_position().width < right.get_position().width
+    plt.close("all")

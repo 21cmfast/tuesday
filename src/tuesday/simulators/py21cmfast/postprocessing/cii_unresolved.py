@@ -2,9 +2,10 @@ r"""[CII] emission of the halos below the 21cmFAST sampler mass.
 
 With discrete halos (``SOURCE_MODEL='CHMF-SAMPLER'``), 21cmFAST samples halos only
 above ``SAMPLER_MIN_MASS``. The halos below it are not in the ``HaloCatalog``, but
-21cmFAST still adds their star formation to the ``HaloBox``, and hence to the 21-cm
+21cmFAST still adds their emission to the ``EmissivityFields``, and hence to the 21-cm
 signal, by integrating the conditional halo mass function (CHMF) of each cell
-(``HaloBox.c: set_fixed_grids``, ``map_mass.c: move_grid_galprops``):
+(``EmissivityFields.c: add_integral_contribution``,
+``map_mass.c: move_integral_emissivities``):
 
 1. On the Lagrangian low-resolution grid, the linear density of each cell,
    ``delta = lowres_density * D(z)``, sets the CHMF of a region of the cell mass.
@@ -18,7 +19,7 @@ This module does the same with the mean [CII] luminosity of a halo,
 ``<L_CII>(M)``, in place of its mean SFR, so that the [CII] emission of these
 halos is consistent with the 21-cm signal of the run. Because ``L_CII`` is a
 nonlinear function of the SFR, with scatter, it cannot be computed from the gridded
-SFR of the ``HaloBox``; it is averaged halo by halo, inside the integral:
+SFR of the ``EmissivityFields``; it is averaged halo by halo, inside the integral:
 
 .. math::
 
@@ -32,97 +33,74 @@ and over the scatter of the [CII] model, with the same 21cmFAST relations as for
 sampled halos (:func:`py21cmfast.wrapper.cfuncs.convert_halo_properties`), except
 for the stellar fraction (see :func:`integral_stellar_ratio`).
 
-Only runs without minihalos, with ``M_MIN_in_Mass``, without
-``PERTURB_ON_HIGH_RES`` and with mean (not median) scaling relations are supported.
+Only runs without minihalos (``USE_MCGS``), without reionization feedback on the
+turnover mass (``USE_REIONIZATION_PHOTOHEATING_FEEDBACK``), with ``M_MIN_in_Mass``,
+without ``PERTURB_ON_HIGH_RES``, with cubic boxes and with mean (not median) scaling
+relations are supported. (21cmFAST itself allows only the Sheth-Tormen and
+Press-Schechter mass functions for discrete halos, for which it does not rescale the
+integrated emission to a global mean.)
 """
 
 from collections.abc import Sequence
 
-import attrs
 import numpy as np
 import py21cmfast as p21c
 from astropy import units as un
+from numpy.polynomial.hermite_e import hermegauss
 from py21cmfast.c_21cmfast import lib
+from py21cmfast.drivers._global_initialization import c_state
 from py21cmfast.wrapper.cfuncs import (
-    broadcast_input_struct,
     convert_halo_properties,
     integrate_chmf_interval,
 )
-from scipy.stats import norm
 
 from tuesday.core.postprocessing.line_intensities import (
     CII_MODELS,
     METALLICITY_MODELS,
     cii_flux,
     cii_luminosity,
+    halo_metallicity,
     validate_cii_model,
 )
 
 
-def fix_cached_inputs(inputs: p21c.InputParameters) -> p21c.InputParameters:
-    """Work around a 21cmFAST bug in input parameters read from an HDF5 cache.
-
-    In 21cmFAST 4.1, ``cosmo_tables.USE_SIGMA_8`` of inputs read back from a cache
-    file is a ``numpy.bool_``. ``CosmoTables.cstruct`` only copies ``float`` and
-    ``bool`` values to the C struct, so the flag is left False and the power
-    spectrum is normalised with ``ps_norm`` (sigma_8) as if it were A_s: sigma(M),
-    and every CHMF integral, are then nearly zero.
-
-    Parameters
-    ----------
-    inputs : py21cmfast.InputParameters
-        Input parameters, possibly read from a cache file.
-
-    Returns
-    -------
-    py21cmfast.InputParameters
-        The same parameters, with ``cosmo_tables.USE_SIGMA_8`` a Python ``bool``
-        and ``ps_norm`` a Python ``float``.
-    """
-    tables = inputs.cosmo_tables
-    if tables.USE_SIGMA_8 is None:
-        return inputs
-    return attrs.evolve(
-        inputs,
-        cosmo_tables=attrs.evolve(
-            tables,
-            ps_norm=float(tables.ps_norm),
-            USE_SIGMA_8=bool(tables.USE_SIGMA_8),
-        ),
-    )
-
-
 def _check_supported(inputs: p21c.InputParameters) -> None:
     """Raise if the run uses options that are not implemented here."""
-    mo, ao = inputs.matter_options, inputs.astro_options
+    so, mo, ao = inputs.simulation_options, inputs.matter_options, inputs.astro_options
     unsupported = {
         "SOURCE_MODEL must be 'CHMF-SAMPLER'": mo.SOURCE_MODEL != "CHMF-SAMPLER",
-        "USE_MINI_HALOS is not supported": ao.USE_MINI_HALOS,
+        "USE_MCGS (minihalos) is not supported": ao.USE_MCGS,
+        # The turnover mass of each cell would then depend on the IonizedBox of the
+        # previous node redshift.
+        "USE_REIONIZATION_PHOTOHEATING_FEEDBACK is not supported": (
+            ao.USE_REIONIZATION_PHOTOHEATING_FEEDBACK
+        ),
         "M_MIN_in_Mass=False is not supported": not ao.M_MIN_in_Mass,
         "PERTURB_ON_HIGH_RES is not supported": mo.PERTURB_ON_HIGH_RES,
+        "NON_CUBIC_FACTOR != 1 is not supported": so.NON_CUBIC_FACTOR != 1,
         "HALO_SCALING_RELATIONS_MEDIAN is not supported": (
             ao.HALO_SCALING_RELATIONS_MEDIAN
         ),
-        # 21cmFAST rescales the integrated grids to the global mean for these.
-        "HMF 'WATSON' and 'WATSON-Z' are not supported": mo.HMF
-        in ("WATSON", "WATSON-Z"),
     }
     problems = [message for message, bad in unsupported.items() if bad]
     if problems:
         raise NotImplementedError(
             "The [CII] of halos below the sampler mass is only implemented for "
-            f"discrete-halo runs without minihalos: {'; '.join(problems)}."
+            "discrete-halo runs without minihalos or reionization feedback: "
+            f"{'; '.join(problems)}."
         )
 
 
 def _validate_models(inputs: p21c.InputParameters, models: Sequence[str]) -> None:
-    """Check the [CII] model names, and that the run gives the halo metallicities."""
+    """Check the [CII] model names, and that the run models halo metallicities."""
+    ao = inputs.astro_options
     for model in models:
         validate_cii_model(model)
-        if model in METALLICITY_MODELS and not inputs.astro_options.USE_TS_FLUCT:
+        if model in METALLICITY_MODELS and not (ao.USE_TS_FLUCT and ao.USE_METALLICITY):
             raise ValueError(
                 f"The [CII] model '{model}' needs halo metallicities, which 21cmFAST "
-                "only computes when USE_TS_FLUCT=True. Use one of the SFR-only models: "
+                "only models when USE_TS_FLUCT=True and USE_METALLICITY=True. Use one "
+                "of the SFR-only models: "
                 f"{[m for m in CII_MODELS if m not in METALLICITY_MODELS]}."
             )
 
@@ -131,8 +109,9 @@ def unresolved_mass_range(inputs: p21c.InputParameters) -> tuple[float, float]:
     """Mass range of the halos that 21cmFAST integrates instead of sampling.
 
     The lower limit is ``minimum_source_mass`` of 21cmFAST (``hmf.c``), which is
-    not exposed to Python: ``M_TURN / 50`` for discrete halos without minihalos and
-    with ``M_MIN_in_Mass``. The upper limit is ``SAMPLER_MIN_MASS``.
+    not exposed to Python: ``M_TURN_STELLAR_FEEDBACK / 50`` for discrete halos
+    without minihalos and with ``M_MIN_in_Mass``. The upper limit is
+    ``SAMPLER_MIN_MASS``.
 
     Parameters
     ----------
@@ -150,7 +129,7 @@ def unresolved_mass_range(inputs: p21c.InputParameters) -> tuple[float, float]:
         If the run uses options that are not supported (see the module notes).
     """
     _check_supported(inputs)
-    m_min = 10**inputs.astro_params.M_TURN / 50.0
+    m_min = inputs.astro_params.cdict["M_TURN_STELLAR_FEEDBACK"] / 50.0
     return m_min, inputs.simulation_options.SAMPLER_MIN_MASS
 
 
@@ -160,14 +139,14 @@ def integral_stellar_ratio(
     """Ratio of the stellar fraction of the 21cmFAST integrals to that of halos.
 
     With ``USE_UPPER_STELLAR_TURNOVER``, the stellar fraction of sampled halos
-    (``get_halo_stellarmass``) is the double power law
-    ``F_STAR10 * r / ((M / Mp)^-ALPHA_STAR + (M / Mp)^-ALPHA_UPPER)``, with
-    ``r = (Mp / 1e10)^ALPHA_STAR + (Mp / 1e10)^ALPHA_UPPER``, but the CHMF integrals
-    of the ``HaloBox`` (``hmf.c``) use the single power law
-    ``F_STAR10 * (M / 1e10)^ALPHA_STAR``. Below the pivot ``Mp`` the double power
-    law is higher by ``1 + (Mp / 1e10)^(ALPHA_UPPER - ALPHA_STAR)``, about 2.5% for
-    the default parameters. Multiplying the stellar mass (and hence the SFR) of a
-    halo by this ratio reproduces the integrals.
+    (``get_halo_stellar_mass``) is the double power law
+    ``F_STAR10_ACG * r / ((M / Mp)^-ALPHA_STAR_ACG + (M / Mp)^-ALPHA_UPPER)``, with
+    ``r = (Mp / 1e10)^ALPHA_STAR_ACG + (Mp / 1e10)^ALPHA_UPPER``, but the CHMF
+    integrals of the ``EmissivityFields`` (``hmf.c``) use the single power law
+    ``F_STAR10_ACG * (M / 1e10)^ALPHA_STAR_ACG``. Below the pivot ``Mp`` the double
+    power law is higher by ``1 + (Mp / 1e10)^(ALPHA_UPPER - ALPHA_STAR_ACG)``, about
+    2.5% for the default parameters. Multiplying the stellar mass (and hence the SFR)
+    of a halo by this ratio reproduces the integrals.
 
     Parameters
     ----------
@@ -181,12 +160,12 @@ def integral_stellar_ratio(
     np.ndarray
         The ratio at each mass; one if the single power law is used for halos too.
     """
-    ap = inputs.astro_params
-    alpha, alpha_upper = ap.ALPHA_STAR, ap.UPPER_STELLAR_TURNOVER_INDEX
+    ap = inputs.astro_params.cdict
+    alpha, alpha_upper = ap["ALPHA_STAR_ACG"], ap["UPPER_STELLAR_TURNOVER_INDEX"]
     masses = np.asarray(masses, dtype=float)
     if not inputs.astro_options.USE_UPPER_STELLAR_TURNOVER or alpha <= alpha_upper:
         return np.ones_like(masses)
-    pivot = 10**ap.UPPER_STELLAR_TURNOVER_MASS
+    pivot = ap["UPPER_STELLAR_TURNOVER_MASS"]
     norm_ratio = (pivot / 1e10) ** alpha + (pivot / 1e10) ** alpha_upper
     double = norm_ratio / (
         (masses / pivot) ** -alpha + (masses / pivot) ** -alpha_upper
@@ -194,24 +173,57 @@ def integral_stellar_ratio(
     return (masses / 1e10) ** alpha / double
 
 
+class _QuadratureNormals(np.random.Generator):
+    """A generator whose ``standard_normal`` returns given quadrature nodes.
+
+    Every [CII] model draws its scatter with a single call of
+    ``rng.standard_normal(n)``, one deviate per halo. Passing this generator as the
+    seed of :func:`~tuesday.core.postprocessing.line_intensities.cii_luminosity`
+    evaluates the model at the nodes of a Gauss-Hermite rule instead.
+    """
+
+    def __init__(self, nodes: np.ndarray):
+        super().__init__(np.random.PCG64(0))
+        self._nodes = nodes
+
+    def standard_normal(self, size=None, dtype=np.float64, out=None) -> np.ndarray:
+        """Return the nodes; ``size`` must be their number."""
+        if size != len(self._nodes) or out is not None:
+            raise RuntimeError(
+                "A [CII] model drew its scatter other than with one "
+                "standard_normal(n_halos) call, which the quadrature assumes."
+            )
+        return self._nodes.astype(dtype)
+
+
+def _gauss_hermite(n_nodes: int) -> tuple[np.ndarray, np.ndarray]:
+    """Nodes and normalised weights of the Gauss-Hermite rule for a unit normal."""
+    nodes, weights = hermegauss(n_nodes)
+    return nodes, weights / weights.sum()
+
+
 def mean_halo_properties(
     inputs: p21c.InputParameters,
     redshift: float,
     masses: np.ndarray,
     models: Sequence[str],
-    n_draws: int = 100_000,
-    seed: int | np.random.Generator | None = None,
+    n_nodes: int = 20,
 ) -> dict[str, np.ndarray]:
     """Mean SFR and [CII] luminosity of halos of given masses.
 
-    For each mass, ``n_draws`` halos are given the 21cmFAST scatter of the stellar
-    mass, SFR and X-ray luminosity. Their properties are computed with
+    The 21cmFAST scatter of the stellar mass and of the SFR of a halo, and the
+    scatter of the [CII] model, are each driven by a unit normal deviate (the
+    ``star_rng`` and ``sfr_rng`` of a halo catalogue, and the deviate drawn inside
+    the model). The mean over the three is computed with a Gauss-Hermite rule of
+    ``n_nodes`` nodes in each. At each node, the stellar mass and SFR are those of
     :func:`py21cmfast.wrapper.cfuncs.convert_halo_properties`, as for the sampled
-    halos, with the stellar mass and SFR rescaled to the relation of the 21cmFAST
-    integrals (:func:`integral_stellar_ratio`), and their [CII] luminosity with
-    :func:`~tuesday.core.postprocessing.line_intensities.cii_luminosity`. The
-    deviates are stratified (every quantile ``(i + 0.5) / n_draws`` is used once by
-    each of the three), and the same deviates are used at every mass.
+    halos, rescaled to the relation of the 21cmFAST integrals
+    (:func:`integral_stellar_ratio`); the metallicity follows from them with
+    :func:`~tuesday.core.postprocessing.line_intensities.halo_metallicity`, the
+    relation of 21cmFAST, and the [CII] luminosity from
+    :func:`~tuesday.core.postprocessing.line_intensities.cii_luminosity`. The rule
+    is exact for the mean SFR, whose scatter is log-normal, and accurate to well
+    below a percent for log-normal scatters of up to ~1 dex.
 
     Parameters
     ----------
@@ -224,10 +236,8 @@ def mean_halo_properties(
     models : sequence of str
         [CII] luminosity models; see
         :data:`~tuesday.core.postprocessing.line_intensities.CII_MODELS`.
-    n_draws : int, optional
-        Number of halos averaged at each mass.
-    seed : int or np.random.Generator, optional
-        Seed or generator for the deviates and the [CII] scatter.
+    n_nodes : int, optional
+        Number of Gauss-Hermite nodes for each of the three deviates.
 
     Returns
     -------
@@ -235,72 +245,71 @@ def mean_halo_properties(
         ``"sfr"``: mean SFR in Msun/s; one entry per model: mean [CII] luminosity
         in Lsun.
 
-    Notes
-    -----
-    The metallicity, used by the metallicity-dependent models, is that of the
-    sampled-halo relation and is not recomputed for the rescaled SFR; the change is
-    below a percent.
-
     Raises
     ------
     ValueError
         If a model is unknown, or needs metallicities and the run was done without
-        ``USE_TS_FLUCT``.
+        ``USE_TS_FLUCT`` and ``USE_METALLICITY``.
     """
     _validate_models(inputs, models)
-    rng = np.random.default_rng(seed)
-    quantiles = (np.arange(n_draws) + 0.5) / n_draws
-    star_rng, sfr_rng, xray_rng = (
-        norm.ppf(rng.permutation(quantiles)) for _ in range(3)
-    )
-    cii_seed = rng.integers(2**32)
     masses = np.asarray(masses, dtype=float)
-    star_ratio = integral_stellar_ratio(inputs, masses)
+    nodes, weights = _gauss_hermite(n_nodes)
+    star_rng, sfr_rng = (grid.ravel() for grid in np.meshgrid(nodes, nodes))
+    halo_weights = np.outer(weights, weights).ravel()
+    n_halos = len(star_rng)
 
-    out = {key: np.empty(len(masses)) for key in ("sfr", *models)}
-    for i, mass in enumerate(masses):
-        props = convert_halo_properties(
+    # Without minihalos or reionization feedback, the halo properties do not depend
+    # on the position of the halo. The X-ray deviate does not enter the SFR.
+    props = convert_halo_properties(
+        redshift=redshift,
+        inputs=inputs,
+        halo_masses=np.repeat(masses, n_halos),
+        star_rng=np.tile(star_rng, len(masses)),
+        sfr_rng=np.tile(sfr_rng, len(masses)),
+        xray_rng=np.zeros(len(masses) * n_halos),
+    )
+    star_ratio = np.repeat(integral_stellar_ratio(inputs, masses), n_halos)
+    # 21cmFAST gives the SFR in Msun/s.
+    sfr = props["sfr_acg"].astype(np.float64) * star_ratio
+    stellar_mass = props["stellar_mass_acg"].astype(np.float64) * star_ratio
+
+    out = {"sfr": sfr.reshape(len(masses), n_halos) @ halo_weights}
+    # Far below the turnover mass, the float32 SFR of 21cmFAST underflows to zero:
+    # such halos do not emit.
+    forming = np.flatnonzero(sfr > 0)
+    mass_index = np.repeat(np.arange(len(masses)), n_halos)[forming]
+    # Each forming halo, at each node of the model scatter.
+    expand = np.repeat(forming, n_nodes)
+    point_weights = np.repeat(np.tile(halo_weights, len(masses))[forming], n_nodes)
+    point_weights *= np.tile(weights, len(forming))
+    metallicity = halo_metallicity(
+        sfr[expand] * un.Msun / un.s, stellar_mass[expand] * un.Msun, redshift
+    )
+    for model in models:
+        luminosity = cii_luminosity(
+            sfr=sfr[expand] * un.Msun / un.s,
+            metallicity=metallicity,
+            halo_mass=props["halo_mass"].astype(np.float64)[expand] * un.Msun,
             redshift=redshift,
-            inputs=inputs,
-            halo_masses=np.full(n_draws, mass),
-            # Positions only matter for the turnover masses of minihalos.
-            halo_coords=np.zeros((n_draws, 3)),
-            star_rng=star_rng,
-            sfr_rng=sfr_rng,
-            xray_rng=xray_rng,
+            model=model,
+            seed=_QuadratureNormals(np.tile(nodes, len(forming))),
         )
-        sfr = props["halo_sfr"] * star_ratio[i]
-        out["sfr"][i] = sfr.mean()
-        for model in models:
-            luminosity = cii_luminosity(
-                sfr=sfr * un.Msun / un.s,
-                metallicity=props["metallicity"],
-                halo_mass=props["halo_mass"] * un.Msun,
-                redshift=redshift,
-                model=model,
-                seed=cii_seed,
-            )
-            out[model][i] = luminosity.to_value(un.Lsun).mean()
+        out[model] = np.bincount(
+            np.repeat(mass_index, n_nodes),
+            weights=luminosity.to_value(un.Lsun) * point_weights,
+            minlength=len(masses),
+        )
     return out
-
-
-def _linear_density(
-    initial_conditions: p21c.InitialConditions, redshift: float
-) -> np.ndarray:
-    """Linear density of the Lagrangian low-resolution cells at ``redshift``."""
-    broadcast_input_struct(fix_cached_inputs(initial_conditions.inputs))
-    density = initial_conditions.get("lowres_density").astype(float)
-    return density * lib.dicke(redshift)
 
 
 def unresolved_cell_totals(
     initial_conditions: p21c.InitialConditions,
     redshift: float,
     models: Sequence[str],
+    inputs: p21c.InputParameters | None = None,
     n_bins: int = 80,
     n_delta: int = 400,
-    n_draws: int = 100_000,
-    seed: int | np.random.Generator | None = None,
+    n_nodes: int = 20,
 ) -> dict[str, np.ndarray]:
     """Totals of the halos below the sampler mass in each Lagrangian cell.
 
@@ -318,14 +327,16 @@ def unresolved_cell_totals(
         Redshift of the halos.
     models : sequence of str
         [CII] luminosity models.
+    inputs : py21cmfast.InputParameters, optional
+        Input parameters of the run. If None, those of ``initial_conditions`` are
+        used; pass the run's own when the initial conditions may have been made for
+        a run with other astrophysical parameters.
     n_bins : int, optional
         Number of logarithmic halo-mass bins.
     n_delta : int, optional
         Number of densities in the interpolation table.
-    n_draws : int, optional
-        Number of halos averaged at each mass; see :func:`mean_halo_properties`.
-    seed : int or np.random.Generator, optional
-        Seed or generator for :func:`mean_halo_properties`.
+    n_nodes : int, optional
+        Number of quadrature nodes per deviate; see :func:`mean_halo_properties`.
 
     Returns
     -------
@@ -337,31 +348,33 @@ def unresolved_cell_totals(
     ------
     ValueError
         If a model is unknown, or needs metallicities and the run was done without
-        ``USE_TS_FLUCT``.
+        ``USE_TS_FLUCT`` and ``USE_METALLICITY``.
     NotImplementedError
         If the run uses options that are not supported (see the module notes).
     """
-    inputs = fix_cached_inputs(initial_conditions.inputs)
+    inputs = initial_conditions.inputs if inputs is None else inputs
     _validate_models(inputs, models)
     m_min, m_max = unresolved_mass_range(inputs)
-    delta = _linear_density(initial_conditions, redshift)
-    if m_min >= m_max:
-        return {key: np.zeros_like(delta) for key in ("halo_mass", "sfr", *models)}
+    # One backend scope for all the calls, so that no other thread sets up the C
+    # globals for other inputs in between.
+    with c_state(inputs, broadcast_inputs=True, sigma=True):
+        delta = initial_conditions.get("lowres_density").astype(float)
+        delta *= lib.dicke(redshift)
+        if m_min >= m_max:
+            return {key: np.zeros_like(delta) for key in ("halo_mass", "sfr", *models)}
 
-    edges = np.linspace(np.log(m_min), np.log(m_max), n_bins + 1)
-    centres = np.exp(0.5 * (edges[1:] + edges[:-1]))
-    # The table range is widened slightly, as in set_fixed_grids.
-    deltas = np.linspace(delta.min() * 1.001, delta.max() * 1.001, n_delta)
-    counts = integrate_chmf_interval(
-        inputs=inputs,
-        redshift=redshift,
-        lnm_lower=edges[:-1],
-        lnm_upper=edges[1:],
-        cond_values=deltas,
-    )
-    means = mean_halo_properties(
-        inputs, redshift, centres, models, n_draws=n_draws, seed=seed
-    )
+        edges = np.linspace(np.log(m_min), np.log(m_max), n_bins + 1)
+        centres = np.exp(0.5 * (edges[1:] + edges[:-1]))
+        # The table range is widened slightly, as in add_integral_contribution.
+        deltas = np.linspace(delta.min() * 1.001, delta.max() * 1.001, n_delta)
+        counts = integrate_chmf_interval(
+            inputs=inputs,
+            redshift=redshift,
+            lnm_lower=edges[:-1],
+            lnm_upper=edges[1:],
+            cond_values=deltas,
+        )
+        means = mean_halo_properties(inputs, redshift, centres, models, n_nodes=n_nodes)
     tables = {"halo_mass": counts @ centres}
     tables.update({key: counts @ values for key, values in means.items()})
     return {
@@ -371,13 +384,15 @@ def unresolved_cell_totals(
 
 
 def lagrangian_to_eulerian(
-    initial_conditions: p21c.InitialConditions, redshift: float
+    initial_conditions: p21c.InitialConditions,
+    redshift: float,
+    inputs: p21c.InputParameters | None = None,
 ) -> np.ndarray:
     """Eulerian positions of the centres of the Lagrangian low-resolution cells.
 
-    Follows ``move_grid_galprops`` in ``map_mass.c``: the low-resolution velocities
-    of the initial conditions are scaled by the growth since the initial redshift,
-    with the 2LPT correction if ``PERTURB_ALGORITHM='2LPT'``.
+    Follows ``move_integral_emissivities`` in ``map_mass.c``: the low-resolution
+    velocities of the initial conditions are scaled by the growth since the initial
+    redshift, with the 2LPT correction if ``PERTURB_ALGORITHM='2LPT'``.
 
     Parameters
     ----------
@@ -385,6 +400,8 @@ def lagrangian_to_eulerian(
         Initial conditions of the run.
     redshift : float
         Redshift of the positions.
+    inputs : py21cmfast.InputParameters, optional
+        Input parameters of the run; if None, those of ``initial_conditions``.
 
     Returns
     -------
@@ -392,12 +409,12 @@ def lagrangian_to_eulerian(
         Positions of shape ``(HII_DIM**3, 3)``, in units of the low-resolution cell
         size, in the C order of the low-resolution grid.
     """
-    inputs = fix_cached_inputs(initial_conditions.inputs)
+    inputs = initial_conditions.inputs if inputs is None else inputs
     so = inputs.simulation_options
-    broadcast_input_struct(inputs)
+    with c_state(inputs, broadcast_inputs=True):
+        growth = lib.dicke(redshift)
+        growth_init = lib.dicke(so.INITIAL_REDSHIFT)
     n = so.HII_DIM
-    growth = lib.dicke(redshift)
-    growth_init = lib.dicke(so.INITIAL_REDSHIFT)
     factor = (growth - growth_init) / so.BOX_LEN * n
     factor_2lpt = -(3.0 / 7.0) * (growth**2 - growth_init**2) / so.BOX_LEN * n
 
@@ -415,15 +432,16 @@ def grid_unresolved_halos(
     initial_conditions: p21c.InitialConditions,
     redshift: float,
     models: Sequence[str],
-    seed: int | np.random.Generator | None = None,
+    inputs: p21c.InputParameters | None = None,
     **kwargs,
 ) -> dict[str, np.ndarray]:
-    """Grid the halos below the sampler mass as 21cmFAST does for its HaloBox.
+    """Grid the halos below the sampler mass as 21cmFAST does for EmissivityFields.
 
     The totals of each Lagrangian cell (:func:`unresolved_cell_totals`) are moved
     to the Eulerian positions of :func:`lagrangian_to_eulerian` and assigned to the
     low-resolution grid with cloud-in-cell interpolation, so that the ``"sfr"`` grid
-    equals what 21cmFAST adds to ``HaloBox.halo_sfr`` (times the cell volume).
+    equals what 21cmFAST adds to ``EmissivityFields.sfrd_acg`` (times the cell
+    volume).
 
     Parameters
     ----------
@@ -433,8 +451,8 @@ def grid_unresolved_halos(
         Redshift of the halos.
     models : sequence of str
         [CII] luminosity models.
-    seed : int or np.random.Generator, optional
-        Seed or generator for :func:`mean_halo_properties`.
+    inputs : py21cmfast.InputParameters, optional
+        Input parameters of the run; if None, those of ``initial_conditions``.
     **kwargs
         Passed to :func:`unresolved_cell_totals`.
 
@@ -449,19 +467,19 @@ def grid_unresolved_halos(
     ------
     ValueError
         If a model is unknown, or needs metallicities and the run was done without
-        ``USE_TS_FLUCT``.
+        ``USE_TS_FLUCT`` and ``USE_METALLICITY``.
     NotImplementedError
         If the run uses options that are not supported (see the module notes).
     """
     # Imported here: cii_lightcone imports this module.
     from .cii_lightcone import _cic_grid
 
+    inputs = initial_conditions.inputs if inputs is None else inputs
     totals = unresolved_cell_totals(
-        initial_conditions, redshift, models, seed=seed, **kwargs
+        initial_conditions, redshift, models, inputs=inputs, **kwargs
     )
-    inputs = fix_cached_inputs(initial_conditions.inputs)
     n = inputs.simulation_options.HII_DIM
-    positions = lagrangian_to_eulerian(initial_conditions, redshift)
+    positions = lagrangian_to_eulerian(initial_conditions, redshift, inputs=inputs)
     cosmo = inputs.cosmo_params.cosmo
     grids = {}
     for key, per_cell in totals.items():

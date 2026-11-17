@@ -13,6 +13,7 @@ from tuesday.core.postprocessing.line_intensities import (
     cii_flux,
     cii_luminosity,
     cii_surface_brightness,
+    halo_metallicity,
     validate_cii_model,
 )
 
@@ -81,6 +82,48 @@ def test_lagache18_relation():
 
     np.testing.assert_allclose(
         np.median(np.log10(luminosity("Lagache18"))), expected, atol=0.02
+    )
+
+
+# --- halo_metallicity -------------------------------------------------------------
+
+
+def test_metallicity_without_star_formation():
+    # Halos without stars or star formation only get the redshift term.
+    z_scale = 1.23 * 10 ** (-0.056 * REDSHIFT + 0.064)
+    metallicity = halo_metallicity(
+        np.array([0.0, 1.0, 0.0]) * un.Msun / un.yr,
+        np.array([1e9, 0.0, 0.0]) * un.Msun,
+        REDSHIFT,
+    )
+
+    assert metallicity.shape == (3,)
+    np.testing.assert_allclose(metallicity, np.full(3, z_scale), rtol=1e-12)
+
+
+def test_metallicity_relation():
+    # At M* = M0 = 1.28825e10 (SFR / [Msun/yr])^0.56 the stellar-mass term is
+    # 2^-0.148, and far above M0 it tends to 1.
+    sfr = np.array([1.0, 10.0, 10.0]) * un.Msun / un.yr
+    m0 = 1.28825e10 * 10.0**0.56
+    stellar_mass = np.array([1.28825e10, m0, 1e6 * m0]) * un.Msun
+    z_scale = 1.23 * 10 ** (-0.056 * REDSHIFT + 0.064)
+
+    np.testing.assert_allclose(
+        halo_metallicity(sfr, stellar_mass, REDSHIFT),
+        z_scale * np.array([2**-0.148, 2**-0.148, 1.0]),
+        rtol=1e-7,
+    )
+
+
+def test_metallicity_sfr_units_are_converted():
+    sfr = np.array([1.0, 30.0]) * un.Msun / un.yr
+    stellar_mass = np.array([1e9, 1e10]) * un.Msun
+
+    np.testing.assert_allclose(
+        halo_metallicity(sfr.to(un.Msun / un.s), stellar_mass.to(un.kg), REDSHIFT),
+        halo_metallicity(sfr, stellar_mass, REDSHIFT),
+        rtol=1e-12,
     )
 
 

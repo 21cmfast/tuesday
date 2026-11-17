@@ -37,6 +37,14 @@ Instrument noise simulation
 
     tuesday.core.instrument_models
 
+Lightcones
+----------
+.. autosummary::
+    :toctree: _autosummary
+    :template: module.rst
+
+    tuesday.core.lightcones
+
 Post-processing
 ---------------
 .. autosummary::

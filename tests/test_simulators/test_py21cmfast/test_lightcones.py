@@ -9,7 +9,12 @@ import attrs
 import numpy as np
 import pytest
 from astropy import units as un
-from py21cmfast import AngularLightconer, InputParameters, RectilinearLightconer
+from py21cmfast import (
+    AngularLightconer,
+    InputParameters,
+    RectilinearLightconer,
+    run_lightcone,
+)
 from py21cmfast.drivers.lightcone import LightCone
 from py21cmfast.io import h5
 from py21cmfast.io.caching import OutputCache, RunCache
@@ -43,13 +48,10 @@ def create_mock_cache_output(cachedir: Path, ics: bool = False) -> RunCache:
                 # Go through each array and set it to be "computed" so we can trick
                 # the writer into writing it out to file.
                 for k, v in o.arrays.items():
-                    setattr(o, k, v.with_value(v.value))
+                    setattr(o, k, v.with_value(o.get(k)))
 
                 # Mock the primitive fields as well...
-                # NOTE: py21cmfast 4.2 renamed the `struct` property to `_struct`; the
-                # pyproject.toml pin (>=4.0.0b) allows either, so support both here.
-                struct = o._struct if hasattr(o, "_struct") else o.struct
-                for fld in struct.primitive_fields:
+                for fld in o._struct.primitive_fields:
                     setattr(o, fld, 0.0)
 
                 h5.write_output_to_hdf5(o, fname)
@@ -57,7 +59,7 @@ def create_mock_cache_output(cachedir: Path, ics: bool = False) -> RunCache:
             o = outputs.InitialConditions.new(inputs=inputs)
             o._init_arrays()
             for k, v in o.arrays.items():
-                setattr(o, k, v.with_value(v.value))
+                setattr(o, k, v.with_value(o.get(k)))
             h5.write_output_to_hdf5(o, fld)
 
     return cache
@@ -69,7 +71,7 @@ def test_construct_rect_lightcone_from_cache(tmp_path: Path):
     cachedir = tmp_path / "cache"
     cache = create_mock_cache_output(cachedir)
 
-    lightconer = RectilinearLightconer.with_equal_cdist_slices(
+    lightconer = RectilinearLightconer.between_redshifts(
         min_redshift=6.5,
         max_redshift=9.5,
         resolution=cache.inputs.simulation_options.BOX_LEN
@@ -137,7 +139,7 @@ def test_construct_rect_lightcone_from_filelist(tmp_path: Path):
     cachedir = tmp_path / "cache"
     cache = create_mock_cache_output(cachedir)
 
-    lightconer = RectilinearLightconer.with_equal_cdist_slices(
+    lightconer = RectilinearLightconer.between_redshifts(
         min_redshift=6.5,
         max_redshift=9.5,
         resolution=cache.inputs.simulation_options.BOX_LEN
@@ -295,4 +297,79 @@ def test_construct_lightcone_from_coevals_checks_redshift_range(tmp_path: Path):
     with pytest.raises(ValueError, match="not compatible"):
         construct_lightcone_from_coevals(
             density_coevals(cache), lightconer, cache.inputs
+        )
+
+
+# --- The dv/dr correction and RSDs, against a (tiny) 21cmFAST run --------------------
+
+
+@pytest.fixture(scope="module")
+def tiny_run(tmp_path_factory) -> SimpleNamespace:
+    """Run a tiny 21cmFAST lightcone with and without dv/dr and RSDs; keep its cache."""
+    cache_dir = tmp_path_factory.mktemp("cache")
+    inputs = InputParameters.from_template(
+        ["latest-discrete", "size-tiny"],
+        random_seed=1,
+        node_redshifts=[7.0, 6.5, 6.0],
+        USE_TS_FLUCT=False,
+        RECOMB_MODEL="none",
+    ).evolve_input_structs(
+        BOX_LEN=30,
+        HII_DIM=10,
+        DIM=None,
+        HIRES_TO_LOWRES_FACTOR=2,
+        PERTURB_ALGORITHM="LINEAR",
+    )
+    lightconer = RectilinearLightconer.between_redshifts(
+        min_redshift=6.1,
+        max_redshift=6.9,
+        resolution=inputs.simulation_options.cell_size,
+        quantities=("brightness_temp", "density"),
+    )
+    references = {
+        (dvdr, rsds): run_lightcone(
+            lightconer=lightconer,
+            inputs=inputs,
+            cache=OutputCache(cache_dir),
+            write=True,
+            progressbar=False,
+            include_dvdr_in_tau21=dvdr,
+            apply_rsds=rsds,
+            n_rsd_subcells=4,
+        )
+        for dvdr, rsds in [(False, False), (True, False), (False, True), (True, True)]
+    }
+    return SimpleNamespace(
+        cache=RunCache.from_inputs(inputs, OutputCache(cache_dir)),
+        lightconer=lightconer,
+        references=references,
+    )
+
+
+@pytest.mark.parametrize(
+    ("dvdr", "rsds"), [(False, False), (True, False), (False, True), (True, True)]
+)
+def test_construct_lightcone_from_cache_matches_run_lightcone(
+    tiny_run, dvdr: bool, rsds: bool
+):
+    # The dv/dr correction and the RSDs are applied as run_lightcone applies them.
+    reference = tiny_run.references[(dvdr, rsds)]
+    lightcone = construct_lightcone_from_cache(
+        tiny_run.cache,
+        tiny_run.lightconer,
+        include_dvdr_in_tau21=dvdr,
+        apply_rsds=rsds,
+        n_rsd_subcells=4,
+    )
+
+    np.testing.assert_array_equal(
+        lightcone.lightcone_distances, reference.lightcone_distances
+    )
+    assert set(lightcone.lightcones) == set(reference.lightcones)
+    for name, values in reference.lightcones.items():
+        np.testing.assert_allclose(lightcone.lightcones[name], values, rtol=1e-6)
+    if dvdr:
+        assert not np.allclose(
+            reference.lightcones["brightness_temp"],
+            tiny_run.references[(False, rsds)].lightcones["brightness_temp"],
         )

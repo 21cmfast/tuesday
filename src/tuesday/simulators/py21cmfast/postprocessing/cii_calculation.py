@@ -1,9 +1,9 @@
 """Calculate [CII] 158 micron emission from 21cmFAST halo catalogues.
 
 These are thin wrappers around :mod:`tuesday.core.postprocessing.line_intensities`.
-:func:`calculate_cii` reads the halo properties from a 21cmFAST
-:class:`~py21cmfast.wrapper.outputs.HaloCatalog` and returns the [CII] luminosity and
-velocity-integrated flux density of each halo, which
+:func:`calculate_cii` takes the halo properties of a 21cmFAST
+:class:`~py21cmfast.wrapper.outputs.PerturbedHaloCatalog` and returns the [CII]
+luminosity and velocity-integrated flux density of each halo, which
 :func:`~.cii_lightcone.gen_coeval` grids into a box. :func:`calculate_bvoxel` turns
 the gridded flux density on a lightcone into a surface brightness.
 """
@@ -11,8 +11,7 @@ the gridded flux density on a lightcone into a surface brightness.
 import numpy as np
 from astropy import units as un
 from py21cmfast import LightCone
-from py21cmfast.wrapper.cfuncs import convert_halo_properties
-from py21cmfast.wrapper.outputs import HaloCatalog
+from py21cmfast.wrapper.outputs import PerturbedHaloCatalog
 
 from tuesday.core.postprocessing.line_intensities import (
     CII_MODELS,
@@ -21,12 +20,13 @@ from tuesday.core.postprocessing.line_intensities import (
     cii_flux,
     cii_luminosity,
     cii_surface_brightness,
+    halo_metallicity,
     validate_cii_model,
 )
 
 
 def calculate_cii(
-    halo_catalog: HaloCatalog,
+    halo_catalog: PerturbedHaloCatalog,
     model: str,
     seed: int | np.random.Generator | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -37,10 +37,21 @@ def calculate_cii(
     flux density with :func:`~tuesday.core.postprocessing.line_intensities.cii_flux`,
     using the cosmology of the simulation.
 
+    The halo properties are those that 21cmFAST computes for the run, which a
+    :class:`~py21cmfast.wrapper.outputs.PerturbedHaloCatalog` holds: the SFR and
+    stellar mass of the atomic-cooling component of each halo, including the
+    minihalo and reionization feedback of the run if
+    :func:`py21cmfast.perturb_halo_catalog` was given the previous node's boxes (as
+    :func:`~.cii_lightcone.gen_coeval` does). 21cmFAST computes the metallicity of each
+    halo but does not store it; it follows from the SFR and stellar mass with
+    :func:`~tuesday.core.postprocessing.line_intensities.halo_metallicity`, the same
+    relation.
+
     Parameters
     ----------
-    halo_catalog : HaloCatalog
-        Halo catalogue at a single redshift. Only its first ``n_halos`` entries
+    halo_catalog : PerturbedHaloCatalog
+        Halo catalogue at a single redshift, with the halo properties computed by
+        :func:`py21cmfast.perturb_halo_catalog`. Only its first ``n_halos`` entries
         (the real halos, not the zero padding) are used.
     model : str
         The [CII] luminosity model, one of
@@ -66,39 +77,36 @@ def calculate_cii(
     ------
     ValueError
         If ``model`` is not one of the available models, or if it depends on the
-        metallicity but the simulation was run without ``USE_TS_FLUCT``, in which
-        case 21cmFAST does not compute halo metallicities and returns zero.
+        metallicity but the simulation was run without ``USE_TS_FLUCT`` and
+        ``USE_METALLICITY``, the only case in which 21cmFAST models halo
+        metallicities.
     """
     validate_cii_model(model)
-    if (
-        model in METALLICITY_MODELS
-        and not halo_catalog.inputs.astro_options.USE_TS_FLUCT
+    astro_options = halo_catalog.inputs.astro_options
+    if model in METALLICITY_MODELS and not (
+        astro_options.USE_TS_FLUCT and astro_options.USE_METALLICITY
     ):
         raise ValueError(
             f"The [CII] model '{model}' needs halo metallicities, which 21cmFAST "
-            "only computes when USE_TS_FLUCT=True. Rerun the simulation with "
-            "USE_TS_FLUCT=True, or use one of the SFR-only models: "
+            "only models when USE_TS_FLUCT=True and USE_METALLICITY=True. Rerun the "
+            "simulation with both, or use one of the SFR-only models: "
             f"{[m for m in CII_MODELS if m not in METALLICITY_MODELS]}."
         )
 
     redshift = halo_catalog.redshift
     # 21cmFAST pads the halo arrays with zeros beyond the n_halos real halos.
     n_halos = halo_catalog.n_halos
-    halo_props = convert_halo_properties(
-        redshift=redshift,
-        inputs=halo_catalog.inputs,
-        halo_masses=halo_catalog.get("halo_masses")[:n_halos],
-        halo_coords=halo_catalog.get("halo_coords")[:n_halos],
-        star_rng=halo_catalog.get("star_rng")[:n_halos],
-        sfr_rng=halo_catalog.get("sfr_rng")[:n_halos],
-        xray_rng=halo_catalog.get("xray_rng")[:n_halos],
+    # 21cmFAST gives the SFR in Msun/s.
+    sfr = halo_catalog.get("sfr_acg")[:n_halos].astype(np.float64) * un.Msun / un.s
+    stellar_mass = (
+        halo_catalog.get("stellar_masses_acg")[:n_halos].astype(np.float64) * un.Msun
     )
+    halo_mass = halo_catalog.get("halo_masses")[:n_halos].astype(np.float64) * un.Msun
 
     luminosity = cii_luminosity(
-        # 21cmFAST gives the SFR in Msun/s.
-        sfr=halo_props["halo_sfr"] * un.Msun / un.s,
-        metallicity=halo_props["metallicity"],
-        halo_mass=halo_props["halo_mass"] * un.Msun,
+        sfr=sfr,
+        metallicity=halo_metallicity(sfr, stellar_mass, redshift),
+        halo_mass=halo_mass,
         redshift=redshift,
         model=model,
         seed=seed,
