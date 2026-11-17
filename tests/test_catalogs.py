@@ -245,3 +245,54 @@ def test_from_table_needs_units():
     table = QTable({"position": np.zeros((N, 3)) * un.Mpc, "id": np.arange(N)})
     with pytest.raises(TypeError, match="'id' must be an astropy Quantity"):
         Catalog.from_table(table)
+
+
+@pytest.mark.parametrize("suffix", [".h5", ".ecsv"])
+def test_write_and_read(catalog, tmp_path, suffix):
+    catalog = catalog.with_features(
+        sfr=np.arange(N, dtype=np.float32) * un.Msun / un.s,
+        uv_magnitude=np.array([-20.0, -19.0, np.inf, -18.0, -17.0]) * un.mag,
+        velocity=np.ones((N, 3)) * un.km / un.s,
+    )
+    path = tmp_path / f"catalog{suffix}"
+    catalog.write(path)
+    read = Catalog.read(path)
+
+    assert len(read) == N
+    np.testing.assert_array_equal(read.positions, catalog.positions)
+    assert read.positions.unit == un.Mpc
+    assert set(read.features) == set(catalog.features)
+    for name, value in catalog.features.items():
+        assert read[name].unit == value.unit
+        np.testing.assert_array_equal(read[name].value, value.value)
+    assert read["sfr"].dtype == np.float32
+    assert read.volume == catalog.volume
+    assert read.redshift == catalog.redshift
+
+
+@pytest.mark.parametrize("suffix", [".h5", ".ecsv"])
+def test_write_and_read_without_volume_and_redshift(tmp_path, suffix):
+    catalog = Catalog(positions=np.zeros((N, 3)) * un.Mpc / littleh)
+    path = tmp_path / f"catalog{suffix}"
+    catalog.write(path)
+    read = Catalog.read(path)
+    assert read.positions.unit == un.Mpc / littleh
+    assert read.volume is None
+    assert read.redshift is None
+
+
+def test_hdf5_path(catalog, tmp_path):
+    path = tmp_path / "catalogs.h5"
+    catalog.write(path)
+    catalog.select(np.array([0, 1])).write(path, path="two", append=True)
+    assert len(Catalog.read(path)) == N
+    assert len(Catalog.read(path, path="two")) == 2
+
+
+@pytest.mark.parametrize("fmt", ["hdf5", "ascii.ecsv"])
+def test_explicit_format(catalog, tmp_path, fmt):
+    path = tmp_path / "catalog.dat"
+    catalog.write(path, format=fmt)
+    read = Catalog.read(path, format=fmt)
+    assert read.volume == catalog.volume
+    np.testing.assert_array_equal(read["mass"], catalog["mass"])

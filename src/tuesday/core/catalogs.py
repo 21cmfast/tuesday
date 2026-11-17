@@ -8,7 +8,9 @@ densities need, and their redshift. Functions that work on catalogues take a
 :func:`tuesday.core.summaries.bin_number_density`.
 
 The data are kept in an astropy :class:`~astropy.table.QTable`, which
-:meth:`Catalog.to_table` returns and :meth:`Catalog.from_table` reads.
+:meth:`Catalog.to_table` returns and :meth:`Catalog.from_table` reads, so a catalogue
+can be written to and read from the file formats of astropy tables that keep units and
+metadata, such as HDF5 and ECSV, with :meth:`Catalog.write` and :meth:`Catalog.read`.
 
 A catalogue does not depend on any simulation code; see
 :mod:`tuesday.simulators.py21cmfast.catalogs` for making one from a 21cmFAST halo
@@ -16,6 +18,7 @@ catalogue.
 """
 
 from collections.abc import Mapping
+from os import PathLike
 from types import MappingProxyType
 
 import numpy as np
@@ -26,6 +29,16 @@ from .units import without_littleh
 
 #: Name of the column of the positions in the table of a catalogue.
 POSITION_COLUMN = "position"
+
+#: Path of the table in HDF5 files written by :meth:`Catalog.write`.
+HDF5_PATH = "catalog"
+
+
+def _is_hdf5(filename: str | PathLike, kwargs: dict) -> bool:
+    """Whether a table is read from or written to HDF5."""
+    if "format" in kwargs:
+        return kwargs["format"] == "hdf5"
+    return str(filename).endswith((".h5", ".hdf5", ".he5"))
 
 
 class Catalog:
@@ -258,3 +271,45 @@ class Catalog:
             volume=table.meta.get("volume"),
             redshift=table.meta.get("redshift"),
         )
+
+    def write(self, filename: str | PathLike, **kwargs) -> None:
+        """Write the catalogue to a file.
+
+        The table of :meth:`to_table` is written with
+        :meth:`astropy.table.QTable.write`. Use a format that keeps units and
+        metadata, such as HDF5 (``.h5``, ``.hdf5``) or ECSV (``.ecsv``). For HDF5 the
+        table is written at the path :data:`HDF5_PATH` and its metadata are
+        serialized, unless ``path`` or ``serialize_meta`` are given.
+
+        Parameters
+        ----------
+        filename : str or PathLike
+            The file to write.
+        **kwargs
+            Passed on to :meth:`astropy.table.QTable.write`, e.g. ``overwrite=True``.
+        """
+        if _is_hdf5(filename, kwargs):
+            kwargs.setdefault("path", HDF5_PATH)
+            kwargs.setdefault("serialize_meta", True)
+        self.to_table().write(filename, **kwargs)
+
+    @classmethod
+    def read(cls, filename: str | PathLike, **kwargs) -> "Catalog":
+        """Read a catalogue written by :meth:`write`.
+
+        Parameters
+        ----------
+        filename : str or PathLike
+            The file to read.
+        **kwargs
+            Passed on to :meth:`astropy.table.QTable.read`. For HDF5 the path is
+            :data:`HDF5_PATH` unless ``path`` is given.
+
+        Returns
+        -------
+        Catalog
+            The catalogue.
+        """
+        if _is_hdf5(filename, kwargs):
+            kwargs.setdefault("path", HDF5_PATH)
+        return cls.from_table(QTable.read(filename, **kwargs))
