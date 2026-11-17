@@ -86,6 +86,11 @@ def calculate_uvlf(
         raise ValueError(
             f"components must be 'both', 'acg' or 'mcg', got '{components}'."
         )
+    if not isinstance(halo_catalog, HaloCatalog | PerturbedHaloCatalog):
+        raise TypeError(
+            "halo_catalog must be a HaloCatalog or a PerturbedHaloCatalog, got "
+            f"{type(halo_catalog).__name__}."
+        )
     use_mcgs = halo_catalog.inputs.astro_options.USE_MCGS
     if components == "mcg" and not use_mcgs:
         raise ValueError("components='mcg' needs a run with minihalos (USE_MCGS=True).")

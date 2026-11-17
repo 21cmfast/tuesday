@@ -154,6 +154,11 @@ def catalog_from_halo_catalog(
         If ``halo_catalog`` is neither a ``HaloCatalog`` nor a
         ``PerturbedHaloCatalog``.
     """
+    if not isinstance(halo_catalog, HaloCatalog | PerturbedHaloCatalog):
+        raise TypeError(
+            "halo_catalog must be a HaloCatalog or a PerturbedHaloCatalog, got "
+            f"{type(halo_catalog).__name__}."
+        )
     names = ["halo_mass", "stellar_mass_acg", "sfr_acg"]
     if halo_catalog.inputs.astro_options.USE_MCGS:
         names += ["stellar_mass_mcg", "sfr_mcg"]
@@ -162,14 +167,9 @@ def catalog_from_halo_catalog(
         values = {
             name: _real_halos(halo_catalog, _PERTURBED_NAMES[name]) for name in names
         }
-    elif isinstance(halo_catalog, HaloCatalog):
+    else:
         properties = get_halo_properties(halo_catalog, initial_conditions)
         values = {name: properties[name] for name in names}
-    else:
-        raise TypeError(
-            "halo_catalog must be a HaloCatalog or a PerturbedHaloCatalog, got "
-            f"{type(halo_catalog).__name__}."
-        )
 
     box_len = halo_catalog.simulation_options.BOX_LEN * un.Mpc
     return Catalog(

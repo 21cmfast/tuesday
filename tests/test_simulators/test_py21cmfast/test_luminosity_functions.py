@@ -105,9 +105,11 @@ def test_unknown_components(halo_inputs, make_perturbed):
         calculate_uvlf(halos, components="all")
 
 
-def test_other_objects_are_refused(halo_inputs):
+@pytest.mark.parametrize("with_inputs", [False, True])
+def test_other_objects_are_refused(halo_inputs, with_inputs):
+    other = SimpleNamespace(inputs=halo_inputs) if with_inputs else object()
     with pytest.raises(TypeError, match="HaloCatalog or a PerturbedHaloCatalog"):
-        calculate_uvlf(SimpleNamespace(inputs=halo_inputs))
+        calculate_uvlf(other)
 
 
 def test_halo_catalogue(halo_run):

@@ -63,9 +63,11 @@ def test_perturbed_catalogue_with_minihalos(minihalo_inputs, make_perturbed):
     )
 
 
-def test_other_objects_are_refused(halo_inputs):
+@pytest.mark.parametrize("with_inputs", [False, True])
+def test_other_objects_are_refused(halo_inputs, with_inputs):
+    other = SimpleNamespace(inputs=halo_inputs) if with_inputs else object()
     with pytest.raises(TypeError, match="HaloCatalog or a PerturbedHaloCatalog"):
-        catalog_from_halo_catalog(SimpleNamespace(inputs=halo_inputs))
+        catalog_from_halo_catalog(other)
 
 
 def test_halo_catalogue_without_feedback(halo_run):
