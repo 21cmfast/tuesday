@@ -39,8 +39,8 @@ class Catalog:
         ``n``. Features without a unit are dimensionless Quantities (e.g.
         ``un.dimensionless_unscaled``), or magnitudes in ``un.mag``.
     volume : un.Quantity, optional
-        The volume that contains the objects, e.g. that of the simulation box. Needed
-        for number densities.
+        The volume that contains the objects, e.g. that of the simulation box: a single
+        finite, positive value. Needed for number densities.
     redshift : float, optional
         Redshift of the objects, if they are all at one redshift (e.g. a coeval box).
     """
@@ -74,13 +74,20 @@ class Catalog:
                     f"Feature '{name}' has shape {value.shape}, but the catalogue "
                     f"has {n_objects} objects."
                 )
-        if (
-            self.volume is not None
-            and without_littleh(self.volume.unit).physical_type != "volume"
-        ):
-            raise ValueError(
-                f"volume must be a volume, got {self.volume.unit.physical_type}."
-            )
+        volume = self.volume
+        if volume is not None:
+            if not isinstance(volume, un.Quantity):
+                raise ValueError(
+                    f"volume must be a Quantity with a unit of volume, got {volume!r}."
+                )
+            if without_littleh(volume.unit).physical_type != "volume":
+                raise ValueError(
+                    f"volume must be a volume, got {volume.unit.physical_type}."
+                )
+            if volume.ndim != 0 or not np.isfinite(volume) or volume <= 0:
+                raise ValueError(
+                    f"volume must be a single finite, positive value, got {volume}."
+                )
         object.__setattr__(self, "features", MappingProxyType(dict(self.features)))
 
     def __len__(self) -> int:

@@ -102,6 +102,32 @@ def test_volume_must_be_a_volume():
         Catalog(positions=np.zeros((N, 3)) * un.Mpc, volume=10 * un.Mpc**2)
 
 
+@pytest.mark.parametrize(
+    "volume",
+    [
+        0.0 * un.Mpc**3,
+        -1.0 * un.Mpc**3,
+        np.inf * un.Mpc**3,
+        np.nan * un.Mpc**3,
+        np.array([1.0, 2.0]) * un.Mpc**3,
+    ],
+    ids=["zero", "negative", "infinite", "nan", "array"],
+)
+def test_volume_must_be_finite_and_positive(volume):
+    with pytest.raises(ValueError, match="single finite, positive value"):
+        Catalog(positions=np.zeros((N, 3)) * un.Mpc, volume=volume)
+
+
+def test_volume_must_be_a_quantity():
+    with pytest.raises(ValueError, match="Quantity with a unit of volume"):
+        Catalog(positions=np.zeros((N, 3)) * un.Mpc, volume=1000.0)
+
+
+def test_select_checks_the_volume(catalog):
+    with pytest.raises(ValueError, match="single finite, positive value"):
+        catalog.select(np.array([0, 1]), volume=0.0 * un.Mpc**3)
+
+
 def test_volume_with_littleh():
     catalog = Catalog(
         positions=np.zeros((N, 3)) * un.Mpc, volume=(10 * un.Mpc / littleh) ** 3
