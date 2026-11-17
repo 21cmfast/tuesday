@@ -154,6 +154,20 @@ def test_non_finite_values_are_not_counted():
     np.testing.assert_allclose(result.bin_edges.to_value(un.mag), [-20.5, -20.0, -19.5])
 
 
+@pytest.mark.parametrize("values", [[], [np.inf, np.nan]], ids=["empty", "non-finite"])
+def test_no_finite_values(values):
+    catalog = make_catalog(mag=np.array(values, dtype=float) * un.mag)
+    # With a number of bins, numpy.histogram puts them between 0 and 1.
+    result = bin_number_density(catalog, "mag", 4)
+    np.testing.assert_array_equal(result.counts, [0, 0, 0, 0])
+    np.testing.assert_allclose(
+        result.bin_edges.to_value(un.mag), [0, 0.25, 0.5, 0.75, 1]
+    )
+    np.testing.assert_array_equal(result.number_density.value, 0.0)
+    result = bin_number_density(catalog, "mag", UV_MAGNITUDE_EDGES)
+    np.testing.assert_array_equal(result.counts, 0)
+
+
 def test_bin_masses():
     catalog = make_catalog(
         volume=1 * un.Gpc**3, mass=np.array([2e10, 5e10, 3e11]) * un.Msun

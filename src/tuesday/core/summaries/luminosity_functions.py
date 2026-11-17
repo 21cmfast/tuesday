@@ -96,7 +96,8 @@ def bin_number_density(
     bins : int or un.Quantity
         Edges of the bins, increasing, in a unit compatible with that of the feature
         (bin widths may differ), or the number of bins of equal width between the
-        smallest and largest finite value. The last bin includes its upper edge, as in
+        smallest and largest finite value (between 0 and 1 if there is none, with
+        zero counts). The last bin includes its upper edge, as in
         :func:`numpy.histogram`.
 
     Returns
