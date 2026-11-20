@@ -442,8 +442,7 @@ def sampled_halos() -> SimpleNamespace:
     rng = np.random.default_rng(5)
     for model in CONSISTENCY_MODELS:
         per_halo[model] = cii_flux(
-            calculate_cii(perturbed, model, seed=rng)[0][in_range]
-            * un.Lsun,
+            calculate_cii(perturbed, model, seed=rng)[0][in_range] * un.Lsun,
             REDSHIFT,
             inputs.cosmo_params.cosmo,
         ).value
