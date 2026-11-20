@@ -180,13 +180,14 @@ def mean_halo_properties(
     models: Sequence[str],
     n_draws: int = 100_000,
     seed: int | np.random.Generator | None = None,
+    stellar_relation: str = "integrals",
 ) -> dict[str, np.ndarray]:
     """Mean SFR and [CII] luminosity of halos of given masses.
 
     For each mass, ``n_draws`` halos are given the 21cmFAST scatter of the stellar
     mass, SFR and X-ray luminosity. Their stellar mass and SFR are computed with
     :func:`py21cmfast.wrapper.cfuncs.convert_halo_properties`, as for the sampled
-    halos, and rescaled to the relation of the 21cmFAST integrals
+    halos, and, by default, rescaled to the relation of the 21cmFAST integrals
     (:func:`integral_stellar_ratio`); their metallicity follows from them with
     :func:`~tuesday.core.postprocessing.line_intensities.halo_metallicity`, the
     relation of 21cmFAST, and their [CII] luminosity, with the scatter of the model,
@@ -210,6 +211,12 @@ def mean_halo_properties(
         Number of halos averaged at each mass.
     seed : int or np.random.Generator, optional
         Seed or generator for the deviates and the [CII] scatter.
+    stellar_relation : {"integrals", "halos"}, optional
+        Stellar fraction to use. ``"integrals"`` (default): that of the CHMF
+        integrals of the ``EmissivityFields``, so that the SFR matches what 21cmFAST
+        adds for the halos below ``SAMPLER_MIN_MASS``. ``"halos"``: that of sampled
+        halos, e.g. to compare with the halos of a run with a lower
+        ``SAMPLER_MIN_MASS``.
 
     Returns
     -------
@@ -220,10 +227,16 @@ def mean_halo_properties(
     Raises
     ------
     ValueError
-        If a model is unknown, or needs metallicities and the run was done without
-        ``USE_TS_FLUCT`` and ``USE_METALLICITY``.
+        If a model is unknown, if it needs metallicities and the run was done
+        without ``USE_TS_FLUCT`` and ``USE_METALLICITY``, or if ``stellar_relation``
+        is not one of the options.
     """
     _validate_models(inputs, models)
+    if stellar_relation not in ("integrals", "halos"):
+        raise ValueError(
+            "stellar_relation must be 'integrals' or 'halos', not "
+            f"{stellar_relation!r}."
+        )
     rng = np.random.default_rng(seed)
     quantiles = (np.arange(n_draws) + 0.5) / n_draws
     star_rng, sfr_rng, xray_rng = (
@@ -231,7 +244,11 @@ def mean_halo_properties(
     )
     cii_seed = rng.integers(2**32)
     masses = np.asarray(masses, dtype=float)
-    star_ratio = integral_stellar_ratio(inputs, masses)
+    star_ratio = (
+        integral_stellar_ratio(inputs, masses)
+        if stellar_relation == "integrals"
+        else np.ones_like(masses)
+    )
 
     out = {key: np.zeros(len(masses)) for key in ("sfr", *models)}
     for i, mass in enumerate(masses):
@@ -282,6 +299,8 @@ def unresolved_cell_totals(
     n_delta: int = 400,
     n_draws: int = 100_000,
     seed: int | np.random.Generator | None = None,
+    mass_range: tuple[float, float] | None = None,
+    stellar_relation: str = "integrals",
 ) -> dict[str, np.ndarray]:
     """Totals of the halos below the sampler mass in each Lagrangian cell.
 
@@ -311,6 +330,14 @@ def unresolved_cell_totals(
         Number of halos averaged at each mass; see :func:`mean_halo_properties`.
     seed : int or np.random.Generator, optional
         Seed or generator for :func:`mean_halo_properties`.
+    mass_range : tuple of float, optional
+        Halo-mass range (Msun) of the integral. If None (default), the range of the
+        halos that 21cmFAST integrates instead of sampling
+        (:func:`unresolved_mass_range`). Another range gives the expected totals of
+        any halos of the CHMF, e.g. those that a run with a lower
+        ``SAMPLER_MIN_MASS`` samples.
+    stellar_relation : {"integrals", "halos"}, optional
+        Passed to :func:`mean_halo_properties`.
 
     Returns
     -------
@@ -321,14 +348,26 @@ def unresolved_cell_totals(
     Raises
     ------
     ValueError
-        If a model is unknown, or needs metallicities and the run was done without
-        ``USE_TS_FLUCT`` and ``USE_METALLICITY``.
+        If a model is unknown, if it needs metallicities and the run was done
+        without ``USE_TS_FLUCT`` and ``USE_METALLICITY``, if ``mass_range`` is not
+        increasing and positive, or if ``stellar_relation`` is not one of the options.
     NotImplementedError
         If the run uses options that are not supported (see the module notes).
     """
     inputs = initial_conditions.inputs if inputs is None else inputs
     _validate_models(inputs, models)
-    m_min, m_max = unresolved_mass_range(inputs)
+    if mass_range is None:
+        m_min, m_max = unresolved_mass_range(inputs)
+    else:
+        # The supported options are still required: the halo properties must not
+        # depend on the position of the halo.
+        _check_supported(inputs)
+        m_min, m_max = (float(m) for m in mass_range)
+        if not 0 < m_min < m_max:
+            raise ValueError(
+                f"mass_range must be (m_min, m_max) with 0 < m_min < m_max, not "
+                f"{mass_range}."
+            )
     # One backend scope for all the calls, so that no other thread sets up the C
     # globals for other inputs in between.
     with c_state(inputs, broadcast_inputs=True, sigma=True):
@@ -349,7 +388,13 @@ def unresolved_cell_totals(
             cond_values=deltas,
         )
         means = mean_halo_properties(
-            inputs, redshift, centres, models, n_draws=n_draws, seed=seed
+            inputs,
+            redshift,
+            centres,
+            models,
+            n_draws=n_draws,
+            seed=seed,
+            stellar_relation=stellar_relation,
         )
     tables = {"halo_mass": counts @ centres}
     tables.update({key: counts @ values for key, values in means.items()})

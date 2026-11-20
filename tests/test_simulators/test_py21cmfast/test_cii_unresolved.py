@@ -7,11 +7,15 @@ import numpy as np
 import py21cmfast as p21c
 import pytest
 from astropy import units as un
+from py21cmfast.c_21cmfast import lib
+from py21cmfast.drivers._global_initialization import c_state
 from py21cmfast.io.caching import OutputCache, RunCache
 from py21cmfast.io.h5 import read_output_struct
+from py21cmfast.wrapper.cfuncs import integrate_chmf_interval
 
 from tuesday.core.postprocessing.line_intensities import cii_flux
 from tuesday.simulators.py21cmfast.postprocessing import cii_lightcone, cii_unresolved
+from tuesday.simulators.py21cmfast.postprocessing.cii_calculation import calculate_cii
 from tuesday.simulators.py21cmfast.postprocessing.cii_lightcone import gen_coeval
 from tuesday.simulators.py21cmfast.postprocessing.cii_unresolved import (
     grid_unresolved_halos,
@@ -372,3 +376,155 @@ def test_cii_flux_of_unresolved_grid(subsampler_run):
         cii_flux(luminosity, REDSHIFT, inputs.cosmo_params.cosmo).value,
         rtol=1e-10,
     )
+
+
+# Consistency of the CHMF integral with sampled halos ---------------------------------
+#
+# A run whose sampler goes down to SAMPLED_MASS_RANGE[0] samples the halos that a run
+# with a higher SAMPLER_MIN_MASS integrates. The integral of cii_unresolved over the
+# same mass range, with the stellar relation of sampled halos, must then give their
+# number, SFR and [CII] luminosity in expectation, and follow them in space.
+
+SAMPLED_MASS_RANGE = (1e8, 1e9)
+CONSISTENCY_MODELS = ["Vallini15", "Horlaville24", "deLooze14"]
+
+
+def _blocks(grid: np.ndarray, size: int) -> np.ndarray:
+    """Sum a cubic grid over blocks of ``size**3`` cells."""
+    n = grid.shape[0] // size
+    return (
+        grid[: n * size, : n * size, : n * size]
+        .reshape(n, size, n, size, n, size)
+        .sum(axis=(1, 3, 5))
+    )
+
+
+@pytest.fixture(scope="module")
+def sampled_halos() -> SimpleNamespace:
+    """Halos sampled down to 1e8 Msun at z = 7 and the integral over the same range.
+
+    The halos are those of a 40 Mpc box (~4e5 halos above 1e8 Msun, ~5 s); the
+    integral is gridded as for the halos below the sampler, with the stellar
+    relation of sampled halos.
+    """
+    inputs = p21c.InputParameters.from_template(
+        ["latest-discrete", "size-tiny"], random_seed=2
+    ).evolve_input_structs(
+        BOX_LEN=40,
+        HII_DIM=10,
+        DIM=None,
+        HIRES_TO_LOWRES_FACTOR=2,
+        SAMPLER_MIN_MASS=SAMPLED_MASS_RANGE[0],
+        ZPRIME_STEP_FACTOR=1.2,
+        RECOMB_MODEL="none",
+    )
+    initial_conditions = p21c.compute_initial_conditions(inputs=inputs)
+    halo_catalog = p21c.determine_halo_catalog(
+        redshift=REDSHIFT, inputs=inputs, initial_conditions=initial_conditions
+    )
+    halo_catalog.load_all()
+    perturbed = p21c.perturb_halo_catalog(
+        initial_conditions=initial_conditions, inputs=inputs, halo_catalog=halo_catalog
+    )
+    n_halos = perturbed.n_halos
+    masses = perturbed.get("halo_masses")[:n_halos].astype(np.float64)
+    in_range = (masses >= SAMPLED_MASS_RANGE[0]) & (masses < SAMPLED_MASS_RANGE[1])
+    so = inputs.simulation_options
+    cell_size = so.BOX_LEN / so.HII_DIM
+    positions = perturbed.get("halo_coords")[:n_halos][in_range] / cell_size
+
+    # Per-halo quantities of the sampled halos in the range, and their grids, as
+    # gen_coeval grids the sampled halos.
+    per_halo = {
+        "halo_mass": masses[in_range],
+        "sfr": perturbed.get("sfr_acg")[:n_halos][in_range].astype(np.float64),
+    }
+    rng = np.random.default_rng(5)
+    for model in CONSISTENCY_MODELS:
+        per_halo[model] = cii_flux(
+            calculate_cii(perturbed, model, seed=rng)[0][in_range]
+            * un.Lsun,
+            REDSHIFT,
+            inputs.cosmo_params.cosmo,
+        ).value
+    sampled = {
+        key: cii_lightcone._cic_grid(positions, values, so.HII_DIM)
+        for key, values in per_halo.items()
+    }
+    integral = grid_unresolved_halos(
+        initial_conditions,
+        REDSHIFT,
+        models=CONSISTENCY_MODELS,
+        inputs=inputs,
+        seed=0,
+        mass_range=SAMPLED_MASS_RANGE,
+        stellar_relation="halos",
+    )
+    return SimpleNamespace(
+        inputs=inputs,
+        initial_conditions=initial_conditions,
+        masses=masses,
+        per_halo=per_halo,
+        sampled=sampled,
+        integral=integral,
+    )
+
+
+def test_chmf_counts_match_sampled_halos(sampled_halos):
+    # The CHMF of the integrals predicts the number of sampled halos in each mass
+    # bin, within Poisson noise.
+    inputs = sampled_halos.inputs
+    edges = np.geomspace(SAMPLED_MASS_RANGE[0], 1e10, 11)
+    with c_state(inputs, broadcast_inputs=True, sigma=True):
+        delta = sampled_halos.initial_conditions.get("lowres_density").astype(float)
+        delta = delta.ravel() * lib.dicke(REDSHIFT)
+        expected = integrate_chmf_interval(
+            inputs=inputs,
+            redshift=REDSHIFT,
+            lnm_lower=np.log(edges[:-1]),
+            lnm_upper=np.log(edges[1:]),
+            cond_values=delta,
+        ).sum(axis=0)
+    counts, _ = np.histogram(sampled_halos.masses, edges)
+
+    assert counts.min() > 1000
+    np.testing.assert_array_less(np.abs(counts - expected), 4 * np.sqrt(expected))
+    np.testing.assert_allclose(counts.sum(), expected.sum(), rtol=5e-3)
+
+
+@pytest.mark.parametrize("key", ["halo_mass", "sfr", *CONSISTENCY_MODELS])
+def test_unresolved_totals_match_sampled_halos(sampled_halos, key: str):
+    # The integral is the expectation of the sum over the sampled halos. The sum
+    # has a sampling error of sqrt(sum x^2) (Poisson halo numbers and the scatter
+    # of each halo); the halos of one run scatter by up to ~2.5 times that estimate
+    # from the integral, as found over several random seeds.
+    per_halo = sampled_halos.per_halo[key]
+    total = per_halo.sum()
+    sigma = np.sqrt((per_halo**2).sum()) / total
+
+    assert sampled_halos.integral[key].sum() > 0
+    np.testing.assert_allclose(
+        sampled_halos.integral[key].sum(), total, rtol=max(4 * sigma, 1e-2)
+    )
+
+
+@pytest.mark.parametrize("key", ["halo_mass", "sfr", "Vallini15", "Horlaville24"])
+def test_unresolved_grids_follow_sampled_halos(sampled_halos, key: str):
+    # Moved to their Eulerian positions and gridded, the integrals follow the sampled
+    # halos in space: on 8 Mpc blocks their only difference is the shot noise of the
+    # sampled halos.
+    sampled = _blocks(sampled_halos.sampled[key], 2).ravel()
+    integral = _blocks(sampled_halos.integral[key], 2).ravel()
+    assert np.corrcoef(sampled, integral)[0, 1] > 0.9
+
+
+def test_mass_range_and_stellar_relation_are_checked(subsampler_run):
+    ic, inputs = subsampler_run.initial_conditions, subsampler_run.inputs
+    with pytest.raises(ValueError, match="mass_range"):
+        unresolved_cell_totals(
+            ic, REDSHIFT, models=[], inputs=inputs, mass_range=(1e9, 1e8)
+        )
+    with pytest.raises(ValueError, match="stellar_relation"):
+        mean_halo_properties(
+            inputs, REDSHIFT, np.array([1e9]), [], stellar_relation="median"
+        )
