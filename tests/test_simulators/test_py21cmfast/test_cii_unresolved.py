@@ -517,6 +517,150 @@ def test_unresolved_grids_follow_sampled_halos(sampled_halos, key: str):
     assert np.corrcoef(sampled, integral)[0, 1] > 0.9
 
 
+# Closure of sampled and sub-sampler halos -------------------------------------------
+#
+# The sampled halos above SAMPLER_MIN_MASS plus the integral below it must give the
+# CHMF integral over all halo masses, whatever SAMPLER_MIN_MASS is: moving the sampler
+# mass only moves halos between the two parts.
+
+CLOSURE_SAMPLER_MASSES = (1e9, 5e9)
+CLOSURE_MODELS = ["Horlaville24", "deLooze14", "Lagache18"]
+# Mass bins of the sampled halos above 1e9 Msun for the per-halo check.
+PER_HALO_EDGES = np.geomspace(1e9, 5e9, 5)
+
+
+def _closure_inputs(sampler_min_mass: float) -> p21c.InputParameters:
+    return p21c.InputParameters.from_template(
+        ["latest-discrete", "size-tiny"], random_seed=2
+    ).evolve_input_structs(
+        BOX_LEN=100,
+        HII_DIM=25,
+        DIM=None,
+        HIRES_TO_LOWRES_FACTOR=2,
+        SAMPLER_MIN_MASS=sampler_min_mass,
+        ZPRIME_STEP_FACTOR=1.2,
+        RECOMB_MODEL="none",
+    )
+
+
+@pytest.fixture(scope="module")
+def closure_runs() -> SimpleNamespace:
+    """Sampled halos and sub-sampler totals at z = 7 for two SAMPLER_MIN_MASS (~1 min).
+
+    The two runs of a 100 Mpc box (25^3 cells) have the same initial conditions.
+    Their halos above SAMPLER_MIN_MASS are given the per-halo [CII] of
+    :func:`calculate_cii`, the halos below the totals of
+    :func:`unresolved_cell_totals`. The reference is the CHMF integral from the
+    lowest mass of the integrals to well above the mass of a cell, with the stellar
+    relation of sampled halos.
+    """
+    runs = {}
+    for sampler_min_mass in CLOSURE_SAMPLER_MASSES:
+        inputs = _closure_inputs(sampler_min_mass)
+        initial_conditions = p21c.compute_initial_conditions(inputs=inputs)
+        halo_catalog = p21c.determine_halo_catalog(
+            redshift=REDSHIFT, inputs=inputs, initial_conditions=initial_conditions
+        )
+        halo_catalog.load_all()
+        perturbed = p21c.perturb_halo_catalog(
+            initial_conditions=initial_conditions,
+            inputs=inputs,
+            halo_catalog=halo_catalog,
+        )
+        n_halos = perturbed.n_halos
+        per_halo = {
+            "halo_mass": perturbed.get("halo_masses")[:n_halos].astype(np.float64),
+            "sfr": perturbed.get("sfr_acg")[:n_halos].astype(np.float64),
+        }
+        rng = np.random.default_rng(5)
+        for model in CLOSURE_MODELS:
+            per_halo[model] = calculate_cii(perturbed, model, seed=rng)[0]
+        subsampler = unresolved_cell_totals(
+            initial_conditions, REDSHIFT, CLOSURE_MODELS, inputs=inputs, seed=0
+        )
+        runs[sampler_min_mass] = SimpleNamespace(
+            inputs=inputs,
+            initial_conditions=initial_conditions,
+            per_halo=per_halo,
+            subsampler=subsampler,
+        )
+
+    run = runs[CLOSURE_SAMPLER_MASSES[0]]
+    so, cosmo = run.inputs.simulation_options, run.inputs.cosmo_params.cosmo
+    cell_mass = (
+        cosmo.Om0
+        * cosmo.critical_density0.to_value(un.Msun / un.Mpc**3)
+        * (so.BOX_LEN / so.HII_DIM) ** 3
+    )
+    full = unresolved_cell_totals(
+        run.initial_conditions,
+        REDSHIFT,
+        CLOSURE_MODELS,
+        inputs=run.inputs,
+        seed=0,
+        mass_range=(unresolved_mass_range(run.inputs)[0], 20 * cell_mass),
+        stellar_relation="halos",
+    )
+    return SimpleNamespace(runs=runs, full=full)
+
+
+@pytest.mark.parametrize("sampler_min_mass", CLOSURE_SAMPLER_MASSES)
+@pytest.mark.parametrize("key", ["sfr", *CLOSURE_MODELS])
+def test_sampled_plus_subsampler_matches_full_integral(
+    closure_runs, sampler_min_mass: float, key: str
+):
+    # The sampled halos of the box scatter about their expectation by ~1-2% (see
+    # test_unresolved_totals_match_sampled_halos). The sub-sampler halos, 7-10% of
+    # the SFR and [CII] with SAMPLER_MIN_MASS = 1e9 and 27-39% with 5e9, follow the
+    # single power law of the integrals, 1.5-2.5% below the halos. For random seeds
+    # 2-4 the totals are within 2.5% of the full integral.
+    run = closure_runs.runs[sampler_min_mass]
+    per_halo = run.per_halo[key]
+    total = per_halo.sum() + run.subsampler[key].sum()
+    sigma = np.sqrt((per_halo**2).sum()) / total
+
+    np.testing.assert_allclose(
+        total, closure_runs.full[key].sum(), rtol=max(3 * sigma, 0.05)
+    )
+
+
+def test_subsampler_share_depends_on_sampler_mass(closure_runs):
+    # The closure is a test of the integral only if the sub-sampler halos carry a
+    # large part of the total in one of the runs.
+    shares = []
+    for sampler_min_mass in CLOSURE_SAMPLER_MASSES:
+        run = closure_runs.runs[sampler_min_mass]
+        subsampler = run.subsampler["sfr"].sum()
+        shares.append(subsampler / (subsampler + run.per_halo["sfr"].sum()))
+    assert shares[0] < 0.1
+    assert shares[1] > 0.25
+
+
+@pytest.mark.parametrize("key", ["sfr", *CLOSURE_MODELS])
+def test_per_halo_means_match_sampled_halos(closure_runs, key: str):
+    # In mass bins between 1e9 and 5e9 Msun, mean_halo_properties with the stellar
+    # relation of sampled halos gives the mean over the sampled halos. With the
+    # relation of the integrals (the default) it is 1-3% lower: the step at
+    # SAMPLER_MIN_MASS.
+    run = closure_runs.runs[CLOSURE_SAMPLER_MASSES[0]]
+    masses, values = run.per_halo["halo_mass"], run.per_halo[key]
+    grid = np.geomspace(PER_HALO_EDGES[0], PER_HALO_EDGES[-1], 41)
+    models = [key] if key in CLOSURE_MODELS else []
+    means = mean_halo_properties(
+        run.inputs, REDSHIFT, grid, models, seed=0, stellar_relation="halos"
+    )[key]
+    for lower, upper in zip(PER_HALO_EDGES[:-1], PER_HALO_EDGES[1:], strict=True):
+        in_bin = (masses >= lower) & (masses < upper)
+        sampled = values[in_bin].sum()
+        sigma = np.sqrt((values[in_bin] ** 2).sum()) / sampled
+        expected = np.exp(
+            np.interp(np.log(masses[in_bin]), np.log(grid), np.log(means))
+        ).sum()
+
+        assert in_bin.sum() > 3e4
+        np.testing.assert_allclose(sampled, expected, rtol=max(3 * sigma, 0.02))
+
+
 def test_mass_range_and_stellar_relation_are_checked(subsampler_run):
     ic, inputs = subsampler_run.initial_conditions, subsampler_run.inputs
     with pytest.raises(ValueError, match="mass_range"):
