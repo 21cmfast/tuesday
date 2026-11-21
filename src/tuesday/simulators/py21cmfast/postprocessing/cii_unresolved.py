@@ -180,14 +180,14 @@ def mean_halo_properties(
     models: Sequence[str],
     n_draws: int = 100_000,
     seed: int | np.random.Generator | None = None,
-    stellar_relation: str = "integrals",
+    stellar_fraction: str = "integrals",
 ) -> dict[str, np.ndarray]:
     """Mean SFR and [CII] luminosity of halos of given masses.
 
     For each mass, ``n_draws`` halos are given the 21cmFAST scatter of the stellar
     mass, SFR and X-ray luminosity. Their stellar mass and SFR are computed with
     :func:`py21cmfast.wrapper.cfuncs.convert_halo_properties`, as for the sampled
-    halos, and, by default, rescaled to the relation of the 21cmFAST integrals
+    halos, and, by default, rescaled to the stellar fraction of the 21cmFAST integrals
     (:func:`integral_stellar_ratio`); their metallicity follows from them with
     :func:`~tuesday.core.postprocessing.line_intensities.halo_metallicity`, the
     relation of 21cmFAST, and their [CII] luminosity, with the scatter of the model,
@@ -211,12 +211,16 @@ def mean_halo_properties(
         Number of halos averaged at each mass.
     seed : int or np.random.Generator, optional
         Seed or generator for the deviates and the [CII] scatter.
-    stellar_relation : {"integrals", "halos"}, optional
-        Stellar fraction to use. ``"integrals"`` (default): that of the CHMF
-        integrals of the ``EmissivityFields``, so that the SFR matches what 21cmFAST
-        adds for the halos below ``SAMPLER_MIN_MASS``. ``"halos"``: that of sampled
-        halos, e.g. to compare with the halos of a run with a lower
-        ``SAMPLER_MIN_MASS``.
+    stellar_fraction : {"integrals", "halos"}, optional
+        Stellar-to-halo mass fraction f*(M) of the halos. ``"integrals"``
+        (default): that of the CHMF integrals of the ``EmissivityFields``, the single
+        power law ``F_STAR10_ACG * (M / 1e10)^ALPHA_STAR_ACG``, so that the SFR
+        matches what 21cmFAST adds for the halos below ``SAMPLER_MIN_MASS``.
+        ``"halos"``: that of sampled halos, e.g. to compare with the halos of a run
+        with a lower ``SAMPLER_MIN_MASS``. With ``USE_UPPER_STELLAR_TURNOVER`` it is
+        the double power law of :func:`integral_stellar_ratio`, about 2.5% higher
+        below the pivot mass for the default parameters; without it the two are the
+        same.
 
     Returns
     -------
@@ -228,14 +232,14 @@ def mean_halo_properties(
     ------
     ValueError
         If a model is unknown, if it needs metallicities and the run was done
-        without ``USE_TS_FLUCT`` and ``USE_METALLICITY``, or if ``stellar_relation``
+        without ``USE_TS_FLUCT`` and ``USE_METALLICITY``, or if ``stellar_fraction``
         is not one of the options.
     """
     _validate_models(inputs, models)
-    if stellar_relation not in ("integrals", "halos"):
+    if stellar_fraction not in ("integrals", "halos"):
         raise ValueError(
-            "stellar_relation must be 'integrals' or 'halos', not "
-            f"{stellar_relation!r}."
+            "stellar_fraction must be 'integrals' or 'halos', not "
+            f"{stellar_fraction!r}."
         )
     rng = np.random.default_rng(seed)
     quantiles = (np.arange(n_draws) + 0.5) / n_draws
@@ -246,7 +250,7 @@ def mean_halo_properties(
     masses = np.asarray(masses, dtype=float)
     star_ratio = (
         integral_stellar_ratio(inputs, masses)
-        if stellar_relation == "integrals"
+        if stellar_fraction == "integrals"
         else np.ones_like(masses)
     )
 
@@ -300,7 +304,7 @@ def unresolved_cell_totals(
     n_draws: int = 100_000,
     seed: int | np.random.Generator | None = None,
     mass_range: tuple[float, float] | None = None,
-    stellar_relation: str = "integrals",
+    stellar_fraction: str = "integrals",
 ) -> dict[str, np.ndarray]:
     """Totals of the halos below the sampler mass in each Lagrangian cell.
 
@@ -336,7 +340,7 @@ def unresolved_cell_totals(
         (:func:`unresolved_mass_range`). Another range gives the expected totals of
         any halos of the CHMF, e.g. those that a run with a lower
         ``SAMPLER_MIN_MASS`` samples.
-    stellar_relation : {"integrals", "halos"}, optional
+    stellar_fraction : {"integrals", "halos"}, optional
         Passed to :func:`mean_halo_properties`.
 
     Returns
@@ -350,7 +354,7 @@ def unresolved_cell_totals(
     ValueError
         If a model is unknown, if it needs metallicities and the run was done
         without ``USE_TS_FLUCT`` and ``USE_METALLICITY``, if ``mass_range`` is not
-        increasing and positive, or if ``stellar_relation`` is not one of the options.
+        increasing and positive, or if ``stellar_fraction`` is not one of the options.
     NotImplementedError
         If the run uses options that are not supported (see the module notes).
     """
@@ -394,7 +398,7 @@ def unresolved_cell_totals(
             models,
             n_draws=n_draws,
             seed=seed,
-            stellar_relation=stellar_relation,
+            stellar_fraction=stellar_fraction,
         )
     tables = {"halo_mass": counts @ centres}
     tables.update({key: counts @ values for key, values in means.items()})

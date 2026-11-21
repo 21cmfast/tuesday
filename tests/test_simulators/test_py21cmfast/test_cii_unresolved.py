@@ -382,7 +382,7 @@ def test_cii_flux_of_unresolved_grid(subsampler_run):
 #
 # A run whose sampler goes down to SAMPLED_MASS_RANGE[0] samples the halos that a run
 # with a higher SAMPLER_MIN_MASS integrates. The integral of cii_unresolved over the
-# same mass range, with the stellar relation of sampled halos, must then give their
+# same mass range, with the stellar fraction of sampled halos, must then give their
 # number, SFR and [CII] luminosity in expectation, and follow them in space.
 
 SAMPLED_MASS_RANGE = (1e8, 1e9)
@@ -405,7 +405,7 @@ def sampled_halos() -> SimpleNamespace:
 
     The halos are those of a 40 Mpc box (~4e5 halos above 1e8 Msun, ~5 s); the
     integral is gridded as for the halos below the sampler, with the stellar
-    relation of sampled halos.
+    fraction of sampled halos.
     """
     inputs = p21c.InputParameters.from_template(
         ["latest-discrete", "size-tiny"], random_seed=2
@@ -457,7 +457,7 @@ def sampled_halos() -> SimpleNamespace:
         inputs=inputs,
         seed=0,
         mass_range=SAMPLED_MASS_RANGE,
-        stellar_relation="halos",
+        stellar_fraction="halos",
     )
     return SimpleNamespace(
         inputs=inputs,
@@ -552,7 +552,7 @@ def closure_runs() -> SimpleNamespace:
     :func:`calculate_cii`, the halos below the totals of
     :func:`unresolved_cell_totals`. The reference is the CHMF integral from the
     lowest mass of the integrals to well above the mass of a cell, with the stellar
-    relation of sampled halos.
+    fraction of sampled halos.
     """
     runs = {}
     for sampler_min_mass in CLOSURE_SAMPLER_MASSES:
@@ -599,7 +599,7 @@ def closure_runs() -> SimpleNamespace:
         inputs=run.inputs,
         seed=0,
         mass_range=(unresolved_mass_range(run.inputs)[0], 20 * cell_mass),
-        stellar_relation="halos",
+        stellar_fraction="halos",
     )
     return SimpleNamespace(runs=runs, full=full)
 
@@ -613,7 +613,7 @@ def test_sampled_plus_subsampler_matches_full_integral(
     # test_unresolved_totals_match_sampled_halos). The sub-sampler halos, 7-10% of
     # the SFR and [CII] with SAMPLER_MIN_MASS = 1e9 and 27-39% with 5e9, follow the
     # single power law of the integrals, 1.5-2.5% below the halos. For random seeds
-    # 2-4 the totals are within 2.5% of the full integral.
+    # 2-4 the totals are within 3% of the full integral.
     run = closure_runs.runs[sampler_min_mass]
     per_halo = run.per_halo[key]
     total = per_halo.sum() + run.subsampler[key].sum()
@@ -639,15 +639,14 @@ def test_subsampler_share_depends_on_sampler_mass(closure_runs):
 @pytest.mark.parametrize("key", ["sfr", *CLOSURE_MODELS])
 def test_per_halo_means_match_sampled_halos(closure_runs, key: str):
     # In mass bins between 1e9 and 5e9 Msun, mean_halo_properties with the stellar
-    # relation of sampled halos gives the mean over the sampled halos. With the
-    # relation of the integrals (the default) it is 1-3% lower: the step at
-    # SAMPLER_MIN_MASS.
+    # fraction of sampled halos gives the mean over the sampled halos (see
+    # test_integral_stellar_fraction_is_below_halos for that of the integrals).
     run = closure_runs.runs[CLOSURE_SAMPLER_MASSES[0]]
     masses, values = run.per_halo["halo_mass"], run.per_halo[key]
     grid = np.geomspace(PER_HALO_EDGES[0], PER_HALO_EDGES[-1], 41)
     models = [key] if key in CLOSURE_MODELS else []
     means = mean_halo_properties(
-        run.inputs, REDSHIFT, grid, models, seed=0, stellar_relation="halos"
+        run.inputs, REDSHIFT, grid, models, seed=0, stellar_fraction="halos"
     )[key]
     for lower, upper in zip(PER_HALO_EDGES[:-1], PER_HALO_EDGES[1:], strict=True):
         in_bin = (masses >= lower) & (masses < upper)
@@ -661,13 +660,44 @@ def test_per_halo_means_match_sampled_halos(closure_runs, key: str):
         np.testing.assert_allclose(sampled, expected, rtol=max(3 * sigma, 0.02))
 
 
-def test_mass_range_and_stellar_relation_are_checked(subsampler_run):
+@pytest.mark.parametrize(
+    ("key", "lower", "upper"),
+    [
+        ("sfr", 1.01, 1.035),
+        ("deLooze14", 1.01, 1.035),
+        ("Lagache18", 1.01, 1.035),
+        # Horlaville24 depends mostly on the halo mass, little on the SFR.
+        ("Horlaville24", 1.0, 1.01),
+    ],
+)
+def test_integral_stellar_fraction_is_below_halos(key: str, lower: float, upper: float):
+    # With USE_UPPER_STELLAR_TURNOVER, the single power law of the integrals (the
+    # default) is below the double power law of sampled halos: the sub-sampler halos
+    # are 1.5-2.5% fainter in SFR than sampled halos of the same mass, a step at
+    # SAMPLER_MIN_MASS.
+    inputs = _closure_inputs(CLOSURE_SAMPLER_MASSES[0])
+    assert inputs.astro_options.USE_UPPER_STELLAR_TURNOVER
+    masses = np.geomspace(1e9, 5e9, 5)
+    models = [key] if key in CLOSURE_MODELS else []
+    halos, integrals = (
+        mean_halo_properties(
+            inputs, REDSHIFT, masses, models, seed=0, stellar_fraction=fraction
+        )[key]
+        for fraction in ("halos", "integrals")
+    )
+    ratio = halos / integrals
+
+    assert np.all(ratio > lower)
+    assert np.all(ratio < upper)
+
+
+def test_mass_range_and_stellar_fraction_are_checked(subsampler_run):
     ic, inputs = subsampler_run.initial_conditions, subsampler_run.inputs
     with pytest.raises(ValueError, match="mass_range"):
         unresolved_cell_totals(
             ic, REDSHIFT, models=[], inputs=inputs, mass_range=(1e9, 1e8)
         )
-    with pytest.raises(ValueError, match="stellar_relation"):
+    with pytest.raises(ValueError, match="stellar_fraction"):
         mean_halo_properties(
-            inputs, REDSHIFT, np.array([1e9]), [], stellar_relation="median"
+            inputs, REDSHIFT, np.array([1e9]), [], stellar_fraction="median"
         )
