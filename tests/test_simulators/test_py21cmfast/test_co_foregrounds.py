@@ -16,16 +16,19 @@ from tuesday.simulators.py21cmfast.postprocessing.co_foregrounds import (
 )
 
 
-def density_inputs() -> p21c.InputParameters:
-    """Small inputs (3 Mpc cells, 10 cells per side) with linear density evolution."""
+def density_inputs(algorithm: str = "2LPT") -> p21c.InputParameters:
+    """Small inputs (3 Mpc cells, 10 cells per side) with the given density evolution.
+
+    The 0.5 Mpc high-resolution cells keep 21cmFAST from warning that the resolution
+    is too low for an evolved density.
+    """
     return p21c.InputParameters.from_template(
         "simple", random_seed=2
     ).evolve_input_structs(
         BOX_LEN=30,
         HII_DIM=10,
-        DIM=None,
-        HIRES_TO_LOWRES_FACTOR=2,
-        PERTURB_ALGORITHM="LINEAR",
+        DIM=60,
+        PERTURB_ALGORITHM=algorithm,
         # Only the density is used; keep the box valid for the reionisation options.
         R_BUBBLE_MAX=5,
     )
@@ -49,11 +52,21 @@ def test_density_lightcone_geometry(density_lc):
     assert density_lc.density.shape[-1] >= 40
 
 
+def test_density_lightcone_is_physical(density_lc):
+    # The 2LPT density is a mass-conserving field: delta >= -1 everywhere.
+    assert density_lc.density.min() >= -1
+
+
+def test_density_lightcone_rejects_linear_density():
+    with pytest.raises(ValueError, match="2LPT"):
+        build_density_lightcone(density_inputs("LINEAR"), max_redshift=0.0345)
+
+
 def test_density_lightcone_rotates_the_boxes(density_lc):
-    # Each box of 10 slices is the same initial conditions, evolved linearly to the
+    # Each box of 10 slices is the same initial conditions, evolved with 2LPT to the
     # redshift of the box centre, and rotated or flipped in the transverse plane
-    # with a period of four boxes. Undoing the transformation must leave the first
-    # box times a growth-factor ratio.
+    # with a period of four boxes. Undoing the transformation must leave nearly the
+    # first box, as the growth changes little at z < 0.035.
     boxes = [density_lc.density[..., 10 * b : 10 * (b + 1)] for b in range(4)]
     undo = [
         lambda box: box,
@@ -61,14 +74,13 @@ def test_density_lightcone_rotates_the_boxes(density_lc):
         lambda box: np.flip(box, axis=0),
         lambda box: np.flip(np.rot90(box, k=-1, axes=(0, 1)), axis=1),
     ]
-    # 21cmFAST floors the density contrast at -1, which linear evolution reaches in
-    # many cells this close to z = 0; those cells do not scale with the growth.
-    unfloored = boxes[0] > -0.99
+
+    def correlation(a: np.ndarray, b: np.ndarray) -> float:
+        return np.corrcoef(a.ravel(), b.ravel())[0, 1]
+
     for b in range(1, 4):
-        restored = undo[b](boxes[b])
-        ratio = (restored / boxes[0])[unfloored]
-        np.testing.assert_allclose(ratio, ratio[0], rtol=1e-4)
-        assert not np.allclose(boxes[b], boxes[0] * ratio[0], rtol=1e-3)
+        assert correlation(undo[b](boxes[b]), boxes[0]) > 0.999
+        assert abs(correlation(boxes[b], boxes[0])) < 0.5
 
 
 def make_cii_lightcone() -> LightCone:

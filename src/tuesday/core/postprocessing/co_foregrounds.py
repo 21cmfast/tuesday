@@ -13,14 +13,23 @@ by ``clip(1 + b delta, 0)`` of density cell ``(j, k)`` in the slice of the densi
 lightcone nearest to the CO distance. The luminosity is spread over the solid angle
 ``(cell_size / chi_co)**2`` and the observed frequency width ``dnu`` of the slice.
 
-This is an approximation, with two known effects that nearly cancel in the mean:
+The density lightcone must be an evolved (Eulerian) field, such as the 2LPT density
+of 21cmFAST: the effective bias relates the emitters at their final positions to the
+matter at the same time. The linearly evolved field used by the research code is
+neither Eulerian nor physical at low redshift: with 1.5 Mpc cells its rms is 1-2,
+``1 + b delta`` is negative in about a third of the cells, and clipping it raises
+the mean weight to about 1.65 and changes the large-scale clustering.
+
+The geometry is an approximation:
 
 - A slice one cell deep spans ``cell_size * H(z) (1 + z_co) / (H(z_co) (1 + z))``
   of comoving depth at the CO redshift, 1.6-1.8 cells for CO J=3-2 to 6-5 in front
   of [CII] at z = 6-7. Counting the emitters of one cell^3 gives a mean brightness
-  lower than a count over the whole channel by this factor.
-- With cells of 1.5 Mpc at z = 0.3-1.7, ``1 + b delta`` is negative in about a
-  third of the cells; clipping it at zero raises its mean to about 1.65.
+  lower than a count over the whole channel by this factor. In the research code,
+  on the linearly evolved field, the mean weight of about 1.65 nearly cancelled
+  this; on a 2LPT field it does not.
+- With 2LPT cells of 1.5 Mpc at z = 0-1.9, ``1 + b delta`` is negative in 10-40%
+  of the cells, mostly voids; clipping it at zero gives a mean weight of 0.87-1.09.
 
 The angular scale is also approximate: at the CO distance a pixel spans
 ``cell_size * chi_co / chi_cii`` across, 1.7-7 times less than the density cell
@@ -200,8 +209,9 @@ def bias_weights(density: np.ndarray, bias: float) -> np.ndarray:
 
     The weight ``1 + bias * density`` is set to zero where it is negative, which
     happens where the density field has strong fluctuations. As in the research
-    code, the weights are not renormalised, so their mean exceeds one when many
-    cells are clipped (about 1.65 for 1.5 Mpc cells at z = 0.3-1.7).
+    code, the weights are not renormalised. For a 2LPT density with 1.5 Mpc cells
+    at z = 0-1.9, their mean is 0.87-1.09; for the linearly evolved field of the
+    research code, it was about 1.65.
 
     Parameters
     ----------

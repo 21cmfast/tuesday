@@ -56,11 +56,18 @@ def build_density_lightcone(
     and rotated or flipped in the transverse plane with a period of four boxes so
     that the repeated structures do not line up.
 
+    The density must be evolved, e.g. with ``PERTURB_ALGORITHM="2LPT"`` (the
+    21cmFAST default): the effective bias of the CO emitters is defined against
+    the matter at the final (Eulerian) positions. The ``"LINEAR"`` density is the
+    linearly extrapolated initial field, whose rms exceeds one in 1.5 Mpc cells at
+    z < 2, so it is rejected.
+
     Parameters
     ----------
     inputs : py21cmfast.InputParameters
         Parameters of the density simulation; its cell size and number of cells set
-        the lightcone resolution. To use the lightcone with
+        the lightcone resolution. ``PERTURB_ALGORITHM`` must not be ``"LINEAR"``.
+        To use the lightcone with
         :func:`add_co_foregrounds`, they must equal those of the [CII] lightcone,
         whose pixels the density cells are mapped to one to one.
     max_redshift : float
@@ -74,7 +81,17 @@ def build_density_lightcone(
     -------
     DensityLightcone
         The density contrast lightcone.
+
+    Raises
+    ------
+    ValueError
+        If ``PERTURB_ALGORITHM`` is ``"LINEAR"``.
     """
+    if inputs.matter_options.PERTURB_ALGORITHM == "LINEAR":
+        raise ValueError(
+            "The CO bias needs an evolved (Eulerian) density field; set "
+            "PERTURB_ALGORITHM='2LPT' instead of 'LINEAR'."
+        )
     simulation = inputs.simulation_options
     n_cells = simulation.HII_DIM
     cell = simulation.cell_size.to(un.Mpc)
