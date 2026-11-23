@@ -6,32 +6,31 @@ drawn from the CO luminosity functions of Popping et al. (2016), MNRAS, 461, 93
 (arXiv:1602.02761), and trace the matter density with the effective bias of
 arXiv:2510.07596 (Table A.1).
 
-The geometry follows the research code this module was ported from. In each [CII]
-slice and for each CO line, every map pixel holds the emitters of one [CII] cell of
-comoving volume, ``cell_size**3``, at the CO redshift. Pixel ``(j, k)`` is weighted
-by ``clip(1 + b delta, 0)`` of density cell ``(j, k)`` in the slice of the density
-lightcone nearest to the CO distance. The luminosity is spread over the solid angle
-``(cell_size / chi_co)**2`` and the observed frequency width ``dnu`` of the slice.
+In each [CII] slice and for each CO line, map pixel ``(j, k)`` holds the emitters
+of density cell ``(j, k)``, with no projection of the cells onto the sky:
+
+- The emitters fill ``cell_size**2`` times the comoving depth of the channel at the
+  CO redshift, ``depth = c dz_co / H(z_co)``, with ``dz_co`` the CO redshift range
+  of the slice. For CO J=3-2 to 6-5 in front of [CII] at z = 6-7, this is 1.6-1.8
+  cells.
+- The density of a pixel is the average of the density slices whose centres lie
+  within ``chi_co -/+ depth / 2`` of the CO distance.
+- The luminosity is spread over the solid angle ``(cell_size / chi_co)**2`` and the
+  observed frequency width ``dnu`` of the slice, so that the mean brightness is
+  ``eps / (4 pi H(z_co) (1 + z_co))`` for a luminosity density ``eps``.
+
+The foreground can include the clustering of the emitters and their shot noise: the
+weights ``clip(1 + b delta, 0)`` are renormalised to unit mean in each slice, and
+the number of emitters in each pixel is drawn from a Poisson distribution. It can
+also include the clustering only: each pixel then holds its expected brightness,
+with the weights ``1 + b delta``, neither clipped nor renormalised.
 
 The density lightcone must be an evolved (Eulerian) field, such as the 2LPT density
 of 21cmFAST: the effective bias relates the emitters at their final positions to the
-matter at the same time. The linearly evolved field used by the research code is
-neither Eulerian nor physical at low redshift: with 1.5 Mpc cells its rms is 1-2,
-``1 + b delta`` is negative in about a third of the cells, and clipping it raises
-the mean weight to about 1.65 and changes the large-scale clustering.
+matter at the same time. With 2LPT cells of 1.5 Mpc at z = 0-1.9, ``1 + b delta`` is
+negative in 10-40% of the cells, mostly voids.
 
-The geometry is an approximation:
-
-- A slice one cell deep spans ``cell_size * H(z) (1 + z_co) / (H(z_co) (1 + z))``
-  of comoving depth at the CO redshift, 1.6-1.8 cells for CO J=3-2 to 6-5 in front
-  of [CII] at z = 6-7. Counting the emitters of one cell^3 gives a mean brightness
-  lower than a count over the whole channel by this factor. In the research code,
-  on the linearly evolved field, the mean weight of about 1.65 nearly cancelled
-  this; on a 2LPT field it does not.
-- With 2LPT cells of 1.5 Mpc at z = 0-1.9, ``1 + b delta`` is negative in 10-40%
-  of the cells, mostly voids; clipping it at zero gives a mean weight of 0.87-1.09.
-
-The angular scale is also approximate: at the CO distance a pixel spans
+The angular scale is approximate: at the CO distance a pixel spans
 ``cell_size * chi_co / chi_cii`` across, 1.7-7 times less than the density cell
 that sets its weight.
 
@@ -208,10 +207,9 @@ def bias_weights(density: np.ndarray, bias: float) -> np.ndarray:
     """Weight the mean number of emitters in each cell by the local density.
 
     The weight ``1 + bias * density`` is set to zero where it is negative, which
-    happens where the density field has strong fluctuations. As in the research
-    code, the weights are not renormalised. For a 2LPT density with 1.5 Mpc cells
-    at z = 0-1.9, their mean is 0.87-1.09; for the linearly evolved field of the
-    research code, it was about 1.65.
+    happens where the density field has strong fluctuations. The weights are not
+    renormalised here; :func:`co_foreground_brightness` renormalises them to unit
+    mean in each slice.
 
     Parameters
     ----------
@@ -288,6 +286,39 @@ class DensityLightcone:
             )
         return self.density[..., np.argmin(np.abs(self.distances - distance))]
 
+    def depth_average(
+        self, distance: un.Quantity[un.Mpc], depth: un.Quantity[un.Mpc]
+    ) -> np.ndarray:
+        """Average the density over a comoving depth along the line of sight.
+
+        The slices whose centres lie in ``[distance - depth / 2, distance +
+        depth / 2)`` are averaged; if there is none, the nearest slice is used.
+
+        Parameters
+        ----------
+        distance : un.Quantity[un.Mpc]
+            Comoving distance of the middle of the depth.
+        depth : un.Quantity[un.Mpc]
+            Comoving depth to average over.
+
+        Returns
+        -------
+        np.ndarray
+            The averaged density, with shape ``(n, n)``.
+
+        Raises
+        ------
+        ValueError
+            If the distance is beyond the lightcone.
+        """
+        nearest = self.nearest_slice(distance)
+        inside = (self.distances >= distance - depth / 2) & (
+            self.distances < distance + depth / 2
+        )
+        if not inside.any():
+            return nearest
+        return self.density[..., inside].mean(axis=-1)
+
 
 def _co_slices(
     transition: str,
@@ -297,9 +328,9 @@ def _co_slices(
 ) -> dict[str, np.ndarray | un.Quantity]:
     """Observed frequency, CO redshift, distances and channel width of each slice.
 
-    As in the research code, the observed width of slice ``i`` is
-    ``nu_co / (1 + z_co)**2 * dz_co``, with ``dz_co`` the gradient of the CO
-    redshift along the slices.
+    The observed width of slice ``i`` is ``nu_co / (1 + z_co)**2 * dz_co``, and the
+    comoving depth of its channel at the CO redshift is ``c dz_co / H(z_co)``, with
+    ``dz_co`` the gradient of the CO redshift along the slices.
     """
     if len(distances) < 2:
         raise ValueError(
@@ -308,7 +339,9 @@ def _co_slices(
     nu_obs = rest_frequency / (1 + comoving_distance_to_redshift(distances, cosmo))
     nu_co = co_rest_frequency(transition)
     z_co = (nu_co / nu_obs).to_value("") - 1
-    delta_nu = np.abs(nu_co / (1 + z_co) ** 2 * np.gradient(z_co))
+    dz_co = np.abs(np.gradient(z_co))
+    delta_nu = nu_co / (1 + z_co) ** 2 * dz_co
+    depth = (const.c / cosmo.H(np.clip(z_co, 0, None))).to(un.Mpc) * dz_co
     valid = z_co > 0
     z_co = np.where(valid, z_co, 0)
     return {
@@ -318,6 +351,7 @@ def _co_slices(
         "chi_co": cosmo.comoving_distance(z_co),
         "d_lum": cosmo.luminosity_distance(z_co),
         "delta_nu": delta_nu,
+        "depth": depth,
     }
 
 
@@ -359,18 +393,19 @@ def mean_co_brightness(
 ) -> un.Quantity[un.Jy / un.sr]:
     """Calculate the mean CO surface brightness of each slice for a uniform density.
 
-    For each CO line, the emitters of one cell^3 of comoving volume at the CO
-    redshift have the luminosity ``eps(z_co) cell_size**3``, with ``eps`` the CO
+    For each CO line, the emitters of a pixel fill ``cell_size**2`` times the
+    comoving depth of the channel at the CO redshift, ``depth = c dz_co / H(z_co)``,
+    and have the luminosity ``eps(z_co) cell_size**2 depth``, with ``eps`` the CO
     luminosity density of the luminosity function. Their brightness is
 
-    ``B = eps cell_size**3 nu_obs / (4 pi D_L**2 c dnu Omega)``,
+    ``B = eps cell_size**2 depth nu_obs / (4 pi D_L**2 c dnu Omega)``,
 
     with ``Omega = (cell_size / chi_co)**2``, ``dnu`` the observed width of the
     slice and ``D_L`` the luminosity distance, so that the flux of a source of
-    luminosity ``L`` is ``L / (4 pi D_L**2)`` in Jy km/s. This is the mean of
-    :func:`co_foreground_brightness` for a density contrast of zero; see the module
-    docstring for the approximations. Lines that would come from a negative
-    redshift are skipped.
+    luminosity ``L`` is ``L / (4 pi D_L**2)`` in Jy km/s. In a flat cosmology this
+    is ``eps / (4 pi H(z_co) (1 + z_co))``, whatever the cell size. This is the
+    mean of :func:`co_foreground_brightness`; lines that would come from a
+    negative redshift are skipped.
 
     Parameters
     ----------
@@ -399,7 +434,7 @@ def mean_co_brightness(
         If a transition is unknown or there are fewer than two slices.
     """
     step = _check_log_l_ratio(log_l_ratio)
-    volume = cell_size.to_value(un.Mpc) ** 3
+    area = cell_size.to_value(un.Mpc) ** 2
     total = np.zeros(len(distances))
     for transition in transitions:
         slices = _co_slices(transition, distances, cosmo, rest_frequency)
@@ -407,6 +442,7 @@ def mean_co_brightness(
             phi, log_l_star = co_luminosity_function(
                 transition, slices["z_co"][i], log_l_ratio
             )
+            volume = area * slices["depth"][i].to_value(un.Mpc)
             luminosity = np.sum(phi * step * 10 ** (log_l_ratio + log_l_star)) * volume
             total[i] += luminosity * _to_brightness(slices, i, cell_size)
     return total * un.Jy / un.sr
@@ -421,18 +457,29 @@ def co_foreground_brightness(
     transitions: tuple[str, ...] = CO_TRANSITIONS,
     rest_frequency: un.Quantity[un.GHz] = NU_CII_REST,
     log_l_ratio: np.ndarray = LOG_L_RATIO,
-    poisson: bool = True,
+    shot_noise: bool = True,
     seed: int | np.random.Generator | None = None,
 ) -> un.Quantity[un.Jy / un.sr]:
-    """Draw the CO interloper foreground of a rectilinear [CII] lightcone.
+    """Simulate the CO interloper foreground of a rectilinear [CII] lightcone.
 
-    For each slice and CO line, the density slice nearest to the CO distance is
-    turned into weights with :func:`bias_weights`, and density cell ``(j, k)``
-    weights pixel ``(j, k)``. The number of emitters in each luminosity bin of each
-    pixel is drawn from a Poisson distribution of mean
-    ``phi * dlog(L) * cell_size**3 * weight``, and their luminosity is converted to
-    a surface brightness as in :func:`mean_co_brightness`. See the module docstring
-    for the approximations of this geometry, which follows the research code.
+    For each slice and CO line, the density is averaged over the comoving depth of
+    the channel at the CO redshift (:meth:`DensityLightcone.depth_average`), and
+    density cell ``(j, k)`` weights pixel ``(j, k)``. The mean number of emitters in
+    each luminosity bin of a pixel is ``phi * dlog(L) * cell_size**2 * depth *
+    weight``, and their luminosity is converted to a surface brightness as in
+    :func:`mean_co_brightness`. Two models are available:
+
+    - clustering and shot noise (``shot_noise=True``, the default): the weights
+      ``clip(1 + b delta, 0)`` of :func:`bias_weights` are renormalised to unit mean
+      over the slice, and the number of emitters is drawn from a Poisson
+      distribution with this mean. The mean of the map is that of
+      :func:`mean_co_brightness`.
+    - clustering only (``shot_noise=False``): each pixel holds the expected
+      brightness, with the linear weight ``1 + b delta``. It is neither clipped nor
+      renormalised, so the brightness is negative where ``b delta < -1``, and its
+      mean over a slice is :func:`mean_co_brightness` times ``1 + b <delta>``.
+
+    See the module docstring for the approximations of this geometry.
 
     Parameters
     ----------
@@ -453,11 +500,13 @@ def co_foreground_brightness(
         Rest-frame frequency of the target line of the lightcone. Defaults to [CII].
     log_l_ratio : np.ndarray, optional
         Uniform grid of ``log10(L / L*)`` of the luminosity bins.
-    poisson : bool, optional
-        If False, return the expected brightness of each pixel instead of a Poisson
-        realisation.
+    shot_noise : bool, optional
+        If True (the default), simulate clustering and shot noise: Poisson draws
+        with the clipped and renormalised weights. If False, simulate the
+        clustering only: the expected brightness with the unclipped weights.
     seed : int or np.random.Generator, optional
-        Seed or generator for the Poisson draws. If None, a random seed is used.
+        Seed or generator for the Poisson draws, unused if ``shot_noise`` is False.
+        If None, a random seed is used.
 
     Returns
     -------
@@ -484,7 +533,7 @@ def co_foreground_brightness(
         )
     step = _check_log_l_ratio(log_l_ratio)
     rng = np.random.default_rng(seed)
-    volume = cell_size.to_value(un.Mpc) ** 3
+    area = cell_size.to_value(un.Mpc) ** 2
 
     brightness = np.zeros((n_pixels, n_pixels, len(distances)))
     for transition in transitions:
@@ -492,16 +541,20 @@ def co_foreground_brightness(
         for i in np.flatnonzero(slices["valid"]):
             z_co = slices["z_co"][i]
             phi, log_l_star = co_luminosity_function(transition, z_co, log_l_ratio)
-            mean_counts = phi * step * volume
+            depth = slices["depth"][i]
+            mean_counts = phi * step * area * depth.to_value(un.Mpc)
             luminosities = 10 ** (log_l_ratio + log_l_star)
-            weights = bias_weights(
-                density_lightcone.nearest_slice(slices["chi_co"][i]), co_bias(z_co)
-            )
+            delta = density_lightcone.depth_average(slices["chi_co"][i], depth)
+            bias = co_bias(z_co)
 
-            if poisson:
+            if shot_noise:
+                weights = bias_weights(delta, bias)
+                if weights.mean() > 0:
+                    weights = weights / weights.mean()
                 counts = rng.poisson(weights[..., None] * mean_counts)
                 luminosity = counts @ luminosities
             else:
+                weights = 1 + bias * np.asarray(delta, dtype=float)
                 luminosity = weights * np.sum(mean_counts * luminosities)
             brightness[..., i] += luminosity * _to_brightness(slices, i, cell_size)
     return brightness * un.Jy / un.sr

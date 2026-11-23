@@ -124,7 +124,7 @@ def add_co_foregrounds(
     density_lightcone: DensityLightcone,
     transitions: tuple[str, ...] = CO_TRANSITIONS,
     log_l_ratio: np.ndarray = LOG_L_RATIO,
-    poisson: bool = True,
+    shot_noise: bool = True,
     seed: int | np.random.Generator | None = None,
 ) -> p21c.LightCone:
     """Add the CO interloper foreground to a [CII] lightcone.
@@ -147,11 +147,15 @@ def add_co_foregrounds(
         default.
     log_l_ratio : np.ndarray, optional
         Uniform grid of ``log10(L / L*)`` of the luminosity bins.
-    poisson : bool, optional
-        If False, use the expected brightness of each pixel instead of a Poisson
-        realisation.
+    shot_noise : bool, optional
+        If True (the default), simulate the clustering and the shot noise of the CO
+        emitters: Poisson draws with the weights ``clip(1 + b delta, 0)``,
+        renormalised to unit mean in each slice.
+        If False, simulate the clustering only: the expected brightness with the
+        unclipped weights ``1 + b delta``, which can be negative.
     seed : int or np.random.Generator, optional
-        Seed or generator for the Poisson draws. If None, a random seed is used.
+        Seed or generator for the Poisson draws, unused if ``shot_noise`` is False.
+        If None, a random seed is used.
 
     Returns
     -------
@@ -181,7 +185,7 @@ def add_co_foregrounds(
         density_lightcone,
         transitions=transitions,
         log_l_ratio=log_l_ratio,
-        poisson=poisson,
+        shot_noise=shot_noise,
         seed=seed,
     ).to_value(un.Jy / un.sr)
     return attrs.evolve(

@@ -119,8 +119,8 @@ def test_co_bias():
 
 def test_bias_weights_are_clipped():
     # Strong fluctuations, as for 1.5 Mpc cells at low redshift: 1 + b delta < 0
-    # in many cells. As in the research code, the weights are clipped at zero and
-    # not renormalised, so their mean exceeds one.
+    # in many cells. The weights are clipped at zero, so their mean exceeds one;
+    # co_foreground_brightness renormalises them.
     delta = np.random.default_rng(0).normal(0, 2, size=(64, 64))
     weights = bias_weights(delta, bias=1.5)
     raw = 1 + 1.5 * delta
@@ -167,62 +167,65 @@ def direct_count(transition: str, distance: un.Quantity) -> un.Quantity:
     return (flux * nu_obs / (const.c * (nu_hi - nu_lo))).to(un.Jy / un.sr)
 
 
-def research_mean(transition: str, distances: un.Quantity) -> np.ndarray:
-    """Mean CO brightness of each slice as in the research code, in Jy/sr.
-
-    The emitters of one cell^3 of comoving volume, at the CO redshift, spread over
-    the solid angle (cell / D_co)^2 and the observed width of the [CII] slice.
-    """
+def co_redshifts(transition: str, distances: un.Quantity) -> np.ndarray:
+    """CO redshift of each [CII] slice, independently of the module."""
     tol = {"ztol": 1e-12, "maxfun": 10_000}
     z_cii = np.array(
         [z_at_value(Planck18.comoving_distance, d, **tol).value for d in distances]
     )
-    nu_obs = NU_CII_REST / (1 + z_cii)
-    nu_co = co_rest_frequency(transition)
-    lc_z_co = (nu_co / nu_obs).value - 1
-    dz_co = np.gradient(lc_z_co)
+    return (co_rest_frequency(transition) * (1 + z_cii) / NU_CII_REST).value - 1
+
+
+def channel_depth(transition: str, distances: un.Quantity) -> un.Quantity:
+    """Comoving depth at the CO redshift of the channel of each [CII] slice."""
+    z_co = co_redshifts(transition, distances)
+    return (const.c / Planck18.H(z_co)).to(un.Mpc) * np.abs(np.gradient(z_co))
+
+
+def luminosity_density_mean(transition: str, distances: un.Quantity) -> np.ndarray:
+    """Mean CO brightness of each slice from the CO luminosity density, in Jy/sr.
+
+    Emitters of luminosity density eps (Jy km/s Mpc^2 per Mpc^3) counted over the
+    comoving depth of the channel give eps / (4 pi H(z_co) (1 + z_co)), whatever the
+    cell size.
+    """
     out = []
-    for i, z_co in enumerate(lc_z_co):
+    for z_co in co_redshifts(transition, distances):
         phi, log_l_star = co_luminosity_function(transition, z_co, LOG_X)
-        luminosity = np.sum(phi * (LOG_X[1] - LOG_X[0]) * 10 ** (LOG_X + log_l_star))
-        lum = luminosity * CELL.value**3 * un.Jy * un.km / un.s * un.Mpc**2
-        d_co = Planck18.comoving_distance(z_co)
-        d_lum = d_co * (1 + z_co)
-        solid_angle = (CELL / d_co) ** 2 * un.sr
-        delta_nu = nu_co / (1 + z_co) ** 2 * dz_co[i]
-        b = lum * nu_obs[i] / (4 * np.pi * d_lum**2 * const.c * delta_nu * solid_angle)
+        eps = (
+            np.sum(phi * (LOG_X[1] - LOG_X[0]) * 10 ** (LOG_X + log_l_star))
+            * un.Jy
+            * un.km
+            / un.s
+            / un.Mpc
+        )
+        b = eps / (4 * np.pi * Planck18.H(z_co) * (1 + z_co)) / un.sr
         out.append(b.to_value(un.Jy / un.sr))
     return np.array(out)
 
 
 @pytest.mark.parametrize("transition", ["CO J=3-2", "CO J=4-3", "CO J=5-4", "CO J=6-5"])
-def test_mean_brightness_matches_research_formula(transition: str):
+def test_mean_brightness_matches_luminosity_density(transition: str):
     mean = mean_co_brightness(DISTANCES, CELL, Planck18, transitions=(transition,))
 
     assert mean.unit == un.Jy / un.sr
     np.testing.assert_allclose(
-        mean.value, research_mean(transition, DISTANCES), rtol=1e-6
+        mean.value, luminosity_density_mean(transition, DISTANCES), rtol=1e-6
     )
 
 
 @pytest.mark.parametrize("transition", ["CO J=3-2", "CO J=4-3", "CO J=5-4", "CO J=6-5"])
-def test_cell_volume_approximation(transition: str):
-    # Documents the approximation of the research code: it counts the emitters of
-    # one cell^3, but a [CII] slice one cell deep spans a depth of
-    # cell * H(z_cii) (1 + z_co) / (H(z_co) (1 + z_cii)) at the CO redshift, i.e.
-    # 1.6-1.8 cells. A direct count of the emitters is larger by this ratio.
+def test_mean_brightness_matches_direct_count(transition: str):
+    # The emitters of a pixel are counted over the comoving depth of the channel at
+    # the CO redshift, 1.6-1.8 cells for CO J=3-2 to 6-5 in front of [CII] at
+    # z = 6.5, not over one cell: the mean equals a direct count of the emitters in
+    # the volume of the channel.
     mean = mean_co_brightness(DISTANCES, CELL, Planck18, transitions=(transition,))
-    distance = DISTANCES[2]
-    z_cii = z_at_value(Planck18.comoving_distance, distance).value
-    nu_obs = NU_CII_REST / (1 + z_cii)
-    z_co = (co_rest_frequency(transition) / nu_obs).value - 1
-    depth_ratio = (
-        (Planck18.H(z_cii) / Planck18.H(z_co)).value * (1 + z_co) / (1 + z_cii)
-    )
+    depth = channel_depth(transition, DISTANCES)
 
-    assert 1.5 < depth_ratio < 1.9
+    assert np.all((depth > 1.5 * CELL) & (depth < 1.9 * CELL))
     np.testing.assert_allclose(
-        direct_count(transition, distance).value / mean[2].value, depth_ratio, rtol=1e-3
+        direct_count(transition, DISTANCES[2]).value, mean[2].value, rtol=1e-3
     )
 
 
@@ -275,7 +278,7 @@ def test_sampled_mean_matches_expectation():
 def test_expected_map_of_uniform_density_is_the_mean():
     density = uniform_density(Planck18.comoving_distance(2.2))
     brightness = co_foreground_brightness(
-        DISTANCES, 16, CELL, Planck18, density, poisson=False
+        DISTANCES, 16, CELL, Planck18, density, shot_noise=False
     )
     mean = mean_co_brightness(DISTANCES, CELL, Planck18)
 
@@ -285,9 +288,9 @@ def test_expected_map_of_uniform_density_is_the_mean():
 
 
 def test_density_cells_map_to_pixels():
-    # As in the research code, density cell (j, k) of the slice nearest to the CO
-    # distance gives the weight of pixel (j, k): a density wave along x appears in
-    # the map with the same number of cells per period.
+    # As in the research code, density cell (j, k) gives the weight of pixel
+    # (j, k): a density wave along x appears in the map with the same number of
+    # cells per period.
     transition = "CO J=4-3"
     amplitude, period = 0.2, 8
     n_pixels = 16
@@ -307,7 +310,7 @@ def test_density_cells_map_to_pixels():
         Planck18,
         density,
         transitions=(transition,),
-        poisson=False,
+        shot_noise=False,
     )
     mean = mean_co_brightness(DISTANCES, CELL, Planck18, transitions=(transition,))
 
@@ -321,6 +324,128 @@ def test_density_cells_map_to_pixels():
     np.testing.assert_allclose(
         weights, np.broadcast_to(weights[:, :1], weights.shape), rtol=1e-10
     )
+
+
+def wave_density(
+    amplitude: float, n_cells: int, cell: un.Quantity, period: int = 8
+) -> tuple[DensityLightcone, np.ndarray]:
+    """A density wave along x, out to 4000 Mpc; also return the wave."""
+    distances = np.arange(cell.value / 2, 4000, cell.value) * un.Mpc
+    wave = amplitude * np.sin(2 * np.pi * (np.arange(n_cells) + 0.5) / period)
+    density = DensityLightcone(
+        density=np.broadcast_to(
+            wave[:, None, None], (n_cells, n_cells, distances.size)
+        ).copy(),
+        distances=distances,
+        cell_size=cell,
+    )
+    return density, wave
+
+
+def first_slice_bias(transition: str, distances: un.Quantity) -> float:
+    """CO bias at the CO redshift of the first [CII] slice."""
+    z_cii = z_at_value(Planck18.comoving_distance, distances[0]).value
+    z_co = (co_rest_frequency(transition) * (1 + z_cii) / NU_CII_REST).value - 1
+    return co_bias(z_co)
+
+
+def test_clustering_only_keeps_negative_weights():
+    # Without shot noise, each pixel holds the expected brightness with the linear
+    # weight 1 + b delta, which is neither clipped nor renormalised: it is negative
+    # where b delta < -1.
+    transition = "CO J=4-3"
+    density, wave = wave_density(amplitude=1.0, n_cells=16, cell=CELL)
+    expected = 1 + first_slice_bias(transition, DISTANCES) * wave
+    assert (expected < 0).any()
+
+    def clustering(seed):
+        return co_foreground_brightness(
+            DISTANCES,
+            16,
+            CELL,
+            Planck18,
+            density,
+            transitions=(transition,),
+            shot_noise=False,
+            seed=seed,
+        )
+
+    brightness = clustering(seed=1)
+    mean = mean_co_brightness(DISTANCES, CELL, Planck18, transitions=(transition,))
+    weights = (brightness[:, :, 0] / mean[0]).value
+
+    # z_at_value's default tolerance changes the bias at the ~1e-10 level.
+    np.testing.assert_allclose(
+        weights, np.broadcast_to(expected[:, None], weights.shape), rtol=1e-8
+    )
+    # No random draws: the seed does not matter.
+    np.testing.assert_array_equal(brightness.value, clustering(seed=2).value)
+
+
+def test_shot_noise_draws_from_renormalised_clipped_weights():
+    # With shot noise, the counts are Poisson draws of mean <N> w, with
+    # w = clip(1 + b delta, 0) renormalised to unit mean over the slice: pixels with
+    # a negative 1 + b delta are empty, the map mean is <N>, and each pixel follows
+    # w. Large cells and only the faint, numerous emitters keep the Poisson noise
+    # low.
+    transition = "CO J=4-3"
+    cell = 10 * un.Mpc
+    n_cells, period = 128, 8
+    distances = Planck18.comoving_distance(6.5) + np.arange(4) * cell
+    log_x = np.linspace(-3, -1, 50)
+    density, wave = wave_density(amplitude=1.5, n_cells=n_cells, cell=cell)
+    raw = 1 + first_slice_bias(transition, distances) * wave
+    clipped = np.clip(raw, 0, None)
+
+    kwargs = {"transitions": (transition,), "log_l_ratio": log_x}
+    brightness = co_foreground_brightness(
+        distances, n_cells, cell, Planck18, density, seed=1, **kwargs
+    )[:, :, 0].value
+    mean = mean_co_brightness(distances, cell, Planck18, **kwargs)[0].value
+    # Mean over the pixels at the same phase of the wave.
+    per_phase = (brightness.mean(axis=1) / mean).reshape(-1, period).mean(axis=0)
+
+    assert (raw < 0).any()
+    assert clipped.mean() > 1.1
+    np.testing.assert_array_equal(brightness[raw < 0], 0)
+    np.testing.assert_allclose(brightness.mean() / mean, 1, rtol=0.01)
+    np.testing.assert_allclose(
+        per_phase, (clipped / clipped.mean())[:period], rtol=0.03
+    )
+
+
+def test_density_is_averaged_over_the_channel_depth():
+    # The density of a pixel is the mean of the slices whose centres lie within the
+    # comoving depth of the channel at the CO redshift, chi_co -/+ depth / 2.
+    transition = "CO J=4-3"
+    distances = np.arange(0.75, 4000, 1.5) * un.Mpc
+    along = np.random.default_rng(0).uniform(-0.3, 0.3, distances.size)
+    density = DensityLightcone(
+        density=np.broadcast_to(along, (4, 4, distances.size)).copy(),
+        distances=distances,
+        cell_size=CELL,
+    )
+    brightness = co_foreground_brightness(
+        DISTANCES,
+        4,
+        CELL,
+        Planck18,
+        density,
+        transitions=(transition,),
+        shot_noise=False,
+    )
+    mean = mean_co_brightness(DISTANCES, CELL, Planck18, transitions=(transition,))
+
+    z_co = co_redshifts(transition, DISTANCES)
+    half = channel_depth(transition, DISTANCES) / 2
+    chi_co = Planck18.comoving_distance(z_co)
+    for i in range(len(DISTANCES)):
+        inside = (distances >= chi_co[i] - half[i]) & (distances < chi_co[i] + half[i])
+        assert 1 <= inside.sum() <= 2
+        expected = 1 + co_bias(z_co[i]) * along[inside].mean()
+        np.testing.assert_allclose(
+            (brightness[..., i] / mean[i]).value, expected, rtol=1e-8
+        )
 
 
 def test_density_must_match_the_map():
@@ -359,3 +484,23 @@ def test_density_lightcone_validation():
             distances=np.arange(4) * un.Mpc,
             cell_size=1 * un.Mpc,
         )
+
+
+def test_depth_average():
+    # Slices at 0.5, 1.5, ..., 9.5 Mpc, with density equal to the slice index.
+    density = DensityLightcone(
+        density=np.broadcast_to(np.arange(10.0), (2, 2, 10)).copy(),
+        distances=(np.arange(10) + 0.5) * un.Mpc,
+        cell_size=1 * un.Mpc,
+    )
+
+    # Centres in [3.5, 5.5): slices 3 and 4.
+    np.testing.assert_array_equal(
+        density.depth_average(4.5 * un.Mpc, 2 * un.Mpc), np.full((2, 2), 3.5)
+    )
+    # No centre in [4.6, 5.4): the nearest slice, 4.
+    np.testing.assert_array_equal(
+        density.depth_average(5.0 * un.Mpc, 0.8 * un.Mpc), np.full((2, 2), 4.0)
+    )
+    with pytest.raises(ValueError, match="density lightcone"):
+        density.depth_average(20 * un.Mpc, 2 * un.Mpc)

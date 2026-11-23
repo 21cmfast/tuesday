@@ -134,6 +134,27 @@ def test_add_co_foregrounds_matches_core():
     assert np.all(out.lightcones["co_brightness"] >= 0)
 
 
+def test_add_co_foregrounds_clustering_only():
+    lc = make_cii_lightcone()
+    # Voids deep enough that 1 + b delta < 0: the clustering-only map keeps them.
+    density = uniform_density()
+    density.density[:5] = -0.9
+    out = add_co_foregrounds(lc, density, shot_noise=False)
+    expected = co_foreground_brightness(
+        lc.lightcone_distances,
+        10,
+        5 * un.Mpc,
+        lc.cosmo_params.cosmo,
+        density,
+        shot_noise=False,
+    )
+
+    np.testing.assert_allclose(
+        out.lightcones["co_brightness"], expected.value, rtol=1e-12
+    )
+    assert np.any(out.lightcones["co_brightness"] < 0)
+
+
 def test_add_co_foregrounds_does_not_mutate_input():
     lc = make_cii_lightcone()
     original = lc.lightcones["cii_brightness"]
