@@ -8,5 +8,6 @@ The following introductory tutorials will help you get started with ``tuesday``:
 
    tutorials/computing_and_plotting_power_spectra
    tutorials/lc_noise_compare_tools21cm
+   tutorials/lightconers
    tutorials/angular_lightcones
    tutorials/lightcones_on_disk

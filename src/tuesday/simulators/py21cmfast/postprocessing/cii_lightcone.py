@@ -28,7 +28,7 @@ import py21cmfast as p21c
 from attrs import define, field
 from py21cmfast.io.caching import OutputCache, RunCache
 from py21cmfast.io.h5 import read_output_struct
-from py21cmfast.lightconers import Lightconer
+from py21cmfast.lightconers import LightconerProtocol, context_from_inputs
 
 from ..lightcones import construct_lightcone_from_coevals
 from .cii_calculation import calculate_bvoxel, calculate_cii
@@ -40,9 +40,8 @@ logger = logging.getLogger(__name__)
 class CIICoeval:
     """A coeval box of the gridded [CII] flux density at one redshift.
 
-    It has the attributes that
-    :meth:`~py21cmfast.lightconers.Lightconer.make_lightcone_slices` needs
-    (``redshift``, ``simulation_options``, ``cosmo_params`` and the field), so it can
+    It has the attributes that a lightconer needs (``redshift`` and the field), as
+    well as ``simulation_options`` and ``cosmo_params``, so it can
     be interpolated onto a lightcone like a :class:`py21cmfast.Coeval`, but it does
     not need the 21-cm outputs of the run.
 
@@ -320,7 +319,7 @@ def gen_coeval_list(
 
 def gen_lc(
     lc: p21c.LightCone,
-    lcn: Lightconer,
+    lcn: LightconerProtocol,
     model: str,
     directory_path: str | Path,
     seed: int | np.random.Generator | None = None,
@@ -341,7 +340,7 @@ def gen_lc(
     ----------
     lc : py21cmfast.LightCone
         The 21cmFAST lightcone of the run.
-    lcn : Lightconer
+    lcn : LightconerProtocol
         The lightconer used for the run, which sets the lightcone geometry.
     model : str
         The [CII] luminosity model; see :func:`~.cii_calculation.calculate_cii`.
@@ -364,7 +363,7 @@ def gen_lc(
         If ``lcn`` does not have the same number of slices as ``lc``, or extends
         beyond the node redshifts of the run.
     """
-    shape = lcn.get_shape(lc.inputs.simulation_options)
+    shape = lcn.start(context_from_inputs(lc.inputs)).shape
     if shape[-1] != len(lc.lightcone_distances):
         raise ValueError(
             f"The lightconer has {shape[-1]} slices but the lightcone has "
@@ -384,7 +383,7 @@ def gen_lc(
 
     intensity = construct_lightcone_from_coevals(
         cii_coevals(),
-        attrs.evolve(lcn, quantities=("cii_intensity",)),
+        lcn.evolve(quantities=("cii_intensity",)),
         lc.inputs,
     ).lightcones["cii_intensity"]
 
