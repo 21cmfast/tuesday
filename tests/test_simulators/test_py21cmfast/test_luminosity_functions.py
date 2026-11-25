@@ -16,9 +16,9 @@ from tuesday.simulators.py21cmfast.summaries.luminosity_functions import (
 SECONDS_PER_YEAR = un.yr.to(un.s)
 
 
-def test_perturbed_catalogue(halo_inputs, make_perturbed):
+def test_perturbed_catalogue(halo_inputs, mock_perturbed_halo_catalog):
     sfr = np.array([0.0, 0.1, 1.0, 1.0, 10.0])
-    halos = make_perturbed(
+    halos = mock_perturbed_halo_catalog(
         halo_inputs,
         # 21cmFAST gives the SFR in Msun/s.
         sfr_acg=sfr / SECONDS_PER_YEAR,
@@ -47,14 +47,14 @@ def test_perturbed_catalogue(halo_inputs, make_perturbed):
 @pytest.mark.parametrize(
     ("components", "sfr"), [("both", 3.0), ("acg", 1.0), ("mcg", 2.0)]
 )
-def test_components(minihalo_inputs, make_perturbed, components, sfr):
+def test_components(minihalo_inputs, mock_perturbed_halo_catalog, components, sfr):
     calls = []
 
     def kuv(sfr, stellar_mass, redshift):
         calls.append((sfr, stellar_mass, redshift))
         return np.full_like(sfr, 1.15e-28)
 
-    halos = make_perturbed(
+    halos = mock_perturbed_halo_catalog(
         minihalo_inputs,
         sfr_acg=np.array([1.0]) / SECONDS_PER_YEAR,
         sfr_mcg=np.array([2.0]) / SECONDS_PER_YEAR,
@@ -76,9 +76,9 @@ def test_components(minihalo_inputs, make_perturbed, components, sfr):
 
 
 def test_runs_without_minihalos_count_atomic_cooling_galaxies(
-    halo_inputs, make_perturbed
+    halo_inputs, mock_perturbed_halo_catalog
 ):
-    halos = make_perturbed(
+    halos = mock_perturbed_halo_catalog(
         halo_inputs,
         sfr_acg=np.array([1.0, 10.0]) / SECONDS_PER_YEAR,
         stellar_masses_acg=np.array([1e8, 1e9]),
@@ -89,16 +89,16 @@ def test_runs_without_minihalos_count_atomic_cooling_galaxies(
     )
 
 
-def test_minihalo_component_needs_minihalos(halo_inputs, make_perturbed):
-    halos = make_perturbed(
+def test_minihalo_component_needs_minihalos(halo_inputs, mock_perturbed_halo_catalog):
+    halos = mock_perturbed_halo_catalog(
         halo_inputs, sfr_acg=np.array([1.0]), stellar_masses_acg=np.array([1e8])
     )
     with pytest.raises(ValueError, match="USE_MCGS"):
         calculate_uvlf(halos, components="mcg")
 
 
-def test_unknown_components(halo_inputs, make_perturbed):
-    halos = make_perturbed(
+def test_unknown_components(halo_inputs, mock_perturbed_halo_catalog):
+    halos = mock_perturbed_halo_catalog(
         halo_inputs, sfr_acg=np.array([1.0]), stellar_masses_acg=np.array([1e8])
     )
     with pytest.raises(ValueError, match="components must be"):
@@ -134,8 +134,8 @@ def test_perturbed_catalogue_of_a_run(halo_run):
     )
 
 
-def test_minihalos(minihalo_inputs, make_halo_catalog):
-    halos = make_halo_catalog(minihalo_inputs)
+def test_minihalos(minihalo_inputs, mock_halo_catalog):
+    halos = mock_halo_catalog(minihalo_inputs)
     shape = (minihalo_inputs.simulation_options.HII_DIM,) * 3
     ics = SimpleNamespace(get=lambda name: np.zeros(shape, dtype="f4"))
     with pytest.raises(ValueError, match="initial_conditions"):

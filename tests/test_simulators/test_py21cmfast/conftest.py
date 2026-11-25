@@ -1,4 +1,8 @@
-"""Fixtures of small 21cmFAST halo catalogues."""
+"""Shared fixtures for the tests of the 21cmFAST wrappers.
+
+So far these are small 21cmFAST runs and halo catalogues, and functions that mock
+21cmFAST halo catalogues with given halo properties.
+"""
 
 from collections.abc import Callable
 from types import SimpleNamespace
@@ -67,8 +71,8 @@ def halo_run(halo_inputs) -> SimpleNamespace:
 
 
 @pytest.fixture
-def make_perturbed() -> Callable[..., PerturbedHaloCatalog]:
-    """Return a function that makes a PerturbedHaloCatalog with given properties.
+def mock_perturbed_halo_catalog() -> Callable[..., PerturbedHaloCatalog]:
+    """Return a function that mocks a PerturbedHaloCatalog with given properties.
 
     The padding beyond the real halos is NaN, so any use of it shows.
     """
@@ -96,8 +100,8 @@ def make_perturbed() -> Callable[..., PerturbedHaloCatalog]:
 
 
 @pytest.fixture
-def make_halo_catalog() -> Callable[[p21c.InputParameters], HaloCatalog]:
-    """Return a function that makes a HaloCatalog of 200 random halos."""
+def mock_halo_catalog() -> Callable[[p21c.InputParameters], HaloCatalog]:
+    """Return a function that mocks a HaloCatalog of 200 random halos."""
 
     def make(inputs: p21c.InputParameters) -> HaloCatalog:
         rng = np.random.default_rng(0)

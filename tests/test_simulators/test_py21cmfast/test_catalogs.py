@@ -20,9 +20,9 @@ ACG_FEATURES = {"halo_mass", "stellar_mass_acg", "sfr_acg"}
 MCG_FEATURES = {"stellar_mass_mcg", "sfr_mcg"}
 
 
-def test_perturbed_catalogue(halo_inputs, make_perturbed):
+def test_perturbed_catalogue(halo_inputs, mock_perturbed_halo_catalog):
     coords = np.arange(15.0).reshape(5, 3)
-    halos = make_perturbed(
+    halos = mock_perturbed_halo_catalog(
         halo_inputs,
         halo_coords=coords,
         halo_masses=np.full(5, 1e10),
@@ -47,8 +47,10 @@ def test_perturbed_catalogue(halo_inputs, make_perturbed):
     assert np.shares_memory(catalog["sfr_acg"], halos.get("sfr_acg"))
 
 
-def test_perturbed_catalogue_with_minihalos(minihalo_inputs, make_perturbed):
-    halos = make_perturbed(
+def test_perturbed_catalogue_with_minihalos(
+    minihalo_inputs, mock_perturbed_halo_catalog
+):
+    halos = mock_perturbed_halo_catalog(
         minihalo_inputs,
         sfr_acg=[1.0, 2.0],
         sfr_mcg=[3.0, 4.0],
@@ -120,15 +122,15 @@ def test_cached_halo_catalogue(halo_run, tmp_path):
         np.testing.assert_array_equal(cached[name], direct[name])
 
 
-def test_minihalos_need_initial_conditions(minihalo_inputs, make_halo_catalog):
+def test_minihalos_need_initial_conditions(minihalo_inputs, mock_halo_catalog):
     with pytest.raises(ValueError, match="initial_conditions"):
-        catalog_from_halo_catalog(make_halo_catalog(minihalo_inputs))
+        catalog_from_halo_catalog(mock_halo_catalog(minihalo_inputs))
 
 
 def test_minihalo_properties_use_relative_velocities(
-    minihalo_inputs, make_halo_catalog
+    minihalo_inputs, mock_halo_catalog
 ):
-    halos = make_halo_catalog(minihalo_inputs)
+    halos = mock_halo_catalog(minihalo_inputs)
     shape = (minihalo_inputs.simulation_options.HII_DIM,) * 3
     slow = SimpleNamespace(get=lambda name: np.zeros(shape, dtype="f4"))
     fast = SimpleNamespace(get=lambda name: np.full(shape, 60.0, dtype="f4"))
