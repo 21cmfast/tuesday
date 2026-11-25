@@ -9,7 +9,7 @@ from py21cmfast.io.caching import OutputCache
 from py21cmfast.io.h5 import read_output_struct
 from py21cmfast.wrapper.cfuncs import convert_halo_properties
 
-from tuesday.core import Catalog
+from tuesday.core import CoevalCatalog
 from tuesday.simulators.py21cmfast.catalogs import (
     HALO_PROPERTY_UNITS,
     catalog_from_halo_catalog,
@@ -31,7 +31,7 @@ def test_perturbed_catalogue(halo_inputs, make_perturbed):
     )
     catalog = catalog_from_halo_catalog(halos)
 
-    assert isinstance(catalog, Catalog)
+    assert isinstance(catalog, CoevalCatalog)
     assert len(catalog) == 5
     assert catalog.redshift == halos.redshift
     assert catalog.volume == (20 * un.Mpc) ** 3

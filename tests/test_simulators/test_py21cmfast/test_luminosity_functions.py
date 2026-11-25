@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from astropy import units as un
 
-from tuesday.core import Catalog
+from tuesday.core import CoevalCatalog
 from tuesday.core.summaries.luminosity_functions import uv_luminosity_function
 from tuesday.simulators.py21cmfast.catalogs import catalog_from_halo_catalog
 from tuesday.simulators.py21cmfast.summaries.luminosity_functions import (
@@ -27,7 +27,7 @@ def test_perturbed_catalogue(halo_inputs, make_perturbed):
     result = calculate_uvlf(halos)
 
     expected = uv_luminosity_function(
-        Catalog(
+        CoevalCatalog(
             positions=np.zeros((5, 3)) * un.Mpc,
             features={
                 "sfr": (sfr / SECONDS_PER_YEAR).astype(np.float32) * un.Msun / un.s

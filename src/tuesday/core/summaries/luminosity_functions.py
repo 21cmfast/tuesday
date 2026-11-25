@@ -1,11 +1,12 @@
 """Number densities of objects in bins of a feature, and UV luminosity functions.
 
-:func:`bin_number_density` bins one feature of a :class:`~tuesday.core.catalogs.Catalog`
-(for example the halo mass or the UV magnitude) and divides the counts by the bin
-width and the volume of the catalogue, which gives e.g. the halo mass function or the
-luminosity function. :func:`sfr_to_uv_magnitude` converts star formation rates to
-absolute UV magnitudes, and :func:`uv_luminosity_function` bins the UV magnitudes of
-the objects of a catalogue.
+:func:`bin_number_density` bins one feature of a
+:class:`~tuesday.core.catalogs.CoevalCatalog` (for example the halo mass or the UV
+magnitude) and divides the counts by the bin width and the volume of the catalogue,
+which gives e.g. the halo mass function or the luminosity function.
+:func:`sfr_to_uv_magnitude` converts star formation rates to absolute UV magnitudes,
+and :func:`uv_luminosity_function` bins the UV magnitudes of the objects of a
+catalogue.
 
 These functions do not depend on any simulation code; see
 :mod:`tuesday.simulators.py21cmfast.summaries.luminosity_functions` for a wrapper that
@@ -18,7 +19,7 @@ from dataclasses import dataclass
 import numpy as np
 from astropy import units as un
 
-from ..catalogs import Catalog
+from ..catalogs import CoevalCatalog
 
 #: Unit of the conversion factor ``K_UV = SFR / L_UV``.
 KUV_UNIT = (un.Msun / un.yr) / (un.erg / un.s / un.Hz)
@@ -75,7 +76,7 @@ class BinnedNumberDensity:
 
 
 def bin_number_density(
-    catalog: Catalog,
+    catalog: CoevalCatalog,
     feature: str,
     bins: int | un.Quantity,
 ) -> BinnedNumberDensity:
@@ -88,11 +89,11 @@ def bin_number_density(
     luminosity function, and binning the natural logarithm of the halo masses gives
     the halo mass function ``dn/dlnM``. A feature that is derived from others (e.g.
     the UV magnitude from the star formation rate) should be added to the catalogue with
-    :meth:`~tuesday.core.catalogs.Catalog.with_features` first.
+    :meth:`~tuesday.core.catalogs.CoevalCatalog.with_features` first.
 
     Parameters
     ----------
-    catalog : Catalog
+    catalog : CoevalCatalog
         The catalogue. Its ``volume`` must be set.
     feature : str
         Name of the feature to bin, which must have one value per object. Non-finite
@@ -216,7 +217,7 @@ def sfr_to_uv_magnitude(
 
 
 def uv_luminosity_function(
-    catalog: Catalog,
+    catalog: CoevalCatalog,
     bins: int | un.Quantity | None = None,
     kuv: un.Quantity | Callable = KUV_SUN16,
     sfr: str = "sfr",
@@ -231,7 +232,7 @@ def uv_luminosity_function(
 
     Parameters
     ----------
-    catalog : Catalog
+    catalog : CoevalCatalog
         The galaxies. Its ``volume`` must be set, and its ``redshift`` is passed on to
         ``kuv`` if it is a function.
     bins : int or un.Quantity, optional

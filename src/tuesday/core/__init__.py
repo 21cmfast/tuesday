@@ -2,7 +2,7 @@
 
 __all__ = [
     "BinnedNumberDensity",
-    "Catalog",
+    "CoevalCatalog",
     "CylindricalPS",
     "SphericalPS",
     "apply_beam",
@@ -53,7 +53,7 @@ __all__ = [
     "validate",
 ]
 from . import catalogs, cosmology, instrument_models, plotting, summaries
-from .catalogs import Catalog
+from .catalogs import CoevalCatalog
 from .cosmology import comoving_distance_to_redshift, redshift_interpolator
 from .instrument_models.noise import (
     apply_beam,

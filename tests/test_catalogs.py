@@ -1,4 +1,4 @@
-"""Tests of the Catalog class."""
+"""Tests of the CoevalCatalog class."""
 
 import numpy as np
 import pytest
@@ -6,15 +6,15 @@ from astropy import units as un
 from astropy.cosmology.units import littleh
 from astropy.table import QTable, Table
 
-from tuesday.core import Catalog
+from tuesday.core import CoevalCatalog
 
 N = 5
 
 
 @pytest.fixture
-def catalog() -> Catalog:
+def catalog() -> CoevalCatalog:
     rng = np.random.default_rng(0)
-    return Catalog(
+    return CoevalCatalog(
         positions=rng.uniform(0, 10, (N, 3)) * un.Mpc,
         features={
             "mass": np.arange(1.0, N + 1) * 1e10 * un.Msun,
@@ -36,7 +36,7 @@ def test_catalog(catalog):
 
 
 def test_positions_only():
-    catalog = Catalog(positions=np.zeros((3, 3)) * un.Mpc / littleh)
+    catalog = CoevalCatalog(positions=np.zeros((3, 3)) * un.Mpc / littleh)
     assert len(catalog) == 3
     assert dict(catalog.features) == {}
     assert catalog.volume is None
@@ -60,7 +60,7 @@ def test_features_are_read_only(catalog):
 def test_arrays_are_not_copied():
     positions = np.zeros((N, 3), dtype=np.float32) * un.Mpc
     mass = np.ones(N, dtype=np.float32) * un.Msun
-    catalog = Catalog(positions=positions, features={"mass": mass})
+    catalog = CoevalCatalog(positions=positions, features={"mass": mass})
     assert np.shares_memory(catalog.positions, positions)
     assert np.shares_memory(catalog["mass"], mass)
     assert catalog["mass"].dtype == np.float32
@@ -71,7 +71,7 @@ def test_positions_are_not_a_feature(catalog):
     with pytest.raises(KeyError, match="no feature 'position'"):
         catalog["position"]
     with pytest.raises(ValueError, match="No feature may be called 'position'"):
-        Catalog(
+        CoevalCatalog(
             positions=np.zeros((N, 3)) * un.Mpc,
             features={"position": np.zeros((N, 3)) * un.Mpc},
         )
@@ -79,14 +79,14 @@ def test_positions_are_not_a_feature(catalog):
 
 def test_repr(catalog):
     assert repr(catalog) == (
-        "<Catalog of 5 objects, features ['mass', 'spin'], volume 1000.0 Mpc3, "
+        "<CoevalCatalog of 5 objects, features ['mass', 'spin'], volume 1000.0 Mpc3, "
         "redshift 7.0>"
     )
 
 
 def test_given_features_dict_is_not_used(catalog):
     features = {"mass": np.ones(N) * un.Msun}
-    catalog = Catalog(positions=catalog.positions, features=features)
+    catalog = CoevalCatalog(positions=catalog.positions, features=features)
     features["sfr"] = np.ones(N) * un.Msun / un.yr
     assert "sfr" not in catalog.features
 
@@ -102,25 +102,27 @@ def test_given_features_dict_is_not_used(catalog):
 )
 def test_bad_positions(positions):
     with pytest.raises(ValueError, match="positions"):
-        Catalog(positions=positions)
+        CoevalCatalog(positions=positions)
 
 
 def test_features_must_be_quantities():
     with pytest.raises(TypeError, match="'mass' must be an astropy Quantity"):
-        Catalog(positions=np.zeros((N, 3)) * un.Mpc, features={"mass": np.ones(N)})
+        CoevalCatalog(
+            positions=np.zeros((N, 3)) * un.Mpc, features={"mass": np.ones(N)}
+        )
 
 
 @pytest.mark.parametrize("shape", [(N + 1,), (), (2, N)])
 def test_features_need_one_value_per_object(shape):
     with pytest.raises(ValueError, match="'mass' has shape"):
-        Catalog(
+        CoevalCatalog(
             positions=np.zeros((N, 3)) * un.Mpc,
             features={"mass": np.ones(shape) * un.Msun},
         )
 
 
 def test_features_may_have_more_axes():
-    catalog = Catalog(
+    catalog = CoevalCatalog(
         positions=np.zeros((N, 3)) * un.Mpc,
         features={"velocity": np.zeros((N, 3)) * un.km / un.s},
     )
@@ -128,8 +130,8 @@ def test_features_may_have_more_axes():
 
 
 def test_volume_must_be_a_volume():
-    with pytest.raises(ValueError, match="volume must be a volume"):
-        Catalog(positions=np.zeros((N, 3)) * un.Mpc, volume=10 * un.Mpc**2)
+    with pytest.raises(ValueError, match="Quantity with a unit of volume"):
+        CoevalCatalog(positions=np.zeros((N, 3)) * un.Mpc, volume=10 * un.Mpc**2)
 
 
 @pytest.mark.parametrize(
@@ -145,12 +147,12 @@ def test_volume_must_be_a_volume():
 )
 def test_volume_must_be_finite_and_positive(volume):
     with pytest.raises(ValueError, match="single finite, positive value"):
-        Catalog(positions=np.zeros((N, 3)) * un.Mpc, volume=volume)
+        CoevalCatalog(positions=np.zeros((N, 3)) * un.Mpc, volume=volume)
 
 
 def test_volume_must_be_a_quantity():
     with pytest.raises(ValueError, match="Quantity with a unit of volume"):
-        Catalog(positions=np.zeros((N, 3)) * un.Mpc, volume=1000.0)
+        CoevalCatalog(positions=np.zeros((N, 3)) * un.Mpc, volume=1000.0)
 
 
 def test_select_checks_the_volume(catalog):
@@ -159,7 +161,7 @@ def test_select_checks_the_volume(catalog):
 
 
 def test_volume_with_littleh():
-    catalog = Catalog(
+    catalog = CoevalCatalog(
         positions=np.zeros((N, 3)) * un.Mpc, volume=(10 * un.Mpc / littleh) ** 3
     )
     assert catalog.volume.unit == (un.Mpc / littleh) ** 3
@@ -214,7 +216,7 @@ def test_to_table(catalog):
 
 
 def test_from_table(catalog):
-    new = Catalog.from_table(catalog.to_table())
+    new = CoevalCatalog.from_table(catalog.to_table())
     np.testing.assert_array_equal(new.positions, catalog.positions)
     assert set(new.features) == {"mass", "spin"}
     np.testing.assert_array_equal(new["mass"], catalog["mass"])
@@ -230,7 +232,7 @@ def test_from_plain_table():
             "mass": np.ones(N) * un.Msun,
         }
     )
-    catalog = Catalog.from_table(table)
+    catalog = CoevalCatalog.from_table(table)
     assert catalog["mass"].unit == un.Msun
     assert catalog.volume is None
     assert catalog.redshift is None
@@ -238,13 +240,13 @@ def test_from_plain_table():
 
 def test_from_table_needs_positions():
     with pytest.raises(ValueError, match="no column 'position'"):
-        Catalog.from_table(QTable({"mass": np.ones(N) * un.Msun}))
+        CoevalCatalog.from_table(QTable({"mass": np.ones(N) * un.Msun}))
 
 
 def test_from_table_needs_units():
     table = QTable({"position": np.zeros((N, 3)) * un.Mpc, "id": np.arange(N)})
     with pytest.raises(TypeError, match="'id' must be an astropy Quantity"):
-        Catalog.from_table(table)
+        CoevalCatalog.from_table(table)
 
 
 @pytest.mark.parametrize("suffix", [".h5", ".ecsv"])
@@ -256,7 +258,7 @@ def test_write_and_read(catalog, tmp_path, suffix):
     )
     path = tmp_path / f"catalog{suffix}"
     catalog.write(path)
-    read = Catalog.read(path)
+    read = CoevalCatalog.read(path)
 
     assert len(read) == N
     np.testing.assert_array_equal(read.positions, catalog.positions)
@@ -272,10 +274,10 @@ def test_write_and_read(catalog, tmp_path, suffix):
 
 @pytest.mark.parametrize("suffix", [".h5", ".ecsv"])
 def test_write_and_read_without_volume_and_redshift(tmp_path, suffix):
-    catalog = Catalog(positions=np.zeros((N, 3)) * un.Mpc / littleh)
+    catalog = CoevalCatalog(positions=np.zeros((N, 3)) * un.Mpc / littleh)
     path = tmp_path / f"catalog{suffix}"
     catalog.write(path)
-    read = Catalog.read(path)
+    read = CoevalCatalog.read(path)
     assert read.positions.unit == un.Mpc / littleh
     assert read.volume is None
     assert read.redshift is None
@@ -285,14 +287,14 @@ def test_hdf5_path(catalog, tmp_path):
     path = tmp_path / "catalogs.h5"
     catalog.write(path)
     catalog.select(np.array([0, 1])).write(path, path="two", append=True)
-    assert len(Catalog.read(path)) == N
-    assert len(Catalog.read(path, path="two")) == 2
+    assert len(CoevalCatalog.read(path)) == N
+    assert len(CoevalCatalog.read(path, path="two")) == 2
 
 
 @pytest.mark.parametrize("fmt", ["hdf5", "ascii.ecsv"])
 def test_explicit_format(catalog, tmp_path, fmt):
     path = tmp_path / "catalog.dat"
     catalog.write(path, format=fmt)
-    read = Catalog.read(path, format=fmt)
+    read = CoevalCatalog.read(path, format=fmt)
     assert read.volume == catalog.volume
     np.testing.assert_array_equal(read["mass"], catalog["mass"])

@@ -7,7 +7,7 @@ import pytest
 from astropy import units as un
 from astropy.cosmology.units import littleh
 
-from tuesday.core import Catalog
+from tuesday.core import CoevalCatalog
 from tuesday.core.summaries.luminosity_functions import (
     KUV_SUN16,
     KUV_UNIT,
@@ -22,10 +22,10 @@ from tuesday.core.summaries.luminosity_functions import (
 VOLUME = (10.0 * un.Mpc) ** 3
 
 
-def make_catalog(volume: un.Quantity | None = VOLUME, **features) -> Catalog:
+def make_catalog(volume: un.Quantity | None = VOLUME, **features) -> CoevalCatalog:
     """Create a catalogue with the given features, all objects at the origin."""
     n = len(next(iter(features.values())))
-    return Catalog(
+    return CoevalCatalog(
         positions=np.zeros((n, 3)) * un.Mpc,
         features=features,
         volume=volume,

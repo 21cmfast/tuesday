@@ -1,9 +1,10 @@
 """Make tuesday catalogues from 21cmFAST halo catalogues.
 
 :func:`catalog_from_halo_catalog` turns a 21cmFAST ``HaloCatalog`` or
-``PerturbedHaloCatalog`` at one redshift into a :class:`tuesday.core.catalogs.Catalog`,
-with the halo positions, the galaxy properties of the halos as features, the volume of
-the simulation box and the redshift. :func:`get_halo_properties` computes the galaxy
+``PerturbedHaloCatalog`` at one redshift into a
+:class:`tuesday.core.catalogs.CoevalCatalog`, with the halo positions, the galaxy
+properties of the halos as features, the volume of the simulation box and the
+redshift. :func:`get_halo_properties` computes the galaxy
 properties of the halos of a ``HaloCatalog`` without feedback, as 21cmFAST does.
 """
 
@@ -13,7 +14,7 @@ from py21cmfast import InitialConditions
 from py21cmfast.wrapper.cfuncs import convert_halo_properties
 from py21cmfast.wrapper.outputs import HaloCatalog, PerturbedHaloCatalog
 
-from tuesday.core.catalogs import Catalog
+from tuesday.core.catalogs import CoevalCatalog
 
 #: Units of the halo properties that 21cmFAST computes, by feature name.
 HALO_PROPERTY_UNITS = {
@@ -116,7 +117,7 @@ def get_halo_properties(
 def catalog_from_halo_catalog(
     halo_catalog: HaloCatalog | PerturbedHaloCatalog,
     initial_conditions: InitialConditions | None = None,
-) -> Catalog:
+) -> CoevalCatalog:
     """Make a tuesday catalogue from a 21cmFAST halo catalogue.
 
     The features are the halo mass, and the stellar mass and star formation rate of
@@ -141,7 +142,7 @@ def catalog_from_halo_catalog(
 
     Returns
     -------
-    Catalog
+    CoevalCatalog
         The halos, with positions in comoving Mpc (Lagrangian for a ``HaloCatalog``,
         Eulerian for a ``PerturbedHaloCatalog``), the features above in the units
         21cmFAST gives them (SFRs in Msun/s), the volume of the simulation box and the
@@ -172,7 +173,7 @@ def catalog_from_halo_catalog(
         values = {name: properties[name] for name in names}
 
     box_len = halo_catalog.simulation_options.BOX_LEN * un.Mpc
-    return Catalog(
+    return CoevalCatalog(
         positions=_real_halos(halo_catalog, "halo_coords") << un.Mpc,
         features={
             name: value << HALO_PROPERTY_UNITS[name] for name, value in values.items()
