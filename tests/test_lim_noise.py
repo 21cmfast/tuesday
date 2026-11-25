@@ -206,7 +206,12 @@ def test_observe_rms_matches_noise_model():
     redshifts = np.linspace(6.0, 7.0, 40)
     _, noise = observe(n_cells=128, redshifts=redshifts, seed=3)
     nu = NU_CII_REST / (1 + redshifts[0])
-    rms = calculate_noise(nu, "ccatp")["RMS_sigma"].to_value(BRIGHTNESS_UNIT)
+    info = calculate_noise(nu, "ccatp")
+    # The rms per beam is converted to per cell (1 Mpc) by the area ratio.
+    d_a = Planck18.angular_diameter_distance(redshifts[0])
+    cell_angle = (1.0 * un.Mpc / (1 + redshifts[0]) / d_a).to_value("") * un.rad
+    area_factor = np.sqrt((info["beam_area"] / cell_angle**2).to_value(""))
+    rms = info["RMS_sigma"].to_value(BRIGHTNESS_UNIT) * area_factor
 
     noise = noise[..., 0].to_value(BRIGHTNESS_UNIT)
     # 128^2 samples: the standard deviation is known to better than 1 per cent.
