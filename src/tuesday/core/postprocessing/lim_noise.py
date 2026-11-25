@@ -202,9 +202,12 @@ def observe_lim_lightcone(
 
     For each lightcone slice at observed frequency ``nu``, the surface brightness is
     averaged over the slices within one spectral channel (``nu +/- nu / (2 R)``) and
-    smoothed with the Gaussian beam of the instrument, and Gaussian white noise with
-    the rms from :func:`calculate_noise` is drawn. Slices outside the frequency range
-    of the instrument are set to NaN.
+    smoothed with the Gaussian beam of the instrument, and Gaussian white noise is
+    drawn independently in every cell. The rms per beam from :func:`calculate_noise`
+    is converted to the rms per cell by the area ratio,
+    ``rms_cell = rms * sqrt(beam_area / cell_area)``, where ``cell_area`` is the solid
+    angle of a cell, so that the noise averaged over one beam keeps the rms per beam.
+    Slices outside the frequency range of the instrument are set to NaN.
 
     Parameters
     ----------
@@ -288,7 +291,9 @@ def observe_lim_lightcone(
         in_channel = (nu_lc > nu_obs - half_bw) & (nu_lc < nu_obs + half_bw)
         b_channel = b_line[..., in_channel].mean(axis=-1)
 
-        noise[..., i] = rng.normal(loc=0.0, scale=1.0, size=b_channel.shape) * rms
+        # Per beam -> per cell: N_cell = beam_area / cell_area cells in one beam.
+        rms_cell = rms * np.sqrt((noise_info["beam_area"] / cell_angle**2).to_value(""))
+        noise[..., i] = rng.normal(loc=0.0, scale=1.0, size=b_channel.shape) * rms_cell
         signal[..., i] = gaussian_filter(b_channel, sigma=beam_sigma_cells)
 
     return signal * un.Jy / un.sr, noise * un.Jy / un.sr

@@ -80,3 +80,27 @@ def test_add_cii_noise_rejects_angular_lightcone():
     lc.lightcones["cii_brightness"] = lc.lightcones["cii_brightness"][0]
     with pytest.raises(ValueError, match="rectilinear"):
         add_cii_noise(lc, "ccatp", seed=1)
+
+
+def test_add_cii_noise_other_brightness_field():
+    # E.g. [CII] plus CO foregrounds: the output fields are named after the input.
+    lc = make_lightcone()
+    lc.lightcones["cii_co_brightness"] = 2 * lc.lightcones["cii_brightness"]
+    out = add_cii_noise(lc, "ccatp", seed=4, brightness_field="cii_co_brightness")
+    default = add_cii_noise(lc, "ccatp", seed=4)
+
+    for key in ("cii_co_noise_ccatp", "cii_co_signal_ccatp", "cii_co_observed_ccatp"):
+        assert key in out.lightcones
+    np.testing.assert_allclose(
+        out.lightcones["cii_co_signal_ccatp"],
+        2 * default.lightcones["cii_signal_ccatp"],
+        rtol=1e-12,
+    )
+    np.testing.assert_array_equal(
+        out.lightcones["cii_co_noise_ccatp"], default.lightcones["cii_noise_ccatp"]
+    )
+
+
+def test_add_cii_noise_bad_brightness_field():
+    with pytest.raises(ValueError, match="_brightness"):
+        add_cii_noise(make_lightcone(), "ccatp", seed=1, brightness_field="density")
