@@ -27,6 +27,11 @@ KUV_UNIT = (un.Msun / un.yr) / (un.erg / un.s / un.Hz)
 #: functions, from Sun & Furlanetto (2016), MNRAS, 460, 417.
 KUV_SUN16 = 1.15e-28 * KUV_UNIT
 
+#: Zero point of :func:`uv_luminosity_to_magnitude`, ``M_UV = UV_MAGNITUDE_ZERO_POINT -
+#: 2.5 log10(L_UV / [erg s^-1 Hz^-1])``: the value of Park et al. (2019), MNRAS, 484,
+#: 933, Eq. 13, which 21cmFAST uses.
+UV_MAGNITUDE_ZERO_POINT = 51.63
+
 #: Default bin edges of :func:`uv_luminosity_function`: 0.5 mag wide, from
 #: ``M_UV = -24`` to ``-12``.
 UV_MAGNITUDE_EDGES = np.linspace(-24.0, -12.0, 25) * un.mag
@@ -82,7 +87,7 @@ def bin_number_density(
     Binning the absolute UV magnitudes of the galaxies in a volume gives the UV
     luminosity function, and binning the natural logarithm of the halo masses gives
     the halo mass function ``dn/dlnM``. A feature that is derived from others (e.g.
-    the UV magnitude from the star formation rate) is added to the catalogue with
+    the UV magnitude from the star formation rate) should be added to the catalogue with
     :meth:`~tuesday.core.catalogs.Catalog.with_features` first.
 
     Parameters
@@ -139,7 +144,13 @@ def uv_luminosity_to_magnitude(
 ) -> un.Quantity[un.mag]:
     """Convert a UV luminosity per unit frequency to an absolute AB magnitude.
 
-    Uses ``M_UV = 51.63 - 2.5 log10(L_UV / [erg s^-1 Hz^-1])``, as 21cmFAST does.
+    Uses ``M_UV = 51.63 - 2.5 log10(L_UV / [erg s^-1 Hz^-1])``, Eq. 13 of Park et al.
+    (2019), MNRAS, 484, 933, which 21cmFAST uses (:data:`UV_MAGNITUDE_ZERO_POINT`).
+    Park et al. give it as the AB magnitude relation of Oke & Gunn (1983), ApJ, 266,
+    713. The AB zero point of 3631 Jy for a source at 10 pc (with 1 pc =
+    3.0857e18 cm) gives 51.595 instead, so these magnitudes are 0.035 mag fainter
+    than the AB magnitudes of :mod:`astropy.units`. The value of 21cmFAST is kept so
+    that luminosity functions can be compared with those of 21cmFAST.
 
     Parameters
     ----------
@@ -152,7 +163,9 @@ def uv_luminosity_to_magnitude(
         Absolute AB magnitude. It is infinite where the luminosity is zero.
     """
     with np.errstate(divide="ignore"):
-        magnitude = 51.63 - 2.5 * np.log10(luminosity.to_value(un.erg / un.s / un.Hz))
+        magnitude = UV_MAGNITUDE_ZERO_POINT - 2.5 * np.log10(
+            luminosity.to_value(un.erg / un.s / un.Hz)
+        )
     return magnitude * un.mag
 
 
