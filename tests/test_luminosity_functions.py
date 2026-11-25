@@ -12,6 +12,7 @@ from tuesday.core.summaries.luminosity_functions import (
     KUV_SUN16,
     KUV_UNIT,
     UV_MAGNITUDE_EDGES,
+    UV_MAGNITUDE_ZERO_POINT,
     BinnedNumberDensity,
     bin_number_density,
     sfr_to_uv_magnitude,
@@ -33,18 +34,40 @@ def make_catalog(volume: un.Quantity | None = VOLUME, **features) -> CoevalCatal
     )
 
 
-def test_magnitude_of_one_msun_per_year():
-    # L_UV = 1 / 1.15e-28 erg/s/Hz, so M_UV = 51.63 + 2.5 log10(1.15e-28).
-    mag = sfr_to_uv_magnitude(np.array([1.0, 10.0]) * un.Msun / un.yr)
+def test_magnitude_scales_with_luminosity():
+    # Ten times the luminosity is 2.5 mag brighter, in any unit of luminosity.
+    lum = np.array([1e26, 1e27, 1e28]) * un.erg / un.s / un.Hz
+    mag = uv_luminosity_to_magnitude(lum)
     assert mag.unit == un.mag
-    np.testing.assert_allclose(mag.value, [-18.2182554, -20.7182554], atol=1e-6)
-
-
-def test_luminosity_to_magnitude():
-    lum = np.array([1e28, 1e29]) * un.erg / un.s / un.Hz
-    np.testing.assert_allclose(uv_luminosity_to_magnitude(lum).value, [-18.37, -20.87])
+    np.testing.assert_allclose(np.diff(mag.value), -2.5, rtol=1e-12)
     np.testing.assert_allclose(
-        uv_luminosity_to_magnitude(lum.to(un.W / un.Hz)).value, [-18.37, -20.87]
+        uv_luminosity_to_magnitude(lum.to(un.W / un.Hz)), mag, rtol=1e-12
+    )
+
+
+def test_magnitude_is_an_absolute_ab_magnitude():
+    # The AB magnitude (astropy) of the flux density at 10 pc. The zero point of
+    # 21cmFAST differs from it by 0.035 mag (see uv_luminosity_to_magnitude).
+    lum = np.logspace(26, 30, 5) * un.erg / un.s / un.Hz
+    ab = (lum / (4 * np.pi * (10 * un.pc) ** 2)).to(un.ABmag).value
+    mag = uv_luminosity_to_magnitude(lum).value
+    assert np.all(np.abs(mag - ab) < 0.04)
+    np.testing.assert_allclose(mag - ab, UV_MAGNITUDE_ZERO_POINT - 51.595, atol=1e-3)
+
+
+def test_sfr_to_magnitude():
+    # L_UV = SFR / K_UV: ten times the SFR is 2.5 mag brighter, twice K_UV is
+    # 2.5 log10(2) mag fainter.
+    sfr = np.array([0.1, 1.0, 10.0]) * un.Msun / un.yr
+    mag = sfr_to_uv_magnitude(sfr)
+    np.testing.assert_allclose(
+        mag, uv_luminosity_to_magnitude(sfr / KUV_SUN16), rtol=1e-12
+    )
+    np.testing.assert_allclose(np.diff(mag.value), -2.5, rtol=1e-12)
+    np.testing.assert_allclose(
+        (sfr_to_uv_magnitude(sfr, kuv=2 * KUV_SUN16) - mag).value,
+        2.5 * np.log10(2),
+        rtol=1e-12,
     )
 
 
@@ -101,8 +124,10 @@ def test_kuv_function_gets_plain_arrays(as_quantity: bool):
     np.testing.assert_allclose(got_sfr, [1.0, 2.0], rtol=1e-12)
     np.testing.assert_allclose(got_mass, [1e8, 1e9], rtol=1e-12)
     assert got_z == 8.0
-    lum = np.array([1.0 / 1e-28, 2.0 / 1e-27])
-    np.testing.assert_allclose(mag.value, 51.63 - 2.5 * np.log10(lum), rtol=1e-12)
+    kuv_values = np.array([1e-28, 1e-27]) * KUV_UNIT
+    np.testing.assert_allclose(
+        mag, uv_luminosity_to_magnitude(sfr / kuv_values), rtol=1e-12
+    )
 
 
 def test_kuv_function_without_stellar_mass():
@@ -223,24 +248,78 @@ def test_unknown_feature():
         bin_number_density(catalog, "sfr", 2)
 
 
-def test_uv_luminosity_function():
-    rng = np.random.default_rng(0)
-    sfr = 10 ** rng.uniform(-3, 2, 1000) * un.Msun / un.yr
-    sfr[:10] = 0.0
-    catalog = make_catalog(sfr=sfr)
-    result = uv_luminosity_function(catalog)
+def schechter(magnitude: np.ndarray) -> np.ndarray:
+    """A Schechter UV luminosity function (per Mpc^3 per mag) like those at z ~ 8."""
+    phi_star, m_star, alpha = 1e-4, -20.5, -2.0
+    x = 10 ** (0.4 * (m_star - magnitude))
+    return 0.4 * np.log(10) * phi_star * x ** (alpha + 1) * np.exp(-x)
 
+
+def draw(rng, pdf, lower, upper, n):
+    """Draw n values between lower and upper from a pdf, by its inverse CDF."""
+    grid = np.linspace(lower, upper, 100_001)
+    cdf = np.concatenate([[0], np.cumsum((pdf(grid[1:]) + pdf(grid[:-1])) / 2)])
+    return np.interp(rng.uniform(0, cdf[-1], n), cdf, grid), grid, cdf
+
+
+def check_recovered(result, n_objects, grid, cdf, volume):
+    """Compare a binned number density with the distribution it was drawn from.
+
+    Each of the n_objects falls in bin i with probability p_i, so the expected
+    number density is n_objects p_i / (width_i volume), with binomial errors.
+    """
+    edges = result.bin_edges.value
+    p = np.diff(np.interp(edges, grid, cdf)) / cdf[-1]
+    norm = result.bin_widths.value * volume.to_value(un.Mpc**3)
+    expected = n_objects * p / norm
+    sigma = np.sqrt(n_objects * p * (1 - p)) / norm
+    observed = result.number_density.value
+    populated = n_objects * p >= 10
+    assert populated.sum() >= 10
+    pulls = (observed - expected)[populated] / sigma[populated]
+    assert np.all(np.abs(pulls) < 5)
+    assert np.mean(pulls**2) < 2
+
+
+def test_bin_number_density_recovers_a_known_distribution():
+    # Halo masses with dn/dlnM proportional to M^-1 between 1e8 and 1e12 Msun:
+    # binning ln(M) must give back that mass function.
+    rng = np.random.default_rng(1)
+    n_objects = 50_000
+    ln_mass, grid, cdf = draw(
+        rng, lambda x: np.exp(-x), np.log(1e8), np.log(1e12), n_objects
+    )
+    volume = (100 * un.Mpc) ** 3
+    catalog = make_catalog(volume=volume, ln_mass=ln_mass * un.dimensionless_unscaled)
+    edges = np.linspace(np.log(1e8), np.log(1e12), 21) * un.dimensionless_unscaled
+    result = bin_number_density(catalog, "ln_mass", edges)
+    assert result.number_density.unit == un.Mpc**-3
+    check_recovered(result, n_objects, grid, cdf, volume)
+
+
+def test_uv_luminosity_function_recovers_a_schechter_function():
+    # Galaxies with UV magnitudes drawn from a Schechter function, and SFRs that give
+    # those magnitudes: the UV LF must give back the Schechter function.
+    rng = np.random.default_rng(2)
+    volume = (100 * un.Mpc) ** 3
+    grid = np.linspace(-24, -12, 1001)
+    n_objects = round(np.trapezoid(schechter(grid), grid) * volume.to_value(un.Mpc**3))
+    magnitude, grid, cdf = draw(rng, schechter, -24, -12, n_objects)
+    luminosity = 10 ** (0.4 * (UV_MAGNITUDE_ZERO_POINT - magnitude))
+    sfr = (luminosity * un.erg / un.s / un.Hz) * KUV_SUN16
+    catalog = make_catalog(volume=volume, sfr=sfr.to(un.Msun / un.yr))
+
+    result = uv_luminosity_function(catalog)
     assert result.feature == "uv_magnitude"
     np.testing.assert_array_equal(result.bin_edges, UV_MAGNITUDE_EDGES)
-    assert len(result.counts) == 24
-    np.testing.assert_allclose(result.bin_widths.to_value(un.mag), 0.5)
-    mag = 51.63 - 2.5 * np.log10(sfr[10:].to_value(un.Msun / un.yr) / 1.15e-28)
-    counts, _ = np.histogram(mag, UV_MAGNITUDE_EDGES.value)
-    np.testing.assert_array_equal(result.counts, counts)
-    np.testing.assert_allclose(
-        result.number_density.to_value(1 / (un.mag * un.Mpc**3)),
-        counts / 0.5 / 1000.0,
-    )
+    assert result.number_density.unit == 1 / (un.mag * un.Mpc**3)
+    check_recovered(result, n_objects, grid, cdf, volume)
+    # The bright end falls off exponentially and the faint end as a power law, so
+    # the LF decreases with increasing luminosity (in the bins with 10 galaxies or
+    # more; the brightest bins are empty or nearly so).
+    filled = result.counts >= 10
+    assert filled.sum() >= 15
+    assert np.all(np.diff(result.number_density.value[filled]) > 0)
     # The catalogue itself is not changed.
     assert "uv_magnitude" not in catalog.features
 

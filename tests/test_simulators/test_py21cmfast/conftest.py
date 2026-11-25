@@ -70,6 +70,23 @@ def halo_run(halo_inputs) -> SimpleNamespace:
     )
 
 
+@pytest.fixture(scope="session")
+def large_halo_run() -> SimpleNamespace:
+    """Inputs and halo catalogue of a 60 Mpc run at z = 8 (a few seconds).
+
+    About a million halos without minihalos or reionization feedback, for
+    statistical tests of the halo properties.
+    """
+    inputs = p21c.InputParameters.from_template(
+        ["latest-discrete", "size-tiny"], random_seed=1
+    ).evolve_input_structs(**{**SMALL_BOX, "BOX_LEN": 60, "HII_DIM": 24})
+    initial_conditions = p21c.compute_initial_conditions(inputs=inputs)
+    halo_catalog = p21c.determine_halo_catalog(
+        redshift=HALO_REDSHIFT, initial_conditions=initial_conditions, inputs=inputs
+    )
+    return SimpleNamespace(inputs=inputs, halo_catalog=halo_catalog)
+
+
 @pytest.fixture
 def mock_perturbed_halo_catalog() -> Callable[..., PerturbedHaloCatalog]:
     """Return a function that mocks a PerturbedHaloCatalog with given properties.

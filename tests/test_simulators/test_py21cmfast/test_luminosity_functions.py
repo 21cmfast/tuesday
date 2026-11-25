@@ -1,13 +1,18 @@
 """Tests of the UV luminosity functions of 21cmFAST halo catalogues."""
 
+import warnings
 from types import SimpleNamespace
 
 import numpy as np
+import py21cmfast as p21c
 import pytest
 from astropy import units as un
 
 from tuesday.core import CoevalCatalog
-from tuesday.core.summaries.luminosity_functions import uv_luminosity_function
+from tuesday.core.summaries.luminosity_functions import (
+    sfr_to_uv_magnitude,
+    uv_luminosity_function,
+)
 from tuesday.simulators.py21cmfast.catalogs import catalog_from_halo_catalog
 from tuesday.simulators.py21cmfast.summaries.luminosity_functions import (
     calculate_uvlf,
@@ -64,7 +69,7 @@ def test_components(minihalo_inputs, mock_perturbed_halo_catalog, components, sf
     edges = np.linspace(-24.0, -12.0, 1201) * un.mag
     result = calculate_uvlf(halos, bins=edges, kuv=kuv, components=components)
 
-    magnitude = (51.63 - 2.5 * np.log10(sfr / 1.15e-28)) * un.mag
+    magnitude = sfr_to_uv_magnitude(np.array([sfr]) * un.Msun / un.yr)[0]
     assert result.counts.sum() == 1
     i = np.argmax(result.counts)
     assert edges[i] <= magnitude < edges[i + 1]
@@ -112,19 +117,44 @@ def test_other_objects_are_refused(halo_inputs, with_inputs):
         calculate_uvlf(other)
 
 
-def test_halo_catalogue(halo_run):
-    result = calculate_uvlf(halo_run.halo_catalog)
-    catalog = catalog_from_halo_catalog(halo_run.halo_catalog)
-    sfr = catalog["sfr_acg"].to_value(un.Msun / un.yr).astype(np.float64)
-    with np.errstate(divide="ignore"):
-        magnitude = 51.63 - 2.5 * np.log10(sfr / 1.15e-28)
-    counts, _ = np.histogram(magnitude, np.linspace(-24, -12, 25))
-    assert counts.sum() > 100
-    np.testing.assert_array_equal(result.counts, counts)
-    np.testing.assert_allclose(
-        result.number_density.to_value(1 / (un.mag * un.Mpc**3)),
-        counts / 0.5 / 20.0**3,
-    )
+def test_uvlf_decreases_with_luminosity(large_halo_run):
+    # Brighter galaxies live in rarer, more massive halos: in every pair of adjacent
+    # bins with galaxies, the brighter bin has no larger number density, within the
+    # Poisson errors.
+    result = calculate_uvlf(large_halo_run.halo_catalog)
+    filled = np.flatnonzero(result.counts)
+    assert len(filled) >= 15
+    assert np.array_equal(filled, np.arange(filled[0], filled[-1] + 1))
+    phi = result.number_density.value[filled]
+    error = result.poisson_error.value[filled]
+    # The bins go from bright to faint.
+    assert np.all(phi[:-1] <= phi[1:] + 2 * np.hypot(error[:-1], error[1:]))
+
+
+def test_uvlf_agrees_with_the_analytic_lf_of_21cmfast(large_halo_run):
+    # 21cmFAST computes the UV LF of the same galaxy model from the halo mass
+    # function, without sampling halos. Where the sampled halos are complete (halos
+    # above SAMPLER_MIN_MASS = 1e8 Msun, galaxies brighter than M_UV = -15.5) and the
+    # bins have 30 galaxies or more, the two agree within a factor of 2. The sampled
+    # LF is higher at the bright end, because the SFRs of the sampled halos scatter
+    # around the mean relation (SIGMA_STAR, SIGMA_SFR_LIM), which the analytic LF
+    # does not include.
+    halo_catalog = large_halo_run.halo_catalog
+    result = calculate_uvlf(halo_catalog)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        magnitude, _, log_phi = p21c.compute_luminosity_function(
+            redshifts=[halo_catalog.redshift],
+            inputs=large_halo_run.inputs,
+            component="acg",
+        )
+    order = np.argsort(magnitude[0])
+    centres = result.bin_centres.to_value(un.mag)
+    analytic = 10 ** np.interp(centres, magnitude[0][order], log_phi[0][order])
+    compared = (result.counts >= 30) & (centres < -15.5)
+    assert compared.sum() >= 6
+    ratio = result.number_density.value[compared] / analytic[compared]
+    assert np.all((ratio > 0.5) & (ratio < 2))
 
 
 def test_perturbed_catalogue_of_a_run(halo_run):
